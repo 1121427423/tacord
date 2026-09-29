@@ -334,6 +334,10 @@ func _test_grenade() -> void:
 		if watcher8.get("posture") == Soldier.POSTURE_PRONE:
 			evade_seen = true
 			break
+		# 雷寿命 108 帧 < 轮询 150 帧：雷炸掉后快照再去摸它的 global_position
+		# 会崩协程（上轮 CI 实测）。雷没了，窗口也就关了，直接收摊。
+		if not is_instance_valid(g8):
+			break
 		if i % 15 == 0:
 			# 快照把雷的现场也摊开：evade 分数恒 0 而雷明明在窗口内，
 			# 组/距离/引信哪个环节断了，下一轮日志一眼定位。
