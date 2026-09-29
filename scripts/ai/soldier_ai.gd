@@ -880,21 +880,20 @@ func _march_and_deliver(_ctx: Dictionary, _delta: float) -> int:
 	return BehaviorTree.Status.SUCCESS
 
 
-## 押着俘虏往 FOB 走：自己去 FOB 旁一格，俘虏跟在身后（背向 FOB 那一侧）。
+## 押着俘虏往 FOB 走：两人去 FOB 旁的同一格。
+## 早先写的是「俘虏跟在押送者身后、背向 FOB 那一侧」——推演路径时发现那是死锁：
+## 押送者停在 FOB 旁一格（离中心 32px），俘虏停在他身后一格（离中心 64px），
+## 64 恰好卡在 DELIVER_RANGE(48) 外面，march_and_deliver 永远返回 RUNNING，交不了人。
+## 而且身后那格是否可走还取决于 _work_spot_around 挑中哪个邻居，结果不确定。
+## 两人叠在同一格没有物理问题：士兵在第 1 层、只与第 2 层障碍碰撞。
 func _march_captive_to(fob) -> void:
 	if map == null:
 		return
 	var spot: Vector2i = _work_spot_around(map.cell_at(fob.global_position))
-	if spot.x >= 0:
-		soldier.call("move_to_cell", spot)
-	var escort_cell: Vector2i = map.cell_at(soldier.global_position)
-	var follow_cell: Vector2i = escort_cell
-	var away: Vector2 = soldier.global_position - fob.global_position
-	if away.length_squared() > 1.0:
-		var behind := escort_cell + Vector2i(int(signf(away.x)), int(signf(away.y)))
-		if map.is_walkable(behind):
-			follow_cell = behind
-	_escort_target.call("move_to_cell", follow_cell)
+	if spot.x < 0:
+		return
+	soldier.call("move_to_cell", spot)
+	_escort_target.call("move_to_cell", spot)
 
 
 ## 放下押送权。必须在换行为时也调用——否则押送权一直占着，
