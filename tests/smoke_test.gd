@@ -392,6 +392,11 @@ func _test_perception_and_memory() -> void:
 	_check(game != null and game.has_method("blackboard"), "Game 自动加载提供小队黑板")
 	# 清掉前几节留下的枪声记忆：否则"最近的一声"可能是别的测试打的，断言就不确定了。
 	game.call("clear_boards")
+	# 前几节的红方士兵在 M4 之后会靠记忆/巡逻四处游走，位置不可预测。
+	# 本节要验证的是"看不见敌人"，所以先把他们清掉；noisemaker 是本节新建的，不受影响。
+	for unit in get_tree().get_nodes_in_group(&"soldiers"):
+		if int(unit.get("team")) == 2:
+			unit.call("die")
 
 	# ---- 黑板本体：不依赖场景 ----
 	var board := Blackboard.new()
@@ -434,7 +439,10 @@ func _test_perception_and_memory() -> void:
 	# 朝向不会被 _follow_path 覆盖掉。
 	await get_tree().process_frame
 	var facing: Vector2 = listener.get("facing")
-	_check(facing.dot(Vector2(0.0, -1.0)) > 0.9, "看不见敌人时朝枪声转头")
+	_check(
+		facing.dot(Vector2(0.0, -1.0)) > 0.9,
+		"看不见敌人时朝枪声转头（facing=%.2f,%.2f）" % [facing.x, facing.y]
+	)
 
 	# ---- 端到端 2：真的开一枪，敌队的人听得见（验证枪声分发路由）----
 	# 两人相距 320px：在 520px 听力内，但在 260px 射程外，所以听者只能听不能打。
