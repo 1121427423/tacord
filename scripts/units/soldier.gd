@@ -79,6 +79,12 @@ const SLIDE_COOLDOWN := 2.0
 ## 翻越：跨过一格 cover 的落地速度与冷却（冷却用来防止贴着矮墙来回蹦）。
 const VAULT_SPEED := 170.0
 const VAULT_COOLDOWN := 1.2
+
+## 掀飞（M12）：爆炸沿 origin→士兵 方向把人推这么远、这么快推完；
+## STAGGER_TIME 是推完之后还踉跄多久（眩晕中开不了枪、走不动）。
+const BLAST_PUSH_DISTANCE := 32.0
+const BLAST_PUSH_TIME := 0.25
+const STAGGER_TIME := 0.8
 const TEAM_COLORS := {
 	1: Color(0.404, 0.635, 1.0),  # 蓝方
 	2: Color(1.0, 0.427, 0.345),  # 红方
@@ -150,8 +156,23 @@ var facing: Vector2 = Vector2.RIGHT
 ## 影响三处：seek_cover 的效用输入、推进欲望、实际移动速度。
 var suppression: float = 0.0
 
+## 手雷余量（M12）：开局一颗。做成公开变量——tactics.gd 的投掷打分读它，
+## 不做成方法是为了不撑破 gdlint 的 20 个公开方法上限（这个文件已经 19 个）。
+var grenades: int = 1
+
+## 被爆炸掀飞后的踉跄读数（M12）：眩晕中开不了枪（try_fire 拦截）、
+## 不能自主移动（位移由冲量接管）。由 _physics_process 按 _stagger_timer 维护，
+## apply_blast 写计时器——读数自己不存账。
+var staggered: bool = false
+
 # BattleMap（battle_map.gd），不标注类型以便鸭子调用其查询接口。
 var battle_map = null
+
+# 爆炸冲量账目（M12）：方向 × 速度，_blast_timer 秒内由 _physics_process 执行。
+var _blast_push: Vector2 = Vector2.ZERO
+var _blast_timer: float = 0.0
+# 踉跄剩余秒数：归零即恢复作战。
+var _stagger_timer: float = 0.0
 
 var _path: PackedVector2Array = PackedVector2Array()
 var _path_index: int = 0
@@ -203,6 +224,19 @@ func _physics_process(delta: float) -> void:
 	if is_dead:
 		return
 	_update_posture(delta)
+	# 踉跄计时（M12）：每帧衰减，读数交给公开变量 staggered。
+	if _stagger_timer > 0.0:
+		_stagger_timer = maxf(0.0, _stagger_timer - delta)
+	staggered = _stagger_timer > 0.0
+	# 爆炸冲量（M12）：优先于一切自主移动——被气浪推着走的人这段时间
+	# 既不举枪也不寻路，位移全由冲量接管。放在 is_downed/is_captive 的
+	# 早退**之前**：倒地的人 apply_blast 本就不授冲量（见那里），账上不会
+	# 有残留；而俘虏一样会被炸飞——爆炸不认战俘身份，早退在前会把他漏掉。
+	if _blast_timer > 0.0:
+		_blast_timer = maxf(0.0, _blast_timer - delta)
+		velocity = _blast_push
+		move_and_slide()
+		return
 	if is_downed:
 		_bleed(delta)
 		# 倒地的人仍会被队友拖着爬行（effective_speed 已换成爬行速度）。
@@ -515,6 +549,22 @@ func apply_suppression(amount: float) -> void:
 	suppression = clampf(suppression + amount, 0.0, 1.0)
 
 
+## 被爆炸掀飞（M12）：沿 origin→自己 方向获得 32px 冲量（0.25s 推完），
+## 外加 0.8s 踉跄（staggered：不能开枪、不能自主移动，见 _physics_process）。
+## 踉跄过后照常作战——"有些人还能爬起来，头晕目眩"。
+## 倒地/阵亡的人不吃掀飞——他们本来就在地上，倒地另有自己的语义
+## （失血、包扎、被拖走），被气浪再推一把只会把那本账搅乱。
+func apply_blast(origin: Vector2) -> void:
+	if is_dead or is_downed:
+		return
+	var push_dir: Vector2 = global_position - origin
+	if push_dir.length_squared() < 0.0001:
+		push_dir = Vector2.RIGHT  # 就站在爆心上：方向无从谈起，随便挑一边飞
+	_blast_push = push_dir.normalized() * (BLAST_PUSH_DISTANCE / BLAST_PUSH_TIME)
+	_blast_timer = BLAST_PUSH_TIME
+	_stagger_timer = STAGGER_TIME
+
+
 ## 压制会压慢脚步（满压制只剩 40%）；倒地的人只能爬。
 func effective_speed() -> float:
 	if is_downed:
@@ -570,6 +620,10 @@ func aim_at(world_target: Vector2) -> void:
 
 ## 朝某个世界坐标开一枪（冷却由 Weapon 组件内部处理）。倒地的人开不了枪。
 func try_fire(target_pos: Vector2) -> bool:
+	# 被爆炸掀得头晕目眩的人扣不动扳机（M12）——眩晕是第一道闸，
+	# 排在所有姿态限制之前。
+	if staggered:
+		return false
 	# 俘虏当然不开枪：他手上那把枪已经是别人的战利品了。
 	# 滑铲和翻越时人是腾空/贴地滑的，同样举不起枪；趴着的倒是一样能打。
 	if weapon == null or is_downed or is_captive or is_vaulting:
