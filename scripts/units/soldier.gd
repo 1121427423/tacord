@@ -287,9 +287,9 @@ func bleed_ratio() -> float:
 	return clampf(bleed_timer / bleed_out_time, 0.0, 1.0)
 
 
-## 失去战斗力（倒地或阵亡）。敌人索敌与 HUD 都看这个。
-func is_incapacitated() -> bool:
-	return is_dead or is_downed
+## 包扎完成度 [0, 1]，用于 HUD 与占位渲染。
+func rescue_ratio() -> float:
+	return clampf(rescue_progress / RESCUE_TIME, 0.0, 1.0)
 
 
 ## 被压制（近失子弹）。累积到 [0, 1] 上限。
@@ -304,15 +304,6 @@ func effective_speed() -> float:
 	if is_downed:
 		return move_speed * CRAWL_SPEED_FACTOR
 	return move_speed * (1.0 - SUPPRESSION_SPEED_PENALTY * suppression)
-
-
-## 医疗包的即时回血（倒地的人得靠 apply_rescue 包扎，不吃这个）。
-func heal(amount: int) -> void:
-	if is_dead or is_downed:
-		return
-	hp = mini(hp + amount, max_hp)
-	health_changed.emit(hp, max_hp)
-	queue_redraw()
 
 
 func die() -> void:
@@ -406,8 +397,7 @@ func _draw() -> void:
 		draw_rect(Rect2(-8.0, -14.0, 16.0, 3.0), Color(0.0, 0.0, 0.0, 0.65))
 		draw_rect(Rect2(-8.0, -14.0, 16.0 * bleed_ratio(), 3.0), Color(0.93, 0.33, 0.27))
 		if rescue_progress > 0.0:
-			var rescue_ratio: float = clampf(rescue_progress / RESCUE_TIME, 0.0, 1.0)
-			draw_rect(Rect2(-8.0, 11.0, 16.0 * rescue_ratio, 2.0), Color(0.45, 0.95, 0.6))
+			draw_rect(Rect2(-8.0, 11.0, 16.0 * rescue_ratio(), 2.0), Color(0.45, 0.95, 0.6))
 		return
 	var ratio: float = clampf(float(hp) / maxf(1.0, float(max_hp)), 0.0, 1.0)
 	draw_rect(Rect2(-8.0, -14.0, 16.0, 3.0), Color(0.0, 0.0, 0.0, 0.65))

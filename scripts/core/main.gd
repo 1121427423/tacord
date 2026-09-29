@@ -6,6 +6,9 @@ const SOLDIER_SCENE := preload("res://scenes/units/soldier.tscn")
 const PLAYER_TEAM := 1
 const ENEMY_TEAM := 2
 
+## 每队第几个（0 基）当医疗兵。默认每队 3 人时即最后一人。
+const MEDIC_INDEX := 2
+
 @export var soldiers_per_team: int = 3
 
 var units: Array = []
@@ -81,21 +84,29 @@ func _spawn_demo_units() -> void:
 	var blue_cells := [Vector2i(3, 6), Vector2i(2, 12), Vector2i(3, 18)]
 	var red_cells := [Vector2i(28, 6), Vector2i(29, 12), Vector2i(28, 18)]
 	for i in range(soldiers_per_team):
-		_spawn_unit(PLAYER_TEAM, blue_cells[i % blue_cells.size()])
-		_spawn_unit(ENEMY_TEAM, red_cells[i % red_cells.size()])
+		var as_medic: bool = i == MEDIC_INDEX
+		_spawn_unit(PLAYER_TEAM, blue_cells[i % blue_cells.size()], as_medic)
+		_spawn_unit(ENEMY_TEAM, red_cells[i % red_cells.size()], as_medic)
 	# 蓝方守、红方攻：这样一开局就能看到 Utility AI 分化出不同行为。
 	_issue_initial_orders()
 
 
-func _spawn_unit(team: int, cell: Vector2i) -> void:
+func _spawn_unit(team: int, cell: Vector2i, as_medic: bool = false) -> void:
 	if map == null:
 		return
 	var unit := SOLDIER_SCENE.instantiate()
 	unit.set("team", team)
 	unit.set("current_order", "hold")
 	unit.name = _next_unit_name(team)
+	if as_medic:
+		# 名字带个"医"，HUD 上一眼能看出谁该去救人。
+		unit.name = String(unit.name) + "医"
 	map.add_child(unit)
 	unit.global_position = map.world_pos(cell)
+	# 医疗兵：救援意愿 x1.4、包扎速度 x2（见 soldier_ai.gd）。
+	var unit_ai = unit.get_node_or_null("SoldierAI")
+	if unit_ai != null:
+		unit_ai.set("is_medic", as_medic)
 	units.append(unit)
 
 
@@ -129,18 +140,36 @@ func _update_hud() -> void:
 	var text: String = "命令: %s    [1]进攻 [2]防守 [3]包抄 [4]待命    [F1]掩体热区 [R]重开\n" % order
 	var blue_alive: int = 0
 	var red_alive: int = 0
+	var blue_down: int = 0
+	var red_down: int = 0
 	for unit in units:
 		if unit.get("is_dead") == true:
 			continue
-		if int(unit.get("team")) == PLAYER_TEAM:
+		var is_blue: bool = int(unit.get("team")) == PLAYER_TEAM
+		if is_blue:
 			blue_alive += 1
 		else:
 			red_alive += 1
-	text += "蓝方 %d 存活    红方 %d 存活\n" % [blue_alive, red_alive]
+		if unit.get("is_downed") == true:
+			if is_blue:
+				blue_down += 1
+			else:
+				red_down += 1
+	text += "蓝方 %d 存活（%d 倒地）    红方 %d 存活（%d 倒地）\n" % [
+		blue_alive, blue_down, red_alive, red_down
+	]
 	text += "— 士兵自主决策 —\n"
 	for unit in units:
 		if unit.get("is_dead") == true:
 			text += "%s  已阵亡\n" % _unit_tag(unit)
+			continue
+		if unit.get("is_downed") == true:
+			text += "%s  倒地  失血=%.1fs  倒地%d次  包扎=%.0f%%\n" % [
+				_unit_tag(unit),
+				float(unit.get("bleed_timer")),
+				int(unit.get("down_count")),
+				float(unit.call("rescue_ratio")) * 100.0,
+			]
 			continue
 		text += "%s  hp=%d  压制=%.2f  命令=%s  行为=%s\n" % [
 			_unit_tag(unit),
