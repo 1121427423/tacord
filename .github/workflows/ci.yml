@@ -75,9 +75,12 @@ jobs:
           if [ "$code" -ge 128 ]; then
             echo "::error::进程被信号 $((code - 128)) 终止（11=SIGSEGV 段错误）"
           fi
-          echo "::error::---- smoke_result.log（测试自述，逐行 flush）----"
+          # annotation 有数量上限且保留最先发出的若干条，所以先发失败项，再发末尾。
           if [ -f smoke_result.log ]; then
-            nl -ba smoke_result.log | tac | head -40 | while IFS= read -r line; do echo "::error::${line}"; done
+            echo "::error::---- 失败项 ----"
+            grep -n "FAIL" smoke_result.log | while IFS= read -r line; do echo "::error::${line}"; done
+            echo "::error::---- 末尾 ----"
+            nl -ba smoke_result.log | tac | head -25 | while IFS= read -r line; do echo "::error::${line}"; done
           else
             echo "::error::没有生成 smoke_result.log —— 测试脚本没能开始执行"
           fi
