@@ -484,10 +484,11 @@ HUD 两处可见：每个士兵 `弹=18/72`（换弹时标「换弹中」、空�
   均见于引擎类文档；`uid` 可省略由 `resource_format_text.cpp` 的 `next_tag.fields.has("uid")` 确认
 
 **已在真实引擎中验证**：GitHub Actions（`.github/workflows/ci.yml`）用 Godot 4.7.2 headless
-依次执行**五个**测试场景，**合计 297 项断言**。前四个场景（smoke / mobility / medic / tank）
-的 **260/260 已全绿**；第五个 `drone_test.tscn`（M11，37 项）随本里程碑新增，
-同样把 37 写死在 `EXPECTED_CHECKS` 里由引擎自己判定数没数够（见下文），
-由推送后的 CI 首跑验证：
+依次执行**五个**测试场景，**合计 297 项断言，297/297 全绿**。第五个 `drone_test.tscn`
+（M11，37 项）随本里程碑新增，同样把 37 写死在 `EXPECTED_CHECKS` 里由引擎自己判定
+数没数够（见下文）。它的 CI 首跑挂过两条（巡逻不动 / 盯梢贴脸），根因是测试把无类型
+数组字面量喂给 `set()`——4.7.2 对 `Array[Vector2]` 脚本属性静默失败，先装进类型化
+局部变量再传（与 main.gd `_spawn_drone` 同款）即全绿：
 
 | 场景 | 断言 | 覆盖 |
 | --- | --- | --- |
