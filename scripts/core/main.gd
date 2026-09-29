@@ -2,6 +2,7 @@
 extends Node2D
 
 const SOLDIER_SCENE := preload("res://scenes/units/soldier.tscn")
+const TANK_SCENE := preload("res://scenes/units/tank.tscn")
 
 const PLAYER_TEAM := 1
 const ENEMY_TEAM := 2
@@ -12,6 +13,10 @@ const MEDIC_INDEX := 2
 @export var soldiers_per_team: int = 3
 
 var units: Array = []
+
+## 装甲车单列一个数组：部队上限（unit_cap）与战损统计都只算步兵，
+## 坦克打掉一辆少一辆，不占编制、也不影响判负。
+var tanks: Array = []
 
 @onready var camera: Camera2D = $Camera2D
 
@@ -137,6 +142,7 @@ func _spawn_demo_units() -> void:
 		var as_medic: bool = i == MEDIC_INDEX
 		_spawn_unit(PLAYER_TEAM, blue_cells[i % blue_cells.size()], as_medic)
 		_spawn_unit(ENEMY_TEAM, red_cells[i % red_cells.size()], as_medic)
+	_spawn_tanks()
 	# 蓝方守、红方攻：这样一开局就能看到 Utility AI 分化出不同行为。
 	_issue_initial_orders()
 
@@ -163,6 +169,24 @@ func _spawn_unit(team: int, cell: Vector2i, as_medic: bool = false) -> void:
 	if unit_ai != null:
 		unit_ai.set("is_medic", as_medic)
 	units.append(unit)
+
+
+## 每队一辆装甲车。落位避开中央墙（x=16，y=4..10 与 14..20）与两堆木箱，
+## 目标点对插敌方纵深——红方开局是"进攻"，它的坦克会当着你的面开过来。
+func _spawn_tanks() -> void:
+	if map == null:
+		return
+	_spawn_tank(PLAYER_TEAM, Vector2i(6, 15), Vector2i(29, 12))
+	_spawn_tank(ENEMY_TEAM, Vector2i(25, 15), Vector2i(3, 12))
+
+
+func _spawn_tank(team: int, cell: Vector2i, objective: Vector2i) -> void:
+	var tank := TANK_SCENE.instantiate()
+	tank.set("team", team)
+	tank.set("objective", objective)
+	map.add_child(tank)
+	tank.global_position = map.world_pos(cell)
+	tanks.append(tank)
 
 
 func _next_unit_name(team: int) -> String:
@@ -218,6 +242,7 @@ func _update_hud() -> void:
 	text += "蓝方 %d 存活（%d 倒地）    红方 %d 存活（%d 倒地）\n" % [
 		blue_alive, blue_down, red_alive, red_down
 	]
+	text += "装甲: %s\n" % _tank_text()
 	text += "情报: %s\n" % _intel_text(game)
 	text += "俘虏: %s\n" % _captive_text(game)
 	text += "弹药: %s\n" % _ammo_text()
@@ -252,6 +277,31 @@ func _update_hud() -> void:
 			_posture_note(unit),
 		]
 	hud_label.text = text
+
+
+## 装甲车状态一行。载具的 is_downed / is_captive 恒为 false，
+## 所以不需要步兵那套倒地/俘虏分支。
+func _tank_text() -> String:
+	if tanks.is_empty():
+		return "无"
+	var parts: Array = []
+	for tank in tanks:
+		var side: String = "蓝" if int(tank.get("team")) == PLAYER_TEAM else "红"
+		if tank.get("is_dead") == true:
+			parts.append("%s方 已击毁" % side)
+			continue
+		parts.append(
+			(
+				"%s方 hp=%d 命令=%s 行为=%s"
+				% [
+					side,
+					int(tank.get("hp")),
+					String(tank.get("current_order")),
+					String(tank.call("current_action")),
+				]
+			)
+		)
+	return "   ".join(parts)
 
 
 func _unit_tag(unit) -> String:
