@@ -433,10 +433,13 @@ func _test_perception_and_memory() -> void:
 	var listener = SOLDIER_SCENE.instantiate()
 	_map.add_child(listener)
 	listener.global_position = _map.world_pos(Vector2i(30, 22))
+	# hold 命令：效用上 hold(0.54) 压过 advance(0.15)，它不会走开，
+	# 于是多等几帧也不会让 _follow_path 把朝向覆盖掉。
+	listener.call("set_order", "hold")
 	var shot_pos: Vector2 = listener.global_position + Vector2(0.0, -100.0)
 	game.call("hear_gunshot", shot_pos, 2)
-	# 只等一个 process 帧：_combat_step 在 _think 之前跑，此时还没有开始移动，
-	# 朝向不会被 _follow_path 覆盖掉。
+	# 等两个 process 帧：节点是在本次迭代里 add_child 的，第一帧未必轮到它 _process。
+	await get_tree().process_frame
 	await get_tree().process_frame
 	var facing: Vector2 = listener.get("facing")
 	_check(
@@ -454,6 +457,7 @@ func _test_perception_and_memory() -> void:
 	noisemaker.global_position = _map.world_pos(Vector2i(4, 20))
 	hearer.global_position = _map.world_pos(Vector2i(14, 20))
 	noisemaker.call("try_fire", noisemaker.global_position + Vector2(0.0, -200.0))
+	await get_tree().process_frame
 	await get_tree().process_frame
 	var to_shooter: Vector2 = (noisemaker.global_position - hearer.global_position).normalized()
 	_check(
