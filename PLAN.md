@@ -42,14 +42,15 @@
 **MVP 内（M0–M3）**
 - 网格地图 + 地形（open / cover / high / blocked）+ AStar2D 寻路
 - 指挥官宏观命令：进攻 / 防守 / 包抄 / 待命
-- Utility AI 四行为：`seek_cover` / `advance` / `flank` / `hold`
+- Utility AI 五行为：`seek_cover` / `advance` / `flank` / `hold` / `rescue`
 - **真实几何掩体评估**（无预设掩体点，侧翼被绕后掩体自动失效）
-- 交火：视线、散布、伤害、阵亡
+- 交火：视线、散布、伤害
 - 压制：近失子弹产生压制值，压制会改变效用打分与机动能力
+- 倒地 / 拖救 / 就地包扎（医疗兵效率 x2）/ 多次倒地才阵亡
 
 **MVP 外（M4+，按顺序推进）**
 - 感知与记忆（听枪声、记住子弹来向、无线电共享敌情）
-- 倒地 / 呼救 / 拖救 / 就地救治 / 医疗帐篷
+- 医疗帐篷等固定救治设施、呼救语音气泡
 - 弹药与后勤（打光弹药、从尸体摸弹匣、补给线）
 - 建造与 FOB（士兵亲手施工、FOB 归属即胜负）
 - 俘虏与审讯、翻越/滑铲/扑倒/肉搏、坦克与无人机、对话气泡本地化
@@ -67,7 +68,7 @@ tacord/
 │   ├── main.tscn                    # Main(Node2D) + Camera2D + BattleMap 实例 + HUD
 │   ├── battle/battle_map.tscn       # Node2D + battle_map.gd
 │   └── units/soldier.tscn           # CharacterBody2D + ColorRect + CollisionShape2D + SoldierAI
-├── tests/smoke_test.tscn            # 引擎原生 headless 测试（42 项断言，退出码判定）
+├── tests/smoke_test.tscn            # 引擎原生 headless 测试（63 项断言，退出码判定）
 ├── .github/workflows/               # ci.yml（lint + 冒烟测试）、web.yml（导出 + Pages）
 ├── export_presets.cfg               # Web 导出预设（单线程），CI 复现用
 ├── scripts/
@@ -96,7 +97,8 @@ tacord/
 ## 4. 下一步顺序（含验收标准）
 
 > 原则：**先让掩体有后果，再让掩体有代价，最后才加复杂度。**
-> M1 让子弹飞起来，M2 让「被打」产生行为后果；下一步是让「打死」变成可挽回的状态——M3 倒地与救援。
+> M1 让子弹飞起来，M2 让「被打」产生行为后果，M3 让「打死」变成可挽回的状态；
+> 下一步是让士兵「知道」战场——M4 感知与记忆。
 
 ### M1 · 交火与视线 ✅ 已完成
 - `scripts/units/weapon.gd`：射程、射速、散布、射线命中（第 1 层单位 + 第 2 层障碍）
@@ -128,11 +130,45 @@ tacord/
 （= 0.3 × (1 - 20/40)，与公式一致）；200 px 外的人压制为 0；满压制时 `advance = 0` 且
 `seek_cover > advance`，把压制清零后 `advance` 恢复到 1.0。
 
-### M3 · 倒地 / 救援 / 救治
+### M3 · 倒地 / 救援 / 救治 ✅ 已完成
 - `hp <= 0` → `downed`（不是 `dead`）：失血计时、爬行、呼救
 - 队友救援 BT 子树：压制火力 → 接近 → 拖回掩体 → 包扎（医疗兵速度 x2）
 - 每次倒地叠加"虚弱"，多次倒地才真正阵亡
-- 验收：打倒一个士兵后，能看到队友在掩护下把他拖回并救活。
+- 验收：✅ 打倒一个士兵后，能看到队友在掩护下把他拖回并救活。
+
+状态机（`soldier.gd`）：
+
+```
+hp > 0 ──take_damage──> hp <= 0 ──go_down()──> downed ──apply_rescue 满 3s──> 站起来（虚弱 +1）
+                                                 │
+                                                 ├─ bleed_timer 归零 ──> die()（失血致死）
+                                                 └─ down_count > 3   ──> die()（伤重不治）
+```
+
+| 参数 | 值 | 作用 |
+| --- | --- | --- |
+| `BLEED_OUT_TIME` | 20 s | 无人救治的失血致死时间（`bleed_out_time` 是导出项，可调） |
+| `BLEED_PER_DAMAGE` | 0.12 s/点 | 倒地后再中弹，每点伤害提前这么多秒死亡 |
+| `RESCUE_TIME` | 3 s | 标准包扎耗时；医疗兵按 `RESCUE_SPEED_MEDIC = 2.0` 倍速 |
+| `REVIVE_HP` | 30 | 被救活时的血量 |
+| `WEAKNESS_PER_DOWN` | 15 | 每次被救活永久损失的最大血量 |
+| `MAX_DOWNS` | 3 | 倒满这么多次后，再倒一次即阵亡 |
+| `CRAWL_SPEED_FACTOR` | 0.35 | 被拖动时的爬行速度系数 |
+| `RESCUE_SCAN_RADIUS` | 900 px | 愿意为救人跑多远 |
+| `MEDIC_SCORE_BONUS` | 1.6 | 医疗兵的救援意愿加成 |
+| `DOWNED_ALLY_ORDER_PENALTY` | 0.5 | 有战友倒地时，推进/包抄欲望打对折 |
+
+两个设计决定值得记下来：
+1. **掩护火力不做成 BT 子树。** `_combat_step()` 每帧都会对可见敌人还击，与当前行为无关，
+   所以医疗兵天然是"一边压着对面一边救人"，不需要额外的火力组节点。
+2. **必须有 `DOWNED_ALLY_ORDER_PENALTY`。** 否则 `attack` 命令下 `_consider_advance` 恒为 1.0，
+   永远压过救援分数——医疗兵根本不会动，M3 的验收标准就成了空话。
+
+验收（CI 里 63/63，其中 21 条覆盖 M3）：失血计时到点真的 `die()`；倒地后 `try_fire` 返回 false、
+`apply_suppression` 无效、`effective_speed` = 80 × 0.35 = 28；`apply_rescue(1.0)` 后
+`rescue_ratio` = 1/3，医疗兵 2 倍速一次补满即救活；救活后 `hp = 30`、`max_hp = 85`；
+连续倒地到第 4 次才 `is_dead`；没人倒地时 `_consider_rescue() == 0`，
+有战友倒地时 `_consider_advance()` 从 1.00 掉到 **0.50** 且医疗兵救援分数反超。
 
 ### M4 · 感知与记忆
 - 听觉事件、"最后已知位置"记忆、小队黑板共享敌情
@@ -188,7 +224,7 @@ tacord/
   均见于引擎类文档；`uid` 可省略由 `resource_format_text.cpp` 的 `next_tag.fields.has("uid")` 确认
 
 **已在真实引擎中验证**：GitHub Actions（`.github/workflows/ci.yml`）用 Godot 4.7.2 headless
-执行 `tests/smoke_test.tscn`，**42/42 断言通过**（M2 的 10 条在最新一次 CI 里逐条 PASS）；
+执行 `tests/smoke_test.tscn`，**63/63 断言通过**（M2 的 10 条、M3 的 21 条都在最新一次 CI 里逐条 PASS）；
 `.github/workflows/web.yml` 的 Web 导出也已成功产出 10.3 MB 的 `github-pages` artifact。
 
 这套测试已经抓到两个真 bug（均已修）：
