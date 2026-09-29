@@ -9,6 +9,12 @@ signal went_down(unit: CharacterBody2D)
 
 ## 被队友救活时发出；rescuer 为 null 表示非救援途径。
 signal revived(unit: CharacterBody2D, rescuer: CharacterBody2D)
+
+## 投降成为俘虏时发出（M7）；by_team 是俘虏归哪一方押送。
+signal surrendered(unit: CharacterBody2D, by_team: int)
+
+## 俘虏被释放（押送者阵亡、自己倒地）时发出。
+signal released(unit: CharacterBody2D)
 signal health_changed(current: int, maximum: int)
 signal order_changed(order: String)
 
@@ -46,6 +52,9 @@ const RESCUE_TIME := 3.0
 
 ## 倒地后再挨打对失血计时的加速：每点伤害提前这么多秒。
 const BLEED_PER_DAMAGE := 0.12
+
+## 俘虏被押送时的速度系数：比正常慢一点，押送的人跟得上。
+const CAPTIVE_SPEED_FACTOR := 0.9
 const TEAM_COLORS := {
 	1: Color(0.404, 0.635, 1.0),  # 蓝方
 	2: Color(1.0, 0.427, 0.345),  # 红方
@@ -73,6 +82,12 @@ var bleed_timer: float = 0.0
 
 ## 包扎进度，达到 RESCUE_TIME 即被救活。
 var rescue_progress: float = 0.0
+
+## 俘虏（M7）：不再开火、不参与目标选择，由敌方押送。
+var is_captive: bool = false
+
+## 俘虏归哪一方押送（0 = 不是俘虏）。
+var captor_team: int = 0
 
 ## 单位朝向（单位向量）。AI 用它判断谁把侧翼暴露给了谁。
 var facing: Vector2 = Vector2.RIGHT
@@ -123,6 +138,10 @@ func _physics_process(delta: float) -> void:
 	if is_downed:
 		_bleed(delta)
 		# 倒地的人仍会被队友拖着爬行（effective_speed 已换成爬行速度）。
+		_follow_path()
+		return
+	if is_captive:
+		# 俘虏不举枪，但仍会被押送者拖着走。
 		_follow_path()
 		return
 	if weapon != null:
@@ -198,10 +217,6 @@ func stop_moving() -> void:
 	velocity = Vector2.ZERO
 
 
-func target_cell() -> Vector2i:
-	return _target_cell
-
-
 ## 指挥官命令（attack / defend / flank / hold / retreat）。
 func set_order(order: String) -> void:
 	if current_order == order:
@@ -233,6 +248,8 @@ func take_damage(amount: int) -> void:
 func go_down() -> void:
 	if is_dead or is_downed:
 		return
+	# 倒地的人押不动了：俘虏身份随之解除，医疗兵才认得出这是个待救的伤员。
+	release()
 	down_count += 1
 	if down_count > MAX_DOWNS:
 		die()
@@ -280,6 +297,33 @@ func revive(rescuer: CharacterBody2D = null) -> void:
 	queue_redraw()
 
 
+## 投降成为俘虏（M7）。AI 在「被包围 + 被压制 + 无援」时调用。
+## 已经倒地/阵亡/是俘虏，或者对方是自己人，都返回 false。
+func surrender(by_team: int) -> bool:
+	if is_dead or is_downed or is_captive or by_team == team:
+		return false
+	is_captive = true
+	captor_team = by_team
+	# 举手的人不再挨压制，也不自己乱跑——路线交给押送者。
+	suppression = 0.0
+	velocity = Vector2.ZERO
+	stop_moving()
+	surrendered.emit(self, by_team)
+	queue_redraw()
+	return true
+
+
+## 解除俘虏状态。返回 false 表示本来就不是俘虏（含已阵亡）。
+func release() -> bool:
+	if is_dead or not is_captive:
+		return false
+	is_captive = false
+	captor_team = 0
+	released.emit(self)
+	queue_redraw()
+	return true
+
+
 ## 失血剩余比例 [0, 1]，用于 HUD 与占位渲染。
 func bleed_ratio() -> float:
 	if bleed_out_time <= 0.0:
@@ -303,6 +347,8 @@ func apply_suppression(amount: float) -> void:
 func effective_speed() -> float:
 	if is_downed:
 		return move_speed * CRAWL_SPEED_FACTOR
+	if is_captive:
+		return move_speed * CAPTIVE_SPEED_FACTOR
 	return move_speed * (1.0 - SUPPRESSION_SPEED_PENALTY * suppression)
 
 
@@ -312,6 +358,9 @@ func die() -> void:
 	is_dead = true
 	# 死人不是"可救援的倒地状态"，救援判定与 HUD 都依赖这个区分。
 	is_downed = false
+	# 同理：死人不是俘虏，押送与审讯都得跳过它。
+	is_captive = false
+	captor_team = 0
 	bleed_timer = 0.0
 	velocity = Vector2.ZERO
 	stop_moving()
@@ -323,10 +372,6 @@ func die() -> void:
 		body_rect.modulate = Color(1.0, 1.0, 1.0, 0.4)
 	died.emit(self)
 	queue_redraw()
-
-
-func is_enemy_of(other) -> bool:
-	return other != null and other != self and int(other.get("team")) != team
 
 
 func current_action() -> StringName:
@@ -346,7 +391,8 @@ func aim_at(world_target: Vector2) -> void:
 
 ## 朝某个世界坐标开一枪（冷却由 Weapon 组件内部处理）。倒地的人开不了枪。
 func try_fire(target_pos: Vector2) -> bool:
-	if weapon == null or is_downed:
+	# 俘虏当然不开枪：他手上那把枪已经是别人的战利品了。
+	if weapon == null or is_downed or is_captive:
 		return false
 	return bool(weapon.call("try_fire", target_pos))
 
@@ -356,13 +402,6 @@ func weapon_range() -> float:
 	if weapon == null:
 		return 0.0
 	return float(weapon.get("max_range"))
-
-
-## 还剩多少发（弹匣 + 备弹）；没挂武器时返回 0。
-func ammo_left() -> int:
-	if weapon == null:
-		return 0
-	return int(weapon.call("total_ammo"))
 
 
 # ---------------------------------------------------------------- 内部
@@ -408,6 +447,13 @@ func _draw() -> void:
 		draw_rect(Rect2(-8.0, -14.0, 16.0 * bleed_ratio(), 3.0), Color(0.93, 0.33, 0.27))
 		if rescue_progress > 0.0:
 			draw_rect(Rect2(-8.0, 11.0, 16.0 * rescue_ratio(), 2.0), Color(0.45, 0.95, 0.6))
+		return
+	if is_captive:
+		# 俘虏：头顶一个白色投降标记 + 空心环，和还在打的人区分开。
+		draw_arc(Vector2.ZERO, 11.0, 0.0, TAU, 24, Color(1.0, 1.0, 1.0, 0.75), 1.5)
+		draw_line(Vector2(-5.0, -13.0), Vector2(5.0, -13.0), Color.WHITE, 2.0)
+		draw_line(Vector2(-5.0, -16.0), Vector2(-5.0, -13.0), Color.WHITE, 1.5)
+		draw_line(Vector2(5.0, -16.0), Vector2(5.0, -13.0), Color.WHITE, 1.5)
 		return
 	var ratio: float = clampf(float(hp) / maxf(1.0, float(max_hp)), 0.0, 1.0)
 	draw_rect(Rect2(-8.0, -14.0, 16.0, 3.0), Color(0.0, 0.0, 0.0, 0.65))
