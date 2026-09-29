@@ -45,6 +45,9 @@ const DRAG_RANGE := 26.0
 ## 拖动落点的掩体搜索半径（格）。
 const DRAG_COVER_CELLS := 3
 
+## 枪声传播半径（像素）。超过这个距离就听不见。
+const GUNSHOT_HEAR_RADIUS := 520.0
+
 ## AI 思考间隔（秒）。单位数量上去后可调大以省 CPU（Web 导出尤其明显）。
 @export var think_interval: float = 0.25
 
@@ -65,6 +68,9 @@ var weapon = null
 
 var utility: UtilityAI = UtilityAI.new()
 
+# 小队黑板（同队共享敌情）。由 Game 提供；没有 Game 时退化成私有黑板。
+var board: Blackboard = null
+
 var _trees: Dictionary = {}  # StringName -> 行为树根节点
 var _action: StringName = ACTION_HOLD
 var _move_started: bool = false
@@ -76,6 +82,12 @@ var _rescue_target = null
 
 # 是否已经把这个伤员往掩体拖过了（每个目标只拖一次）。
 var _drag_started: bool = false
+
+# 私有黑板才由自己推进时钟（Game 提供的由 Game 统一推进）。
+var _owns_board: bool = false
+
+# 已经响应过的枪声 id，避免对同一声枪响反复转头。
+var _heard_shot_id: int = 0
 
 
 func _ready() -> void:
@@ -90,6 +102,10 @@ func _ready() -> void:
 	weapon = soldier.get_node_or_null("Weapon")
 	if weapon == null:
 		push_warning("SoldierAI: 所属士兵没有 Weapon 子节点，无法开火。")
+	else:
+		# 自己开的枪也要上报黑板：队友靠这个判断"东边有接触"。
+		weapon.connect("shot_fired", _on_own_shot_fired)
+	board = _resolve_board()
 	_rng.seed = hash(soldier.name)
 	utility.stickiness = stickiness
 	_register_considerations()
@@ -102,6 +118,8 @@ func _process(delta: float) -> void:
 	# 倒地的人什么都不做（不开火、不决策），只能等队友来拖。
 	if soldier == null or soldier.get("is_dead") == true or soldier.get("is_downed") == true:
 		return
+	if _owns_board and board != null:
+		board.advance(delta)
 	# 交战是"反射"，每帧处理；战术决策按 think_interval 处理。
 	_combat_step()
 	_think_accum += delta
@@ -121,10 +139,42 @@ func _combat_step() -> void:
 		return
 	var target = _acquire_target()
 	if target == null:
+		# 看不见人，但枪声听得见：转头朝向声源（M4 验收标准的前半句）。
+		_listen_for_gunshots()
 		return
 	var target_pos: Vector2 = target.global_position
 	soldier.call("aim_at", target_pos)
 	soldier.call("try_fire", target_pos)
+
+
+## 自己开火时上报枪声：声音是给队友听的，不是给自己。
+func _on_own_shot_fired(from: Vector2, _to: Vector2, _hit_target: bool) -> void:
+	if board != null and soldier != null:
+		board.report_gunshot(from, int(soldier.get("team")))
+
+
+## 看不见敌人时，朝听得见的最近敌队枪声转头。
+## 只对"新的一声"响应：否则士兵会一直僵在同一个朝向上，别的判断全被冻住。
+func _listen_for_gunshots() -> void:
+	if board == null or soldier == null:
+		return
+	var shot: Dictionary = board.nearest_enemy_gunshot(
+		soldier.global_position, int(soldier.get("team")), GUNSHOT_HEAR_RADIUS
+	)
+	if shot.is_empty() or int(shot["id"]) == _heard_shot_id:
+		return
+	_heard_shot_id = int(shot["id"])
+	soldier.call("aim_at", shot["pos"])
+
+
+## 取同队黑板。没有 Game（单独实例化做测试）时退化成私有黑板，自己推进时钟。
+func _resolve_board() -> Blackboard:
+	var game := get_node_or_null("/root/Game")
+	if game != null and game.has_method("blackboard") and soldier != null:
+		return game.blackboard(int(soldier.get("team")))
+	_owns_board = true
+	push_warning("SoldierAI: 没有 Game 自动加载，改用私有黑板（敌情不与队友共享）。")
+	return Blackboard.new()
 
 
 ## 射程内、且有通视的最近敌人；没有则返回 null。
@@ -143,6 +193,9 @@ func _acquire_target():
 		if distance <= best_dist:
 			best_dist = distance
 			best = enemy
+	# 看见就是看见：报给全队，这样别人看不见也能来搜。
+	if best != null and board != null:
+		board.report_sighting(best, best.global_position)
 	return best
 
 
