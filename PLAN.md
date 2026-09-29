@@ -104,7 +104,7 @@ macOS 26（`LSMinimumSystemVersion` = 10.12，远低于之）与 Web（无需 CO
 
 ---
 
-## 3. 当前进度（M0–M11 已完成，M12–M14 第一波并行推进中）
+## 3. 当前进度（M0–M14 已完成，M15 排为第二波）
 
 ```
 tacord/
@@ -116,12 +116,17 @@ tacord/
 │   ├── battle/battle_map.tscn       # Node2D + battle_map.gd
 │   ├── units/soldier.tscn           # CharacterBody2D + ColorRect + CollisionShape2D + SoldierAI
 │   ├── units/tank.tscn              # M10：CharacterBody2D + 矩形车体 + Weapon(主炮) + TankAI
-│   └── units/drone.tscn             # M11：CharacterBody2D + 圆形机身 + DroneAI（无武器节点）
+│   ├── units/drone.tscn             # M11：CharacterBody2D + 圆形机身 + DroneAI（无武器节点）
+│   ├── units/grenade.tscn           # M12：Node2D 一次性投掷物（无碰撞体，只有引信）
+│   └── units/fpv_drone.tscn         # M13：FPV 自杀无人机 + FPVAI（撞针引爆）
 ├── tests/smoke_test.tscn            # M0–M7：154 项断言（退出码判定）
 ├── tests/mobility_test.tscn         # M8：40 项断言，独立场景（见 §4 M8）
 ├── tests/medic_test.tscn            # M9：26 项断言，独立场景（见 §4 M9）
 ├── tests/tank_test.tscn             # M10：40 项断言，独立场景（见 §4 M10）
 ├── tests/drone_test.tscn            # M11：37 项断言，独立场景（见 §4 M11）
+├── tests/grenade_test.tscn          # M12：49 项断言（见 §4 M12）
+├── tests/fpv_test.tscn              # M13：49 项断言（见 §4 M13）
+├── tests/ammo_test.tscn             # M14：20 项断言（见 §4 M14）
 ├── .github/workflows/               # ci.yml（lint + 冒烟测试）、web.yml（导出 + Pages）
 ├── export_presets.cfg               # Web 导出预设（单线程），CI 复现用
 ├── scripts/
@@ -136,6 +141,9 @@ tacord/
 │   ├── ai/tactics.gd                # M8：近战/伏地/滑铲 3 个考虑因素与对应的行为
 │   ├── ai/tank_ai.gd                # M10：载具 Utility AI（交战 / 推进 / 待命）
 │   ├── ai/drone_ai.gd               # M11：无人机 Utility AI（盯梢 / 巡逻）
+│   ├── ai/fpv_ai.gd                 # M13：FPV 锁定→俯冲（0.2s 节拍，引爆判定每帧）
+│   ├── units/grenade.gd             # M12：手榴弹（投掷/引信/被扔回/爆炸三本账）
+│   ├── units/fpv_drone.gd           # M13：FPV 本体（俯冲/撞针引爆/被击落是哑弹）
 │   ├── units/soldier.gd             # 移动 / HP / 命令 / 压制 / 倒地 / 俘虏 / 姿态与翻越
 │   ├── units/weapon.gd              # hitscan 武器：散布、冷却、命中判定、近失压制、弹药、枪托
 │   ├── units/build_site.gd          # 工地：施工计时 / 建成转实体 / 被打掉拆地形
@@ -171,10 +179,18 @@ tacord/
 双方头顶各有一架侦察无人机沿航点绕场：它不吃压制、不能被俘、三发步枪弹就坠毁，
 但墙挡得住地面视线、挡不住俯瞰——260 px 半径内的敌人哪怕躲在墙后，也被直接写进本队黑板，
 步兵的「最后已知位置」从此可以由天上来喂；被盯上时它绕着目击位置转六边形的圈，离敌人不近也不远。
+每名士兵开局揣一颗手榴弹：敌人躲进 cover 打不着时才出手（四条件缺一不投），
+落点 40 px 内"胆子够大"的敌兵会把雷捡起来朝你扔回去（引信不重置、只翻一次），
+96 px 内引信 ≤ 1 s 的雷会触发全员就地扑倒；爆炸半径 56 px 中心 60 边缘 12，
+40 px 内的人被掀飞 32 px 并踉跄 0.8 s（眩晕中扣不动扳机）。
+双方各还有一架 FPV 自杀无人机从角落起飞：锁定最近敌兵/坦克直线俯冲，16 px 拉信管，
+两发步枪弹能把它打下来——**击落是哑弹**，这是士兵努力瞄准它的全部理由。
+弹药告急时阵地会先"省着打"：总量跌到最后一匣，冷却从 0.35 s 拉长到 0.875 s——
+长点射变成单发，直到有人补进新弹药。
 
 ---
 
-## 4. 里程碑顺序与验收标准（M0–M11 完成，M12–M15 排定）
+## 4. 里程碑顺序与验收标准（M0–M14 完成，M15 排定）
 
 > 原则：**先让掩体有后果，再让掩体有代价，最后才加复杂度。**
 > M1 让子弹飞起来，M2 让「被打」产生行为后果，M3 让「打死」变成可挽回的状态，
@@ -492,7 +508,7 @@ HUD 两处可见：每个士兵 `弹=18/72`（换弹时标「换弹中」、空�
   步兵 64 px 处一枪打得下它：64×sin3° ≈ 3.4 px 最大散布 < 5 px 命中半径，
   这一枪是确定性的）。
 
-### M12 · 手榴弹（投掷 / 被扔回 / 爆炸掀飞 / 扑倒躲避）
+### M12 · 手榴弹（投掷 / 被扔回 / 爆炸掀飞 / 扑倒躲避）✅ 已完成
 
 原简介「细节」段前三条在此落地：**手榴弹会被胆子够大的扔回来**、**被炸飞**、**扑倒躲开手榴弹**。
 
@@ -524,7 +540,7 @@ HUD 两处可见：每个士兵 `弹=18/72`（换弹时标「换弹中」、空�
   与 staggered 窗口、evade 扑倒触发与起身恢复、投掷决策的三个条件各自反例、
   弹匣不受影响（雷不耗弹药）。
 
-### M13 · FPV 自杀无人机（俯冲撞击 / 被听到 / 可击落）
+### M13 · FPV 自杀无人机（俯冲撞击 / 被听到 / 可击落）✅ 已完成
 
 原简介：**FPV 操作员会驾驶自杀式无人机撞向你的士兵和坦克；士兵能听到它们逼近，
 会试图把它们击落。** M11 侦察机的对位：那个是眼睛，这个是刺刀。
@@ -551,7 +567,7 @@ HUD 两处可见：每个士兵 `弹=18/72`（换弹时标「换弹中」、空�
   （`nearby_enemies` 收得到）、`fpv_threat` 距离归一、坦克也是合法目标、
   侦察机行为零扰动（抽 3 条 M11 断言回归）。
 
-### M14 · 弹药告急降级射击（长点射变单发）
+### M14 · 弹药告急降级射击（长点射变单发）✅ 已完成
 
 原简介：**弹药会真的打光：弹药告急的阵地会渐渐沉寂，长点射变成单发。**
 M5 做了"打光"，这里补"告急"——打光前的最后一段弹链，射速先降下来。
@@ -608,8 +624,10 @@ M5 做了"打光"，这里补"告急"——打光前的最后一段弹链，射�
 
 已在沙箱内执行的检查：
 
-- `gdparse`（gdtoolkit 4.5.0，Godot 4 GDScript 语法）：**16 个脚本 + `tests/` 下五个测试脚本全部通过**
-- `gdlint`：**no problems found**（M11 的 drone.gd / drone_ai.gd / drone_test.gd 与改动后的 main.gd 均在本地复跑确认）
+- `gdparse`（gdtoolkit 4.5.0，Godot 4 GDScript 语法）：**19 个脚本 + `tests/` 下八个测试脚本全部通过**
+- `gdlint`：**no problems found**（M12–M14 的 grenade.gd / fpv_drone.gd / fpv_ai.gd /
+  三个新测试与改动后的 soldier.gd / tactics.gd / weapon.gd / perception.gd / main.gd
+  均在本地复跑确认）
 - 引擎 API 交叉核对：把脚本里 **112 处**引擎/项目符号逐个比对 Godot 源码自带的
   `doc/classes/*.xml`（方法名、参数、常量、继承链），**4.7.2-stable 与 4.2-stable 两个版本
   各跑一遍，均 0 问题**——这使"脚本兼容 4.2+"成为已验证结论而非假设。
@@ -622,9 +640,11 @@ M5 做了"打光"，这里补"告急"——打光前的最后一段弹链，射�
   均见于引擎类文档；`uid` 可省略由 `resource_format_text.cpp` 的 `next_tag.fields.has("uid")` 确认
 
 **已在真实引擎中验证**：GitHub Actions（`.github/workflows/ci.yml`）用 Godot 4.7.2 headless
-依次执行**五个**测试场景，**合计 297 项断言，297/297 全绿**。第五个 `drone_test.tscn`
-（M11，37 项）随本里程碑新增，同样把 37 写死在 `EXPECTED_CHECKS` 里由引擎自己判定
-数没数够（见下文）。它的 CI 首跑挂过两条（巡逻不动 / 盯梢贴脸），根因是测试把无类型
+依次执行**八个**测试场景，**合计 415 项断言**。前五个（smoke / mobility / medic / tank /
+drone）合计 **297/297 已全绿**；M12–M14 新增的三个场景合计 **118 项**静态检查已过
+（gdparse/gdlint 全仓 `no problems found`），引擎级验证由本次推送后的 CI 首跑完成。
+每个场景都把总数写死在 `EXPECTED_CHECKS` 里由引擎自己判定数没数够（见下文）。
+第五个场景的 CI 首跑曾挂过两条（巡逻不动 / 盯梢贴脸），根因是测试把无类型
 数组字面量喂给 `set()`——4.7.2 对 `Array[Vector2]` 脚本属性静默失败，先装进类型化
 局部变量再传（与 main.gd `_spawn_drone` 同款）即全绿：
 
@@ -635,8 +655,11 @@ M5 做了"打光"，这里补"告急"——打光前的最后一段弹链，射�
 | `tests/medic_test.tscn` | 26 | M9：医疗帐篷的落点/建成/视线/治疗四条件/不碰胜负、呼救气泡相位 |
 | `tests/tank_test.tscn` | 40 | M10：组归属与边界、装甲三档、双向交火与压制、同图 A*、Utility 三选一、不被步兵逻辑认领 |
 | `tests/drone_test.tscn` | 37 | M11：身段与边界、三枪坠毁、直线穿墙（y 不偏移）、盯梢/巡逻两选一、墙后目击进黑板（含前提断言）、不被认领且子弹打得下它 |
+| `tests/grenade_test.tscn` | 49 | M12：引信飞行、伤害三档+压制、坦克吃雷走装甲、被扔回与两条克制反例、掀飞位移与踉跄窗口、evade 扑倒、投掷决策三反例一正例、不搅局 |
+| `tests/fpv_test.tscn` | 49 | M13：身段边界、脆皮、俯冲直线与速度实测（60px 下界同时排除侦察机那档）、撞击引爆、击落不爆、士兵击落链路、fpv_threat 归一、坦克合法目标、侦察机零扰动回归 |
+| `tests/ammo_test.tscn` | 20 | M14：两档冷却实测帧数对比防假绿、补弹自动恢复、打光与换弹边界、降级不伤命中与弹药账、告急线精确踩线（24 vs 25） |
 
-五个场景都必须退出码 0，CI 才算绿；一个失败也不跳过后面的。
+八个场景都必须退出码 0，CI 才算绿；一个失败也不跳过后面的。
 这个数字本身也是一条断言：`EXPECTED_CHECKS` 写死在测试里，`_finish()` 打印的
 「`_checks/_checks`」是*实际跑到的*条数——某个测试段中途崩掉时后面的断言不会执行，
 退出码却仍是 0；沙箱又读不到 CI 日志，所以总数必须由引擎自己判定。M7 期间它立刻见效：
