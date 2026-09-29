@@ -141,6 +141,11 @@ func can_reinforce(team: int) -> bool:
 	return alive_count(team) < unit_cap(team)
 
 
+## 某队是否已经因为失去全部 FOB 而判负。
+func is_team_defeated(team: int) -> bool:
+	return bool(_defeated.get(team, false))
+
+
 ## 失去曾经拥有过的最后一座 FOB 即判负。
 func _check_fob_defeat() -> void:
 	for team in _fob_had.keys():

@@ -41,6 +41,25 @@ func _unhandled_input(event: InputEvent) -> void:
 			var game := get_node_or_null("/root/Game")
 			if game != null:
 				game.call("load_battle")
+		elif event.keycode == KEY_5:
+			_place_build_site(&"fob")
+		elif event.keycode == KEY_6:
+			_place_build_site(&"sandbag")
+
+
+## 在蓝方第一个活人脚下放一个工地（指挥官把工事下在自己部队所在位置）。
+func _place_build_site(kind: StringName) -> void:
+	var game := get_node_or_null("/root/Game")
+	if game == null or map == null or not game.has_method("place_build_site"):
+		return
+	var cell := Vector2i(-1, -1)
+	for unit in units:
+		if int(unit.get("team")) == PLAYER_TEAM and unit.get("is_dead") != true:
+			cell = map.cell_at(unit.global_position)
+			break
+	if cell.x < 0:
+		cell = Vector2i(4, 12)
+	game.call("place_build_site", kind, cell, PLAYER_TEAM)
 
 
 # ---------------------------------------------------------------- 场景装配
@@ -94,6 +113,11 @@ func _spawn_demo_units() -> void:
 func _spawn_unit(team: int, cell: Vector2i, as_medic: bool = false) -> void:
 	if map == null:
 		return
+	# 部队上限由 FOB 数量决定（见 game.gd 的 unit_cap）。
+	var game := get_node_or_null("/root/Game")
+	if game != null and game.has_method("can_reinforce") and not game.call("can_reinforce", team):
+		push_warning("main: %d 队已达部队上限，跳过生成。" % team)
+		return
 	var unit := SOLDIER_SCENE.instantiate()
 	unit.set("team", team)
 	unit.set("current_order", "hold")
@@ -137,7 +161,12 @@ func _update_hud() -> void:
 	var order: String = "hold"
 	if game != null:
 		order = String(game.get("current_order"))
-	var text: String = "命令: %s    [1]进攻 [2]防守 [3]包抄 [4]待命    [F1]掩体热区 [R]重开\n" % order
+	var text: String = "命令: %s    [1]进攻 [2]防守 [3]包抄 [4]待命    " % order
+	text += "[5]放FOB [6]放沙袋    [F1]掩体热区 [R]重开\n"
+	if game != null and game.has_method("is_team_defeated") and game.call(
+		"is_team_defeated", PLAYER_TEAM
+	):
+		text += "!! 蓝方失去全部 FOB —— 战败（按 R 重开）\n"
 	var blue_alive: int = 0
 	var red_alive: int = 0
 	var blue_down: int = 0
@@ -160,6 +189,7 @@ func _update_hud() -> void:
 	]
 	text += "情报: %s\n" % _intel_text(game)
 	text += "弹药: %s\n" % _ammo_text()
+	text += "工事: %s\n" % _build_text(game)
 	text += "— 士兵自主决策 —\n"
 	for unit in units:
 		if unit.get("is_dead") == true:
@@ -223,6 +253,32 @@ func _ammo_text() -> String:
 			if left <= 0:
 				dry += 1
 		parts.append("%s方 %d 发（%d/%d 人打光）" % [tag, total, dry, count])
+	return "    ".join(parts)
+
+
+## 工地与 FOB 状态：数量、部队上限、每个工地的施工进度。
+func _build_text(game) -> String:
+	var parts: Array = []
+	if game != null and game.has_method("fob_count"):
+		for team in [PLAYER_TEAM, ENEMY_TEAM]:
+			var tag: String = "蓝" if team == PLAYER_TEAM else "红"
+			parts.append(
+				"%s方 FOB %d（上限 %d 人）"
+				% [tag, game.call("fob_count", team), game.call("unit_cap", team)]
+			)
+	var sites: Array = []
+	for site in get_tree().get_nodes_in_group(&"build_sites"):
+		var tag: String = "蓝" if int(site.get("team")) == PLAYER_TEAM else "红"
+		if site.get("is_built") == true:
+			sites.append("%s%s %dhp" % [tag, site.call("label"), int(site.get("hp"))])
+		else:
+			sites.append(
+				"%s%s %.0f%%" % [tag, site.call("label"), float(site.call("build_ratio")) * 100.0]
+			)
+	if sites.is_empty():
+		parts.append("无工地（按 5 放 FOB / 6 放沙袋）")
+	else:
+		parts.append(" ".join(sites))
 	return "    ".join(parts)
 
 
