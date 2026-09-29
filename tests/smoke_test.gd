@@ -363,6 +363,27 @@ func _test_downed_and_rescue() -> void:
 	_check(int(casualty.get("down_count")) == 4, "连续倒地计数到 4")
 	_check(casualty.get("is_dead") == true, "倒满 3 次后再倒即阵亡")
 
+	# 10) 端到端：全程不做任何干预，看队友自己跑过去把伤员拖救活（M3 的验收标准）。
+	#     只断言结果不断言"是谁救的"——医疗兵和附近的普通兵都会去，谁先到算谁。
+	var doc = SOLDIER_SCENE.instantiate()
+	var hurt = SOLDIER_SCENE.instantiate()
+	_map.add_child(doc)
+	_map.add_child(hurt)
+	doc.global_position = _map.world_pos(Vector2i(20, 3))
+	hurt.global_position = _map.world_pos(Vector2i(23, 3))
+	doc.call("set_order", "attack")
+	doc.get_node("SoldierAI").set("is_medic", true)
+	hurt.call("take_damage", 9999)
+	var frames: int = 0
+	while hurt.get("is_downed") == true and frames < 900:
+		await get_tree().physics_frame
+		frames += 1
+	_check(
+		hurt.get("is_downed") == false and hurt.get("is_dead") == false,
+		"无人干预下队友自主完成拖救并救活伤员"
+	)
+	_check(frames < 900, "救援在 15 秒模拟时间内完成（用了 %d 帧）" % frames)
+
 
 func _finish() -> void:
 	_emit("")
