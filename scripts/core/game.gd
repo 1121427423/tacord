@@ -10,6 +10,12 @@ signal team_defeated(team: int)
 ## 建筑落点（M6）。
 signal build_site_placed(site: BuildSite)
 
+## 有人接手押送一个俘虏（M7）。投降本身的事件在 soldier.gd 的 surrendered 信号上。
+signal escort_claimed(captive: CharacterBody2D, captor_team: int)
+
+## 审讯完成并得到敌方工事情报。
+signal intel_gained(team: int, revealed: Array)
+
 ## 默认战斗场景；load_battle() 可换成别的地图。
 const BATTLE_SCENE_PATH := "res://scenes/battle/battle_map.tscn"
 
@@ -19,6 +25,9 @@ const PLAYER_TEAM := 1
 ## 部队上限：基础值 + 每座建成 FOB 的加成。
 const BASE_UNIT_CAP := 6
 const UNITS_PER_FOB := 3
+
+## 审讯必须在己方建成的 FOB 旁边进行，这个距离以内才算「押到了」（M7）。
+const INTERROGATE_RADIUS := 64.0
 
 ## MVP 按键绑定（后续迁到 Input Map 以支持重绑定）。
 const ORDER_KEYS := {
@@ -44,6 +53,12 @@ var _fob_had: Dictionary = {}
 # team -> 是否已经判负（避免每帧重复发信号）。
 var _defeated: Dictionary = {}
 
+# 俘虏 -> 押送者（M7）。押送权要唯一，否则三个兵会去拖同一个人。
+var _escorts: Dictionary = {}
+
+# 已经审过的俘虏：情报只值一次，不能押着同一个人反复问。
+var _interrogated: Dictionary = {}
+
 
 func _ready() -> void:
 	# 主场景由 project.godot 的 run/main_scene 自动加载；
@@ -56,6 +71,7 @@ func _process(delta: float) -> void:
 	for board in _boards.values():
 		board.advance(delta)
 	_check_fob_defeat()
+	_check_captives()
 
 
 func _boot() -> void:
@@ -141,6 +157,94 @@ func can_reinforce(team: int) -> bool:
 	return alive_count(team) < unit_cap(team)
 
 
+## 还活着的俘虏；captor_team < 0 表示全部（M7）。
+func captives(captor_team: int = -1) -> Array:
+	var out: Array = []
+	for unit in soldiers(-1):
+		if unit.get("is_captive") != true or unit.get("is_dead") == true:
+			continue
+		if captor_team >= 0 and int(unit.get("captor_team")) != captor_team:
+			continue
+		out.append(unit)
+	return out
+
+
+## 认领一个俘虏的押送权。已有人在押则返回 false（押送权唯一）。
+func claim_escort(captive, escort) -> bool:
+	if captive == null or escort == null:
+		return false
+	var current = _escorts.get(captive)
+	if current != null and is_instance_valid(current) and current.get("is_dead") != true:
+		return false
+	_escorts[captive] = escort
+	escort_claimed.emit(captive, int(captive.get("captor_team")))
+	return true
+
+
+## 放弃押送权（行为被打断、目标换了）。押送者本人没了由 _check_captives 兜。
+func drop_escort(captive, escort) -> void:
+	if captive == null:
+		return
+	var current = _escorts.get(captive)
+	if current == escort:
+		_escorts.erase(captive)
+
+
+## 审讯俘虏，把敌方**已建成**的工事写进本队黑板。返回新揭露的坐标列表。
+## 必须在己方建成的 FOB 旁边进行——审讯要有个地方审，这也让押送有终点。
+func interrogate(captive) -> Array:
+	if captive == null or not is_instance_valid(captive) or _interrogated.has(captive):
+		return []
+	if captive.get("is_captive") != true or captive.get("is_dead") == true:
+		return []
+	var captor_team: int = int(captive.get("captor_team"))
+	if not _near_own_fob(captive.global_position, captor_team):
+		return []
+	_interrogated[captive] = true
+	var board := blackboard(captor_team)
+	var revealed: Array = []
+	for site in get_tree().get_nodes_in_group(&"build_sites"):
+		if int(site.get("team")) == captor_team or site.get("is_built") != true:
+			continue
+		if board.report_structure(site.global_position, int(site.get("team"))):
+			revealed.append(site.global_position)
+	if not revealed.is_empty():
+		intel_gained.emit(captor_team, revealed)
+	return revealed
+
+
+## 某坐标是否落在该队已建成 FOB 的审讯半径内。
+func _near_own_fob(world_pos: Vector2, team: int) -> bool:
+	for site in get_tree().get_nodes_in_group(&"build_sites"):
+		if int(site.get("team")) != team:
+			continue
+		if not site.has_method("is_supply_point") or not bool(site.call("is_supply_point")):
+			continue
+		if world_pos.distance_to(site.global_position) <= INTERROGATE_RADIUS:
+			return true
+	return false
+
+
+## 押送者阵亡/倒地，或押送方全军覆没 -> 俘虏跑掉。
+## 这让押送成为一件有风险的事，而不是免费的搬运。
+func _check_captives() -> void:
+	for captive in _escorts.keys():
+		if not is_instance_valid(captive) or captive.get("is_captive") != true:
+			_escorts.erase(captive)
+			_interrogated.erase(captive)
+			continue
+		var escort = _escorts[captive]
+		var escort_gone: bool = (
+			not is_instance_valid(escort)
+			or escort.get("is_dead") == true
+			or escort.get("is_downed") == true
+			or alive_count(int(captive.get("captor_team"))) <= 0
+		)
+		if escort_gone:
+			_escorts.erase(captive)
+			captive.call("release")
+
+
 ## 某队是否已经因为失去全部 FOB 而判负。
 func is_team_defeated(team: int) -> bool:
 	return bool(_defeated.get(team, false))
@@ -165,6 +269,8 @@ func load_battle(path: String = BATTLE_SCENE_PATH) -> void:
 	clear_boards()
 	_fob_had.clear()
 	_defeated.clear()
+	_escorts.clear()
+	_interrogated.clear()
 	var error := get_tree().change_scene_to_file(path)
 	if error != OK:
 		push_error("Game: 无法加载战斗场景 %s (error=%d)" % [path, error])
