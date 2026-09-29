@@ -240,19 +240,33 @@ func _update_hud() -> void:
 				int(unit.get("hp")),
 			]
 			continue
-		text += "%s  hp=%d  弹=%s  压制=%.2f  命令=%s  行为=%s\n" % [
+		text += "%s  hp=%d  弹=%s  压制=%.2f  命令=%s  行为=%s%s\n" % [
 			_unit_tag(unit),
 			int(unit.get("hp")),
 			_unit_ammo_text(unit),
 			float(unit.get("suppression")),
 			String(unit.get("current_order")),
 			String(unit.call("current_action")),
+			_posture_note(unit),
 		]
 	hud_label.text = text
 
 
 func _unit_tag(unit) -> String:
 	return String(unit.get("name"))
+
+
+## 姿态标注：站姿不写（默认即常态），伏地/滑铲/翻越要一眼看出来。
+## 趴下的人更难被打中、滑行的人开不了枪——这两件事直接影响观感与结果。
+func _posture_note(unit) -> String:
+	if unit.get("is_vaulting") == true:
+		return "  [翻越]"
+	match StringName(unit.get("posture")):
+		&"prone":
+			return "  [伏地]"
+		&"slide":
+			return "  [滑铲]"
+	return ""
 
 
 ## 单个士兵的弹药读数，形如 "18/72"，换弹时加标注。
