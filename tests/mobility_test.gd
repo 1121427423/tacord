@@ -7,7 +7,7 @@ const MAP_SCENE := preload("res://scenes/battle/battle_map.tscn")
 const SOLDIER_SCENE := preload("res://scenes/units/soldier.tscn")
 
 # 本场景的断言总数。与 smoke_test 同样的理由：只看"0 失败"会漏掉中途 abort。
-const EXPECTED_CHECKS := 39
+const EXPECTED_CHECKS := 40
 
 var _map = null
 var _checks: int = 0
@@ -78,6 +78,10 @@ func _test_mobility_and_melee() -> void:
 	_check(not _map.is_walkable(Vector2i(4, 10)), "矮墙那一格不可走")
 	var vaulter = SOLDIER_SCENE.instantiate()
 	_map.add_child(vaulter)
+	# 关掉 AI：hold 会 stop_moving() 清空路径，而它的首个 think tick 落在
+	# 0~15 帧之间——翻越第一段要 23 帧才走完，路径会被提前砍断，
+	# has_arrived 假性变真、落点断言跟着错。这里测的是兵的机动，不是 AI 的决策。
+	vaulter.get_node("SoldierAI").set_process(false)
 	vaulter.global_position = _map.world_pos(Vector2i(3, 10))
 	_check(vaulter.call("move_to_cell", Vector2i(7, 10)), "翻越路线也算一条有效路径")
 	var saw_vault: bool = false
@@ -118,6 +122,9 @@ func _test_mobility_and_melee() -> void:
 	# ---- 2) 姿态：命中轮廓、速度、开火能力 ----
 	var subject = SOLDIER_SCENE.instantiate()
 	_map.add_child(subject)
+	# 同理，姿态是 soldier 自己的事；AI 不关的话 hold 会打断移动，
+	# _combat_step 还会朝谁开枪，把"移动即起立"搅成一锅粥。
+	subject.get_node("SoldierAI").set_process(false)
 	subject.global_position = _map.world_pos(Vector2i(28, 2))
 	var weapon = subject.get_node("Weapon")
 
@@ -164,9 +171,11 @@ func _test_mobility_and_melee() -> void:
 		"冷却没过时连着按第二次滑铲无效",
 	)
 
-	# 一走就自动站起来：起身不需要 AI 干预。
+	# 一走就自动站起来：起身不需要 AI 干预。先把压制抬到 0.35 的释放线以上，
+	# 否则下一帧压制本来就低于阈值，"趴着也会自己站起来"，测不出"移动即起立"。
 	subject.set("posture", Soldier.POSTURE_PRONE)
-	subject.call("move_to_cell", Vector2i(26, 4))
+	subject.call("apply_suppression", 0.9)
+	_check(subject.call("move_to_cell", Vector2i(26, 4)), "趴着也能正常寻路")
 	for _frame in range(6):
 		await get_tree().physics_frame
 	_check(

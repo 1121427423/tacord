@@ -68,8 +68,12 @@ jobs:
 
       - name: 运行冒烟测试
         run: |
-          # 一个场景一个日志前缀。M8 起测试按里程碑拆场景——smoke_test.gd 已经顶到
-          # gdlint 的 1000 行上限，再往里塞会让后面的里程碑没有落脚的地方。
+          # 一个场景一个日志前缀。M8 起测试按里程碑拆场景——smoke_test.gd 已经
+          # 顶到 gdlint 的 1000 行上限，再往里塞后面的里程碑就没有落脚的地方。
+          #
+          # annotation 上限约 10 条且只保留**最先发出**的若干条。曾经让通过的
+          # smoke 先刷满配额，真正失败的 mobility 那段整个被挤掉，只能靠猜。
+          # 所以：成功的场景一行都不发，失败的才把诊断摊开，且按"最可能致命"排序。
           run_scene() {
             scene="$1"; tag="$2"
             set +e
@@ -79,25 +83,27 @@ jobs:
             code=$?
             set -e
             echo "[$scene] exit code = $code"
+            if [ "$code" -eq 0 ]; then
+              grep -c "  PASS" "${tag}_result.log" 2>/dev/null || true
+              return 0
+            fi
             if [ "$code" -ge 128 ]; then
               echo "::error::${scene}: 进程被信号 $((code - 128)) 终止（11=SIGSEGV 段错误）"
             fi
-            # annotation 有数量上限（约 10 条）且保留**最先发出**的若干条，
-            # 所以诊断价值最高的 stderr 必须排在最前面——GDScript 的运行时错误
-            # 与回溯只在 stderr 里，而它恰恰是"某个测试段中途 abort"的唯一线索。
-            echo "::error::---- ${scene} stderr（运行时错误在这里）----"
-            if [ -s "${tag}_err.log" ]; then
-              nl -ba "${tag}_err.log" | tac | head -40 | while IFS= read -r line; do echo "::error::${line}"; done
-            else
-              echo "::error::${scene}: (stderr 为空)"
-            fi
+            echo "::error::==== ${scene} 失败（exit $code）===="
             if [ -f "${tag}_result.log" ]; then
-              echo "::error::---- ${scene} 失败项 ----"
+              echo "::error::---- FAIL 项 ----"
               grep -n "FAIL" "${tag}_result.log" | while IFS= read -r line; do echo "::error::${line}"; done
-              echo "::error::---- ${scene} 末尾 ----"
-              nl -ba "${tag}_result.log" | tac | head -8 | while IFS= read -r line; do echo "::error::${line}"; done
+              echo "::error::---- 跑到哪 ----"
+              nl -ba "${tag}_result.log" | tac | head -6 | while IFS= read -r line; do echo "::error::${line}"; done
             else
               echo "::error::没有生成 ${tag}_result.log —— ${scene} 没能开始执行"
+            fi
+            echo "::error::---- stderr 尾部（运行时错误在这里）----"
+            if [ -s "${tag}_err.log" ]; then
+              nl -ba "${tag}_err.log" | tac | head -8 | while IFS= read -r line; do echo "::error::${line}"; done
+            else
+              echo "::error::${scene}: (stderr 为空)"
             fi
             return $code
           }
@@ -107,3 +113,15 @@ jobs:
           run_scene tests/smoke_test.tscn smoke || rc=1
           run_scene tests/mobility_test.tscn mobility || rc=1
           exit $rc
+      - name: 上传测试日志（annotation 被截断时的兜底）
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs
+          path: |
+            *_out.log
+            *_err.log
+            *_result.log
+          if-no-files-found: ignore
+          retention-days: 7
+
