@@ -74,14 +74,20 @@ jobs:
         with:
           path: web_build
 
+      # enablement: Pages 被关掉时自动重新启用。之前整整几个里程碑就是卡在这里——
+      # 页面 404，而 deploy 步骤被 continue-on-error 吞成"成功"，绿色的 run 假装一切正常。
+      # permissions 里的 pages: write 就是给这个参数用的。
       - name: 配置 Pages
         uses: actions/configure-pages@v5
+        with:
+          enablement: true
         continue-on-error: true
 
+      # 故意不加 continue-on-error：部署失败就该是红的。
+      # 产物（github-pages artifact）无论如何都会上传，失败时"部署结果提示"会给出兜底办法。
       - name: 部署到 GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-        continue-on-error: true
 
       - name: 部署结果提示
         if: always()
@@ -89,6 +95,6 @@ jobs:
           outcome="${{ steps.deployment.outcome }}"
           echo "部署步骤结果：$outcome"
           if [ "$outcome" != "success" ]; then
-            echo "::warning::Pages 未发布（$outcome）。请到 Settings → Pages → Build and deployment → Source 选择 GitHub Actions，再重跑本 workflow。"
+            echo "::error::Pages 未发布（$outcome）。到 Settings → Pages → Build and deployment → Source 选 GitHub Actions，再重跑本 workflow。"
             echo "::warning::导出产物已上传为 artifact 'github-pages'，下载解压后用 python3 -m http.server 即可本地预览。"
           fi

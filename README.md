@@ -252,15 +252,49 @@ godot --headless --path . tests/mobility_test.tscn # M8，同样退出码判定
 
 **一次性设置（必须手动做一次）**：仓库 `Settings → Pages → Build and deployment → Source`
 选择 **GitHub Actions**。没开启时导出仍会成功、artifact 照常上传，只是最后一步发布会报
-`Failed to create deployment (status: 404)`。
+`Failed to create deployment (status: 404)`。workflow 里的 `configure-pages` 带了
+`enablement: true`，在 `pages: write` 权限下可以自己把它重新打开；
+但 `deploy-pages` **故意不加 `continue-on-error`**——以前加了，于是"页面根本没部署出来"
+被伪装成绿色 run，骗过了好几个里程碑。
 
-开启后重跑 workflow，站点地址为 `https://<用户名>.github.io/tacord/`。
-在开启之前，可以下载 artifact 本地预览：
+开启后站点地址为 `https://<用户名>.github.io/tacord/`。
+也可以下载 artifact 本地预览：
 
 ```bash
 gh run download <run-id> -n github-pages -D web_preview
 cd web_preview && python3 -m http.server 8080
 ```
+
+### 自定义域名（`tacord.games`）
+
+按 GitHub 官方文档，**用自定义 Actions workflow 部署时不需要 `CNAME` 文件**：
+域名登记在 `Settings → Pages → Custom domain`，仓库里就算塞了 `CNAME` 也会被忽略且不需要。
+因此要做的三步，且**顺序不能反**（官方明确要求先在 GitHub 登记域名，再去配 DNS，
+否则别人可以占用你某个子域来架站）：
+
+**① 先验证域名所有权**（防域名被抢注；在**个人** `Settings → Pages`，不是仓库设置）
+→ `Add a domain` 填 `tacord.games`，按提示到注册商加一条 TXT：
+
+| 类型 | 名称 | 值 |
+| --- | --- | --- |
+| TXT | `_github-pages-challenge-1121427423.tacord.games` | GitHub 页面当场生成的 token |
+
+生效后（最长 24 小时）回同一页点 **Verify**。这条 TXT 要**长期保留**。
+
+**② 仓库里登记域名**：`Settings → Pages → Custom domain` 填 `tacord.games` → `Save`。
+
+**③ 注册商处配 DNS**（apex 域名必须用 `A`，或 `ALIAS`/`ANAME`）：
+
+| 类型 | 主机 | 值 |
+| --- | --- | --- |
+| A | `@` | `185.199.108.153` |
+| A | `@` | `185.199.109.153` |
+| A | `@` | `185.199.110.153` |
+| A | `@` | `185.199.111.153` |
+| CNAME | `www` | `1121427423.github.io` |
+
+`www` 是官方推荐与 apex 一起配的，配好后两者会自动互相跳转。
+DNS 传播最长 24 小时，之后 `Enforce HTTPS` 才可勾选（站点强制 HTTPS 又可能再等一会儿）。
 
 > CI 读日志的坑：Actions 的日志文件存在 `*.blob.core.windows.net`，某些网络环境访问不到。
 > 因此两个 workflow 都把关键输出用 `::error::` / `::warning::` 发成 **annotation**，
