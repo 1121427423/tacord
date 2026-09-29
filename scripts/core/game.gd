@@ -77,8 +77,11 @@ func hear_gunshot(world_pos: Vector2, shooter_team: int) -> void:
 
 
 ## 清空所有敌情记忆（重开一局时调用）。
+## 注意是清每块黑板的内容，不是丢掉字典：活着的士兵手里握着这些黑板的引用，
+## 换掉对象会让 hear_gunshot 写进一块没人读的新黑板。
 func clear_boards() -> void:
-	_boards.clear()
+	for board in _boards.values():
+		board.clear()
 
 
 ## 加载 / 重开一局战斗场景。

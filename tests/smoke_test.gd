@@ -33,6 +33,7 @@ func _ready() -> void:
 	await _test_combat()
 	await _test_suppression()
 	await _test_downed_and_rescue()
+	await _test_perception_and_memory()
 	_finish()
 
 
@@ -383,6 +384,85 @@ func _test_downed_and_rescue() -> void:
 		"无人干预下队友自主完成拖救并救活伤员"
 	)
 	_check(frames < 900, "救援在 15 秒模拟时间内完成（用了 %d 帧）" % frames)
+
+
+func _test_perception_and_memory() -> void:
+	_emit("[感知与记忆]")
+	var game = get_node_or_null("/root/Game")
+	_check(game != null and game.has_method("blackboard"), "Game 自动加载提供小队黑板")
+	# 清掉前几节留下的枪声记忆：否则"最近的一声"可能是别的测试打的，断言就不确定了。
+	game.call("clear_boards")
+
+	# ---- 黑板本体：不依赖场景 ----
+	var board := Blackboard.new()
+	var dummy = SOLDIER_SCENE.instantiate()
+	_map.add_child(dummy)
+	board.report_sighting(dummy, Vector2(300.0, 400.0))
+	_check(board.has_sighting(dummy), "上报目击后黑板记得这个敌人")
+	var memory: Dictionary = board.memory_of(dummy)
+	_check(
+		memory.get("pos") == Vector2(300.0, 400.0) and memory.get("kind") == &"sighting",
+		"记忆带回最后已知位置与来源"
+	)
+	board.advance(Blackboard.MEMORY_TTL + 1.0)
+	_check(not board.has_sighting(dummy), "超过保鲜期的记忆被遗忘")
+
+	var shot_id: int = board.report_gunshot(Vector2(500.0, 500.0), 2)
+	_check(
+		int(board.nearest_enemy_gunshot(Vector2(400.0, 500.0), 1, 520.0).get("id", -1)) == shot_id,
+		"听得见半径内的敌队枪声"
+	)
+	_check(
+		board.nearest_enemy_gunshot(Vector2(400.0, 500.0), 2, 520.0).is_empty(),
+		"自己队的枪声不算威胁"
+	)
+	_check(
+		board.nearest_enemy_gunshot(Vector2.ZERO, 1, 100.0).is_empty(),
+		"超出听力半径的枪声听不见"
+	)
+	board.report_sighting(dummy, Vector2(300.0, 400.0))
+	_check(board.best_memory(1).get("kind") == &"sighting", "best_memory 优先返回目击而不是枪声")
+
+	# ---- 端到端 1：看不见敌人时朝枪声转头 ----
+	# 放在地图角落，保证 260px 射程内没有敌人（否则它会开火而不是听）。
+	var listener = SOLDIER_SCENE.instantiate()
+	_map.add_child(listener)
+	listener.global_position = _map.world_pos(Vector2i(30, 22))
+	var shot_pos: Vector2 = listener.global_position + Vector2(0.0, -100.0)
+	game.call("hear_gunshot", shot_pos, 2)
+	# 只等一个 process 帧：_combat_step 在 _think 之前跑，此时还没有开始移动，
+	# 朝向不会被 _follow_path 覆盖掉。
+	await get_tree().process_frame
+	var facing: Vector2 = listener.get("facing")
+	_check(facing.dot(Vector2(0.0, -1.0)) > 0.9, "看不见敌人时朝枪声转头")
+
+	# ---- 端到端 2：真的开一枪，敌队的人听得见（验证枪声分发路由）----
+	# 两人相距 320px：在 520px 听力内，但在 260px 射程外，所以听者只能听不能打。
+	var noisemaker = SOLDIER_SCENE.instantiate()
+	var hearer = SOLDIER_SCENE.instantiate()
+	noisemaker.set("team", 2)
+	_map.add_child(noisemaker)
+	_map.add_child(hearer)
+	noisemaker.global_position = _map.world_pos(Vector2i(4, 20))
+	hearer.global_position = _map.world_pos(Vector2i(14, 20))
+	noisemaker.call("try_fire", noisemaker.global_position + Vector2(0.0, -200.0))
+	await get_tree().process_frame
+	var to_shooter: Vector2 = (noisemaker.global_position - hearer.global_position).normalized()
+	_check(
+		(hearer.get("facing") as Vector2).dot(to_shooter) > 0.9,
+		"敌队开火后，看不见他的人也会转向声源"
+	)
+
+	# ---- 端到端 3：毫无情报也要搜索，不能原地发呆 ----
+	var searcher = SOLDIER_SCENE.instantiate()
+	_map.add_child(searcher)
+	searcher.global_position = _map.world_pos(Vector2i(28, 20))
+	searcher.call("set_order", "attack")
+	var start_pos: Vector2 = searcher.global_position
+	for _frame in range(60):
+		await get_tree().physics_frame
+	var walked: float = searcher.global_position.distance_to(start_pos)
+	_check(walked > 8.0, "进攻命令下会朝情报/巡逻点移动而不是发呆（走了 %.0f px）" % walked)
 
 
 func _finish() -> void:
