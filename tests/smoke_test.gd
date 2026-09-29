@@ -69,7 +69,9 @@ func _test_terrain() -> void:
 
 	var obstacles: Node = _map.get_node("Obstacles")
 	var before: int = obstacles.get_child_count()
+	print("  -- before add_obstacle")
 	_map.add_obstacle(Vector2i(2, 20))
+	print("  -- after add_obstacle")
 	# 回归测试：cover 格必须不可走，否则 A* 会规划出穿墙路径。
 	_check(not _map.is_walkable(Vector2i(2, 20)), "add_obstacle 的 cover 格不可走（防穿墙路径）")
 	_check(obstacles.get_child_count() == before + 1, "add_obstacle 生成了碰撞体")

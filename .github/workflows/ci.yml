@@ -70,9 +70,8 @@ jobs:
           code=${PIPESTATUS[0]}
           set -e
           echo "exit code = $code"
-          # 把关键行发成 workflow annotation，这样不依赖日志 CDN 也能取回结果。
-          grep -nE "FAIL|PASS|SMOKE TEST|SCRIPT ERROR|Parse Error|ERROR:|Cannot|Nonexistent" smoke.log \
-            | head -60 | while IFS= read -r line; do
-              echo "::error::${line}"
-            done
+          # 把完整输出发成 workflow annotation（不依赖被拦截的日志 CDN）。
+          nl -ba smoke.log | head -90 | while IFS= read -r line; do
+            echo "::error::${line}"
+          done
           exit $code
