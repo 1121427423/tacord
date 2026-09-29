@@ -8,6 +8,7 @@ const ACTION_SEEK_COVER := &"seek_cover"
 const ACTION_ADVANCE := &"advance"
 const ACTION_FLANK := &"flank"
 const ACTION_HOLD := &"hold"
+const ACTION_RESCUE := &"rescue"
 
 ## 命令优先级：宏观命令通过它影响效用打分，士兵仍然自己决定怎么执行。
 const ORDER_PRIORITY := {
@@ -25,11 +26,30 @@ const SCAN_RADIUS := 360.0  # 感知半径（像素）
 const COVER_SCAN_CELLS := 6  # 找掩体时的搜索半径（格）
 const ARRIVAL_EPSILON := 3.0
 
+## 愿意为救人跑多远（像素）。
+const RESCUE_SCAN_RADIUS := 900.0
+
+## 医疗兵的救援意愿加成（分数乘算，最终仍夹在 1.0）。
+const MEDIC_SCORE_BONUS := 1.4
+
+## 包扎速度倍率：医疗兵 x2。
+const RESCUE_SPEED_NORMAL := 1.0
+const RESCUE_SPEED_MEDIC := 2.0
+
+## 离伤员多近才算够得着（开始拖 + 包扎）。
+const DRAG_RANGE := 26.0
+
+## 拖动落点的掩体搜索半径（格）。
+const DRAG_COVER_CELLS := 3
+
 ## AI 思考间隔（秒）。单位数量上去后可调大以省 CPU（Web 导出尤其明显）。
 @export var think_interval: float = 0.25
 
 ## 行为粘性：传给 UtilityAI，防止分数抖动导致反复横跳。
 @export var stickiness: float = 0.15
+
+## 医疗兵：救援意愿与包扎速度都更高。由 main.gd 在编队时指定。
+@export var is_medic: bool = false
 
 var soldier: CharacterBody2D = null
 
@@ -47,6 +67,12 @@ var _action: StringName = ACTION_HOLD
 var _move_started: bool = false
 var _think_accum: float = 0.0
 var _rng := RandomNumberGenerator.new()
+
+# 当前正在救援的伤员（未标注类型，避免脚本循环依赖）。
+var _rescue_target = null
+
+# 是否已经把这个伤员往掩体拖过了（每个目标只拖一次）。
+var _drag_started: bool = false
 
 
 func _ready() -> void:
@@ -70,7 +96,8 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	if soldier == null or soldier.get("is_dead") == true:
+	# 倒地的人什么都不做（不开火、不决策），只能等队友来拖。
+	if soldier == null or soldier.get("is_dead") == true or soldier.get("is_downed") == true:
 		return
 	# 交战是"反射"，每帧处理；战术决策按 think_interval 处理。
 	_combat_step()
@@ -145,6 +172,7 @@ func _think() -> void:
 
 func _reset_trees() -> void:
 	_move_started = false
+	_drag_started = false
 	for tree in _trees.values():
 		BehaviorTree.reset_node(tree)
 
@@ -169,6 +197,10 @@ func _register_considerations() -> void:
 	utility.register_consideration(
 		ACTION_HOLD, _consider_hold, 0.0, 1.0, 0.35, UtilityAI.CurveType.LINEAR
 	)
+	# 5) 有队友倒地时去救。用 LINEAR：分数已经在 _consider_rescue 里算好了。
+	utility.register_consideration(
+		ACTION_RESCUE, _consider_rescue, 0.0, 1.0, 1.0, UtilityAI.CurveType.LINEAR
+	)
 
 
 func _consider_seek_cover() -> float:
@@ -192,6 +224,21 @@ func _consider_flank() -> float:
 func _consider_hold() -> float:
 	# 命令越明确，待命越没有吸引力。
 	return clampf(0.6 - 0.4 * _order_priority(), 0.0, 1.0)
+
+
+func _consider_rescue() -> float:
+	var casualty = _nearest_downed_ally(RESCUE_SCAN_RADIUS)
+	if casualty == null:
+		return 0.0
+	# 失血越多越急、人越近越该我去。被压制时打对折而不是归零：
+	# 冒死救人是有的，但分数要能被真正的致命威胁压过去。
+	var urgency: float = 1.0 - float(casualty.call("bleed_ratio"))
+	var distance: float = soldier.global_position.distance_to(casualty.global_position)
+	var proximity: float = 1.0 - clampf(distance / RESCUE_SCAN_RADIUS, 0.0, 1.0)
+	var score: float = 0.45 + 0.4 * urgency + 0.15 * proximity
+	if is_medic:
+		score *= MEDIC_SCORE_BONUS
+	return clampf(score * (1.0 - _suppression() * 0.5), 0.0, 1.0)
 
 
 # ---------------------------------------------------------------- 感知
@@ -225,11 +272,31 @@ func _nearby_enemies(radius: float) -> Array:
 	for unit in get_tree().get_nodes_in_group(&"soldiers"):
 		if unit == soldier or int(unit.get("team")) == my_team:
 			continue
-		if unit.get("is_dead") == true:
+		# 倒地的人不算有效目标：不鞭尸，也不为已经趴下的敌人计算危险压力。
+		if unit.get("is_dead") == true or unit.get("is_downed") == true:
 			continue
 		if soldier.global_position.distance_to(unit.global_position) <= radius:
 			out.append(unit)
 	return out
+
+
+## 最近的倒地友军；没有则返回 null。
+func _nearest_downed_ally(radius: float):
+	if soldier == null:
+		return null
+	var best = null
+	var best_dist: float = radius
+	var my_team: int = int(soldier.get("team"))
+	for unit in get_tree().get_nodes_in_group(&"soldiers"):
+		if unit == soldier or int(unit.get("team")) != my_team:
+			continue
+		if unit.get("is_downed") != true or unit.get("is_dead") == true:
+			continue
+		var d: float = soldier.global_position.distance_to(unit.global_position)
+		if d <= best_dist:
+			best_dist = d
+			best = unit
+	return best
 
 
 func _nearest_enemy(radius: float):
@@ -293,6 +360,17 @@ func _build_trees() -> void:
 		[BehaviorTree.action(&"pick_flank", _pick_flank_target), BehaviorTree.action(&"walk", _walk)]
 	)
 	_trees[ACTION_HOLD] = BehaviorTree.action(ACTION_HOLD, _do_hold)
+	# 救援：接近伤员 -> 走到他身边 -> 拖到掩体并包扎。
+	# 掩护火力不需要单独子树：_combat_step 每帧都会对可见敌人还击，
+	# 所以医疗兵是一边压着对面一边救人的。
+	_trees[ACTION_RESCUE] = BehaviorTree.sequence(
+		ACTION_RESCUE,
+		[
+			BehaviorTree.action(&"pick_casualty", _pick_rescue_target),
+			BehaviorTree.action(&"walk", _walk),
+			BehaviorTree.action(&"drag_and_bandage", _drag_and_bandage),
+		]
+	)
 
 
 func _pick_cover_target(_ctx: Dictionary, _delta: float) -> int:
@@ -358,6 +436,67 @@ func _do_hold(_ctx: Dictionary, _delta: float) -> int:
 	if soldier != null:
 		soldier.call("stop_moving")
 	return BehaviorTree.Status.SUCCESS
+
+
+func _pick_rescue_target(_ctx: Dictionary, _delta: float) -> int:
+	if map == null:
+		return BehaviorTree.Status.FAILURE
+	var casualty = _nearest_downed_ally(RESCUE_SCAN_RADIUS)
+	if casualty == null:
+		_rescue_target = null
+		return BehaviorTree.Status.FAILURE
+	# 换了一个伤员就重新计一次"是否已经拖过"。
+	if _rescue_target != casualty:
+		_rescue_target = casualty
+		_drag_started = false
+	if not _start_move(map.cell_at(casualty.global_position)):
+		return BehaviorTree.Status.FAILURE
+	return BehaviorTree.Status.SUCCESS
+
+
+func _drag_and_bandage(_ctx: Dictionary, _delta: float) -> int:
+	var casualty = _rescue_target
+	if casualty == null or not is_instance_valid(casualty):
+		_rescue_target = null
+		return BehaviorTree.Status.FAILURE
+	if casualty.get("is_downed") != true:
+		# 已经站起来了（可能是别人先救到的）。
+		_rescue_target = null
+		return BehaviorTree.Status.SUCCESS
+	if soldier.global_position.distance_to(casualty.global_position) > DRAG_RANGE:
+		# 距离被拉开了：让序列回到开头重新接近。
+		return BehaviorTree.Status.FAILURE
+	if not _drag_started:
+		_drag_started = true
+		_drag_casualty_to_cover(casualty)
+	# 树每隔 think_interval 才 tick 一次，所以按 think_interval 推进包扎进度，
+	# 这样 RESCUE_TIME 秒就是真实的秒数，不受 think_interval 调整影响。
+	var done: bool = casualty.call(
+		"apply_rescue", think_interval, _rescue_speed(), soldier
+	)
+	if done:
+		_rescue_target = null
+		return BehaviorTree.Status.SUCCESS
+	return BehaviorTree.Status.RUNNING
+
+
+## 把伤员往附近掩体质量最好的格子拖（他自己用爬行速度过去）。
+func _drag_casualty_to_cover(casualty) -> void:
+	if map == null or not map.has_method("find_cover_cell"):
+		return
+	var threats: Array = []
+	for enemy in _nearby_enemies(900.0):
+		threats.append(enemy.global_position)
+	var cell: Vector2i = map.find_cover_cell(
+		map.cell_at(casualty.global_position), threats, DRAG_COVER_CELLS
+	)
+	if cell.x >= 0:
+		casualty.call("move_to_cell", cell)
+
+
+## 包扎速度倍率：医疗兵 x2。
+func _rescue_speed() -> float:
+	return RESCUE_SPEED_MEDIC if is_medic else RESCUE_SPEED_NORMAL
 
 
 # ---------------------------------------------------------------- 移动辅助
