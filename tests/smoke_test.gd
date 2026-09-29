@@ -10,7 +10,7 @@ const WALL_X := 8
 
 # 期望的断言总数。测试函数中途报错时 _finish() 可能少跑几条，
 # 光看「0 失败」会误判为全绿，所以把总数本身也做成一条断言。
-const EXPECTED_CHECKS := 125
+const EXPECTED_CHECKS := 154
 
 # BattleMap 实例，不标注类型以便鸭子调用其查询接口。
 var _map = null
@@ -40,6 +40,7 @@ func _ready() -> void:
 	await _test_perception_and_memory()
 	await _test_ammo_and_logistics()
 	await _test_building_and_fob()
+	await _test_captives_and_intel()
 	_finish()
 
 
@@ -715,6 +716,153 @@ func _test_building_and_fob() -> void:
 		frames += 1
 	_check(site3.get("is_built") == true, "无人干预下士兵自己跑过去把工地建起来")
 	_check(frames < 300, "施工在 5 秒模拟时间内完成（用了 %d 帧）" % frames)
+
+
+func _test_captives_and_intel() -> void:
+	_emit("[俘虏与审讯]")
+	var game = get_node_or_null("/root/Game")
+	# 清场：上一节留了建成/拆掉的工地和几个士兵，这一节要一块干净的场地。
+	for unit in get_tree().get_nodes_in_group(&"soldiers"):
+		unit.call("die")
+	game.call("clear_boards")
+
+	# 1) 俘虏状态机。
+	var prisoner = SOLDIER_SCENE.instantiate()
+	prisoner.set("team", 2)
+	_map.add_child(prisoner)
+	prisoner.global_position = _map.world_pos(Vector2i(8, 20))
+	_check(prisoner.call("surrender", 2) == false, "不能向自己人投降")
+	_check(prisoner.call("surrender", 1) == true, "surrender 成功")
+	_check(prisoner.get("is_captive") == true, "投降后 is_captive 为真")
+	_check(int(prisoner.get("captor_team")) == 1, "俘虏记下了押送方")
+	_check(
+		prisoner.call("try_fire", prisoner.global_position + Vector2(50.0, 0.0)) == false,
+		"俘虏不开枪",
+	)
+	_check(is_zero_approx(float(prisoner.get("suppression"))), "举手的人不再被压制")
+	_check(
+		is_equal_approx(float(prisoner.call("effective_speed")), 72.0),
+		"俘虏以 0.9 倍速被押着走（80 x 0.9 = 72）",
+	)
+	_check(prisoner.call("surrender", 1) == false, "已经是俘虏就不能再投一次")
+
+	# 2) 投降的三道门槛：被压制 + 被包围 + 无援，缺一即 0。
+	var lonely = SOLDIER_SCENE.instantiate()
+	lonely.set("team", 1)
+	_map.add_child(lonely)
+	lonely.global_position = _map.world_pos(Vector2i(6, 20))
+	lonely.call("set_order", "hold")
+	var lonely_ai = lonely.get_node("SoldierAI")
+	_check(
+		is_zero_approx(float(lonely_ai.call("_consider_surrender"))),
+		"没人围、没被压制时不想投降",
+	)
+	var foe_a = SOLDIER_SCENE.instantiate()
+	foe_a.set("team", 2)
+	_map.add_child(foe_a)
+	foe_a.global_position = _map.world_pos(Vector2i(9, 20))
+	var foe_b = SOLDIER_SCENE.instantiate()
+	foe_b.set("team", 2)
+	_map.add_child(foe_b)
+	foe_b.global_position = _map.world_pos(Vector2i(6, 22))
+	lonely.set("suppression", 0.8)
+	_check(
+		_map.has_line_of_sight(lonely.global_position, foe_a.global_position)
+		and _map.has_line_of_sight(lonely.global_position, foe_b.global_position),
+		"两个敌人都与 lonely 通视（「被包围」的前提）",
+	)
+	_check(
+		is_equal_approx(float(lonely_ai.call("_consider_surrender")), 1.0),
+		"被包围 + 被压制 + 无援 -> 投降欲望拉满 1.00（prisoner 是俘虏，不算援军）",
+	)
+	var helper = SOLDIER_SCENE.instantiate()
+	helper.set("team", 1)
+	_map.add_child(helper)
+	helper.global_position = _map.world_pos(Vector2i(5, 20))
+	_check(
+		is_zero_approx(float(lonely_ai.call("_consider_surrender"))),
+		"300px 内有站着的战友就不投降",
+	)
+	helper.call("die")
+	_check(
+		is_equal_approx(float(lonely_ai.call("_consider_surrender")), 1.0),
+		"援军一死，投降欲望立刻回来",
+	)
+
+	# 3) 押送权唯一。
+	var guard_a = SOLDIER_SCENE.instantiate()
+	_map.add_child(guard_a)
+	guard_a.global_position = _map.world_pos(Vector2i(7, 20))
+	var guard_b = SOLDIER_SCENE.instantiate()
+	_map.add_child(guard_b)
+	guard_b.global_position = _map.world_pos(Vector2i(7, 21))
+	_check(game.call("claim_escort", prisoner, guard_a) == true, "第一个来的人拿到押送权")
+	_check(game.call("escort_of", prisoner) == guard_a, "escort_of 返回押送者本人")
+	_check(game.call("claim_escort", prisoner, guard_b) == false, "押送权唯一：第二个人抢不到")
+	_check(
+		game.call("claim_escort", prisoner, guard_a) == true,
+		"同一个人可以续押（leash 断开后的恢复路径）",
+	)
+	game.call("drop_escort", prisoner, guard_b)
+	_check(game.call("escort_of", prisoner) == guard_a, "押送者不匹配时 drop_escort 不动权限")
+	game.call("drop_escort", prisoner, guard_a)
+	_check(game.call("escort_of", prisoner) == null, "押送者本人放手后权限清空")
+
+	# 4) 审讯的位置约束：必须押到本队建成的 FOB 旁边才问得出话。
+	_check(int(game.call("interrogate", prisoner).size()) == 0, "本队还没有 FOB 时审不出情报")
+	var blue_fob = game.call("place_build_site", &"fob", Vector2i(4, 20), 1)
+	blue_fob.call("apply_labor", 99.0, 1.0)
+	var red_fob = game.call("place_build_site", &"fob", Vector2i(26, 20), 2)
+	red_fob.call("apply_labor", 99.0, 1.0)
+	_check(
+		int(game.call("interrogate", prisoner).size()) == 0, "俘虏还离 FOB 很远，审不出情报"
+	)
+	prisoner.global_position = blue_fob.global_position + Vector2(30.0, 0.0)
+	var revealed: Array = game.call("interrogate", prisoner)
+	_check(revealed.size() == 1, "押到 FOB 旁边审出 1 处敌方工事")
+	_check(
+		int(game.call("blackboard", 1).call("structure_count")) == 1, "情报写进了蓝方黑板"
+	)
+	var known: Dictionary = game.call("blackboard", 1).call(
+		"nearest_structure", prisoner.global_position
+	)
+	_check(
+		(known["pos"] as Vector2).distance_to(red_fob.global_position) < 1.0,
+		"审出来的正是红方那座 FOB",
+	)
+	_check(
+		int(game.call("blackboard", 2).call("structure_count")) == 0, "红方黑板不受影响"
+	)
+	_check(
+		int(game.call("interrogate", prisoner).size()) == 0, "同一个俘虏审不出第二次"
+	)
+
+	# 5) 端到端：俘虏投降 -> 押送者自己跑过去 -> 押回 FOB -> 审出新情报 -> 放人。
+	for unit in get_tree().get_nodes_in_group(&"soldiers"):
+		unit.call("die")
+	var red_bags = game.call("place_build_site", &"sandbag", Vector2i(24, 22), 2)
+	red_bags.call("apply_labor", 99.0, 1.0)
+	var victim = SOLDIER_SCENE.instantiate()
+	victim.set("team", 2)
+	_map.add_child(victim)
+	victim.global_position = _map.world_pos(Vector2i(8, 20))
+	victim.call("surrender", 1)
+	var escort = SOLDIER_SCENE.instantiate()
+	escort.set("team", 1)
+	_map.add_child(escort)
+	escort.global_position = _map.world_pos(Vector2i(7, 20))
+	var frames: int = 0
+	while int(game.call("blackboard", 1).call("structure_count")) < 2 and frames < 400:
+		await get_tree().physics_frame
+		frames += 1
+	_check(
+		int(game.call("blackboard", 1).call("structure_count")) == 2,
+		"无人干预下押送 + 审讯跑通：情报从 1 条变成 2 条",
+	)
+	_check(
+		frames < 400, "整趟押送在 %.1f 秒模拟时间内完成（%d 帧）" % [frames / 60.0, frames]
+	)
+	_check(victim.get("is_captive") == false, "情报到手就放人")
 
 
 func _finish() -> void:
