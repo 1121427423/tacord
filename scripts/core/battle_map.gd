@@ -266,11 +266,14 @@ func add_obstacle(cell: Vector2i, terrain_type: StringName = TERRAIN_COVER) -> v
 
 ## 指挥官命令下发：Game -> BattleMap -> 该阵营所有士兵。
 func issue_order(order: StringName, team: int = 1) -> void:
-	for unit in get_tree().get_nodes_in_group(&"soldiers"):
-		if int(unit.get("team")) != team:
-			continue
-		if unit.has_method("set_order"):
-			unit.call("set_order", String(order))
+	# 载具也听命令（它们同样有 set_order）；不在 soldiers 组里，
+	# 所以和 perception 一样要显式多扫一个组。
+	for group in [&"soldiers", &"vehicles"]:
+		for unit in get_tree().get_nodes_in_group(group):
+			if int(unit.get("team")) != team:
+				continue
+			if unit.has_method("set_order"):
+				unit.call("set_order", String(order))
 
 
 # ---------------------------------------------------------------- 占位渲染

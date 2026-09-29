@@ -87,17 +87,23 @@ func nearby_enemies(radius: float) -> Array:
 	if soldier == null or tree == null:
 		return out
 	var my_team: int = int(soldier.get("team"))
-	for unit in tree.get_nodes_in_group(&"soldiers"):
-		if unit == soldier or int(unit.get("team")) == my_team:
-			continue
-		# 倒地的人不算有效目标：不鞭尸，也不为已经趴下的敌人计算危险压力。
-		# 俘虏同理——他已经退出战斗，围着他不会让人更想投降。
-		if unit.get("is_dead") == true or unit.get("is_downed") == true:
-			continue
-		if unit.get("is_captive") == true:
-			continue
-		if soldier.global_position.distance_to(unit.global_position) <= radius:
-			out.append(unit)
+	# 士兵 + 装甲车都算敌人。载具自成 vehicles 组（救援、押送、帐篷治疗、
+	# FOB 补弹都只扫 soldiers，它不进去就不会被那些逻辑误伤），
+	# 所以这里显式多扫一个组。现有三个测试场景没有载具，
+	# 第二个组恒返回 []，这条改动对 220 条断言零扰动。
+	for group in [&"soldiers", &"vehicles"]:
+		for unit in tree.get_nodes_in_group(group):
+			if unit == soldier or int(unit.get("team")) == my_team:
+				continue
+			# 倒地的人不算有效目标：不鞭尸，也不为已经趴下的敌人计算危险压力。
+			# 俘虏同理——他已经退出战斗，围着他不会让人更想投降。
+			# 载具的 is_downed / is_captive 恒为 false（它不会倒地也不会被俘）。
+			if unit.get("is_dead") == true or unit.get("is_downed") == true:
+				continue
+			if unit.get("is_captive") == true:
+				continue
+			if soldier.global_position.distance_to(unit.global_position) <= radius:
+				out.append(unit)
 	return out
 
 
