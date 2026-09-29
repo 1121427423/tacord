@@ -1,22 +1,214 @@
-# tacord
+# TACORD
+
 指挥官只下达战术命令，AI 士兵根据地形、掩体和战局自主判断与作战。
 
-2D 俯视角战术 RTS · Godot 4.7.x · GDScript · Utility AI + 行为树
+2D 俯视角战术 RTS · Godot 4.7.x · GDScript · Utility AI + 行为树 · 无预设掩体点
 
-## 运行
+---
 
-1. 用 Godot 4.7.x（stable）打开本目录的 `project.godot`
-2. 按 `F5`
+## 一、依赖
+
+### 必需（只有这一项）
+
+| 依赖 | 版本 | 说明 |
+| --- | --- | --- |
+| **Godot Engine** | **4.7.2 stable**（或任意 4.7.x） | 用**标准版**，不要用 `.NET / Mono` 版 |
+
+下载地址（官方，二选一）：
+
+- 下载页：<https://godotengine.org/download/archive/4.7.2-stable/>
+- GitHub Release：<https://github.com/godotengine/godot-builds/releases/tag/4.7.2-stable>
+
+| 平台 | 文件 | 大小 |
+| --- | --- | --- |
+| macOS（Apple Silicon / Intel 通用） | `Godot_v4.7.2-stable_macos.universal.zip` | 170.6 MB |
+| Windows 64 位 | `Godot_v4.7.2-stable_win64.exe.zip` | 86.0 MB |
+| Linux x86_64 | `Godot_v4.7.2-stable_linux.x86_64.zip` | 77.9 MB |
+
+> **为什么锁 4.7.x 而不是 4.2**：4.2 的 Web 导出必须依赖 `SharedArrayBuffer` + COOP/COEP 响应头，
+> 且在 macOS/iOS 上多线程导出有已知兼容问题；自 4.3 起支持单线程 Web 导出。
+> 本工程脚本只用 4.2+ 就有的 API，所以**用 4.3 ~ 4.7 任意版本打开都能跑**，推荐直接用 4.7.2。
+
+### 明确不需要的东西
+
+- ❌ 任何第三方插件 / AssetLib 资源 / GDExtension
+- ❌ C#/.NET（C# 版 Godot 4 无法导出 Web，这是硬约束）
+- ❌ 外部美术资源（当前全是 `ColorRect` + `_draw()` 占位，后续换 Kenney 素材）
+- ❌ 额外的寻路/行为树库（`AStar2D` 与 BT 都在仓库内实现）
+
+### 可选依赖
+
+| 用途 | 依赖 | 安装 |
+| --- | --- | --- |
+| 静态检查 GDScript（不需要开编辑器） | Python 3.9+ 与 `gdtoolkit 4.5.0` | `pip install gdtoolkit==4.5.0` |
+| 导出 Web / macOS / 其他平台 | Godot **Export Templates 4.7.2.stable**（约 **1.28 GB**） | 编辑器菜单 `Editor → Manage Export Templates → Download`，只在要导出时装 |
+| macOS 签名与公证 | Xcode 或 Command Line Tools + Apple 开发者证书 | 只有正式分发才需要 |
+
+---
+
+## 二、搭建手册
+
+### 步骤 1 · 安装 Godot
+
+**macOS**
+
+```bash
+# 1) 解压 zip，把 Godot.app 拖进 /Applications
+# 2) 若被 Gatekeeper 拦（"无法验证开发者"），执行：
+xattr -dr com.apple.quarantine /Applications/Godot.app
+```
+
+**Windows**：解压 `..._win64.exe.zip`，双击 `Godot_v4.7.2-stable_win64.exe` 即可（免安装）。
+
+**Linux**
+
+```bash
+unzip Godot_v4.7.2-stable_linux.x86_64.zip
+chmod +x Godot_v4.7.2-stable_linux.x86_64
+sudo mv Godot_v4.7.2-stable_linux.x86_64 /usr/local/bin/godot
+```
+
+### 步骤 2 · 打开工程
+
+```bash
+git clone https://github.com/1121427423/tacord.git
+cd tacord
+```
+
+- 图形界面：启动 Godot → `Import` → 选中本目录的 **`project.godot`** → `Import & Edit`
+- 命令行：
+
+```bash
+godot --path .            # 直接跑游戏
+godot --path . --editor   # 打开编辑器
+```
+
+### 步骤 3 · 首次导入
+
+第一次打开时 Godot 会生成 `.godot/` 目录和 `*.import` 文件。
+**这两者都已在 `.gitignore` 里**，所以：
+
+- 别人克隆仓库后第一次打开需要重新导入（几秒钟，正常现象）
+- 不要手动提交 `.godot/`
+
+### 步骤 4 · 运行（F5）
+
+主场景是 `scenes/main.tscn`，会看到 32×24 的网格地图、中央带缺口的墙、几堆木箱，
+以及左侧 3 个蓝色士兵、右侧 3 个红色士兵。
 
 | 按键 | 作用 |
 | --- | --- |
-| `1` / `2` / `3` / `4` | 对蓝方下达：进攻 / 防守 / 包抄 / 待命 |
+| `1` / `2` / `3` / `4` | 对**蓝方**下达：进攻 / 防守 / 包抄 / 待命 |
 | `F1` | 掩体热区可视化（绿 = 掩体好，红 = 暴露） |
 | `R` | 重开一局 |
 
-开局蓝方 `defend`、红方 `attack`，双方自主向中线推进；进入感知半径后效用分数开始分化，
-被通视的一方会自己去找掩体，看到对方侧面暴露的一方会尝试包抄。
+开局蓝方命令是 `defend`、红方是 `attack`，双方会自主向中线推进；进入感知半径后效用分数开始
+分化——被通视的一方自己转 `seek_cover`，看到对方侧面暴露的一方转 `flank`。左上角 HUD 实时
+显示每个士兵的 hp / 命令 / 当前行为。
 
-## 文档
+### 步骤 5 · 静态检查（可选，但建议提交前跑）
 
-- 技术栈决策、MVP 范围、后续里程碑：见 [PLAN.md](PLAN.md)
+```bash
+# 方式 A：gdtoolkit（不需要开 Godot）
+python3 -m venv .venv && .venv/bin/pip install gdtoolkit==4.5.0
+.venv/bin/gdparse scripts/**/*.gd   # 语法
+.venv/bin/gdlint  scripts/**/*.gd   # 风格
+
+# 方式 B：引擎自带（需要本地有 Godot）
+godot --headless --path . --import                     # 导入全部资源后自动退出
+godot --headless --path . --quit-after 2               # 冒烟测试：加载主场景跑 2 帧后退出
+godot --headless --path . --check-only --script scripts/core/battle_map.gd
+```
+
+> 官方帮助原文：`--import` = "Starts the editor, waits for any resources to be imported,
+> and then quits"；`--check-only` = "Only parse for errors and quit (use with --script)"；
+> `--quit-after <int>` = "Quit after the given number of iterations"。
+
+---
+
+## 三、导出
+
+### 导出 Web（HTML5）
+
+1. `Editor → Manage Export Templates` 下载 4.7.2.stable 模板
+2. `Project → Export → Add… → Web`
+3. 关键设置（**保持默认即可**）：
+   - `Variant → Thread Support` = **关闭**
+     （4.7.2 引擎源码里 `variant/thread_support` 默认就是 `false`）
+     → 单线程导出**不需要** COOP/COEP 响应头，itch.io / GitHub Pages / 任意静态托管都能直接跑
+   - `Variant → Extensions Support` = 关闭（本工程没有 GDExtension）
+4. 导出到 `web_build/index.html`
+5. **必须用 HTTP 服务，`file://` 打不开**：
+
+```bash
+cd web_build && python3 -m http.server 8080
+# 浏览器打开 http://localhost:8080
+```
+
+> 只有当你主动打开 `Thread Support` 时，服务器才必须返回这两个头：
+> `Cross-Origin-Opener-Policy: same-origin` 和 `Cross-Origin-Embedder-Policy: require-corp`。
+
+### 导出 macOS
+
+1. 同样先装 Export Templates；官方 macOS 模板是 **Universal 2**（arm64 + x86_64 同一个包）
+2. `Project → Export → Add… → macOS`
+3. 引擎写入的 `Info.plist` 里 `LSMinimumSystemVersion` 为 **10.12**，
+   因此 **macOS 26（Tahoe）远高于最低要求**，不存在系统版本不够的问题
+4. 本工程渲染方式已固定为 **Compatibility**，不依赖 Metal/Forward+ 后端，在 Apple Silicon
+   与 Intel 上行为一致
+5. 正式分发需要 `codesign` + 公证（编辑器导出面板里有 CodeSign 相关选项，也可以用
+   `codesign` / `notarytool` 命令行）。**这一步需要在真机上验证一次**，沙箱环境无法覆盖
+
+---
+
+## 四、目录结构
+
+```
+tacord/
+├── project.godot                    # 4.7.x / Compatibility / 1280x720 / autoload Game
+├── icon.svg
+├── scenes/
+│   ├── main.tscn                    # Main + Camera2D + BattleMap 实例 + HUD
+│   ├── battle/battle_map.tscn       # Node2D + battle_map.gd
+│   └── units/soldier.tscn           # CharacterBody2D + ColorRect + CollisionShape2D + SoldierAI
+├── scripts/
+│   ├── core/game.gd                 # autoload：引导、命令下发、全局查询
+│   ├── core/battle_map.gd           # 网格/地形/AStar2D/视线/掩体评估/占位渲染
+│   ├── core/main.gd                 # 场景装配、演示地形与双方占位单位、HUD
+│   ├── ai/utility.gd                # 通用 Utility AI（Consideration + 响应曲线）
+│   ├── ai/behavior_tree.gd          # 极简 BT：Action / Condition / Sequence / Selector
+│   ├── ai/soldier_ai.gd             # seek_cover / advance / flank / hold
+│   └── units/soldier.gd             # 移动 / HP / 命令 / 占位绘制
+├── assets/                          # 美术资源占位目录
+└── PLAN.md                          # 技术栈决策 + M0~M7 里程碑
+```
+
+物理层约定：**1 = 单位，2 = 静态障碍**（视线射线只打第 2 层）。
+
+---
+
+## 五、常见问题
+
+| 现象 | 原因 / 处理 |
+| --- | --- |
+| 打开工程提示要"升级"配置 | `config/features` 写的是 `4.2`，用更高版本打开属正常，确认即可 |
+| 克隆后没有 `.godot/`，第一次打开卡一下 | 正常，是在重新导入 |
+| 士兵不动 | 确认 HUD 上命令不是 `hold`；`hold` 时待命分数最高是预期行为 |
+| Web 导出白屏 / 报 SharedArrayBuffer | 你打开了 `Thread Support`，改回关闭，或给服务器加 COOP/COEP 头 |
+| macOS 提示无法打开 | `xattr -dr com.apple.quarantine <路径>` |
+| 编辑器报"脚本编译错误" | 跑一次 `godot --headless --path . --import` 看完整报错 |
+
+---
+
+## 六、当前验证状态
+
+已完成的静态验证：7 个脚本通过 `gdparse`（Godot 4 语法）与 `gdlint`；脚本里 **112 处**引擎 API
+**同时**逐个比对过 Godot **4.7.2** 与 **4.2** 源码自带的类文档（两边都 0 问题，所以"兼容 4.2+"
+不是口头承诺）；**126 处**跨文件调用核对无误；`project.godot` 的每个设置项与 `.tscn` 的每个
+属性名都在引擎源码中确认存在。
+
+**尚未验证**：引擎实际运行画面（"F5 看到网格和士兵"）需要在本地 Godot 4.7.x 里确认一次。
+macOS 签名/公证同样需要真机验证。
+
+技术选型理由、MVP 范围与后续里程碑（M1 交火 → M2 压制 → M3 倒地救援 → … → M7 俘虏审讯）
+见 **[PLAN.md](PLAN.md)**。

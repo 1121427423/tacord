@@ -29,8 +29,8 @@
 
 | 平台 | 状态 | 说明 |
 | --- | --- | --- |
-| 桌面（macOS 26 / Win / Linux） | 主开发目标 | 编辑器内 F5 直接跑。macOS 分发需要签名 + 公证（**本沙箱内无法验证，需在真机上做一次导出冒烟**）。 |
-| Web（HTML5） | 一等目标 | 用 **单线程导出**（关闭 Thread Support），普通静态托管即可，无需 COOP/COEP。注意：`file://` 打不开，必须走 HTTP；预览/itch.io 均可。 |
+| 桌面（macOS 26 / Win / Linux） | 主开发目标 | 编辑器内 F5 直接跑。引擎给 macOS 导出包写的 `Info.plist` 里 `LSMinimumSystemVersion` = **10.12**（见 `platform/macos/export/export_plugin.cpp`），官方模板是 **Universal 2**（arm64+x86_64），macOS 26 远高于最低要求。分发需要签名 + 公证（**本沙箱内无法验证，需在真机上做一次导出冒烟**）。 |
+| Web（HTML5） | 一等目标 | 用 **单线程导出**。4.7.2 源码 `platform/web/export/export_plugin.cpp` 里 `variant/thread_support` **默认值就是 false**，所以默认配置即无需 COOP/COEP 头，普通静态托管 / itch.io 可直接跑。注意：`file://` 打不开，必须走 HTTP。 |
 | 联机 | 暂缓（M6 之后） | Web 端需要 `WebSocketMultiplayerPeer`，与桌面 ENet 不是同一套传输层，早期不要为它做设计妥协。 |
 
 ---
@@ -153,8 +153,9 @@ tacord/
 
 - `gdparse`（gdtoolkit 4.5.0，Godot 4 GDScript 语法）：**7 个脚本全部通过**
 - `gdlint`：**no problems found**
-- 引擎 API 交叉核对：把脚本里 **112 处**引擎/项目符号逐个比对 Godot **4.7.2-stable** 源码自带的
-  `doc/classes/*.xml`（方法名、参数、常量、继承链）：**0 问题**。
+- 引擎 API 交叉核对：把脚本里 **112 处**引擎/项目符号逐个比对 Godot 源码自带的
+  `doc/classes/*.xml`（方法名、参数、常量、继承链），**4.7.2-stable 与 4.2-stable 两个版本
+  各跑一遍，均 0 问题**——这使"脚本兼容 4.2+"成为已验证结论而非假设。
   这一步实际抓到一个真 bug：`battle_map.gd` 调用了未定义的 `_init_terrain()`，已补上。
 - 跨文件鸭子调用核对：**126 处**（`map.xxx()` / `soldier.call("xxx")` / `unit.get("xxx")` 等）：**0 问题**
 - `project.godot` 的每个设置项都在引擎源码里确认存在（`project_settings.cpp`、`main.cpp`、
