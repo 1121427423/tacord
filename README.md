@@ -252,7 +252,18 @@ godot --headless --path . tests/mobility_test.tscn # M8，同样退出码判定
 
 **一次性设置（必须手动做一次）**：仓库 `Settings → Pages → Build and deployment → Source`
 选择 **GitHub Actions**。没开启时导出仍会成功、artifact 照常上传，只是最后一步发布会报
-`Failed to create deployment (status: 404)`。workflow 里的 `configure-pages` 带了
+`Failed to create deployment (status: 404)`。
+
+**两个都真实踩过的坑**，第二个特别阴险：
+
+| 症状 | 原因 | 修法 |
+| --- | --- | --- |
+| deploy 步骤报 `Failed to create deployment (status: 404)` | Pages 没开启 / Source 不是 GitHub Actions | `Settings → Pages → Source` 选 **GitHub Actions** |
+| job 在 **Set up job 阶段 2 秒就失败**，`steps: []`、几乎没有日志，annotation 里是 `Branch "xxx" is not allowed to deploy to github-pages due to environment protection rules` | `Settings → Environments → github-pages` 的 **Deployment branches** 只允许 `main`（把 Source 切成 GitHub Actions 时 GitHub 默认只加 `main`），而本工程在 `arena/**` 分支上开发 | 同一页把 `arena/**` 加进允许列表，或直接改成 **No restriction** |
+
+第二个坑为什么难查：它发生在 job 启动前，Actions 日志文件在 `*.blob.core.windows.net`
+（很多网络环境访问不到），`gh run view --log` 又常常是空的。唯一的线索是
+`gh api /repos/<owner>/<repo>/check-runs/<id>/annotations`。workflow 里的 `configure-pages` 带了
 `enablement: true`，在 `pages: write` 权限下可以自己把它重新打开；
 但 `deploy-pages` **故意不加 `continue-on-error`**——以前加了，于是"页面根本没部署出来"
 被伪装成绿色 run，骗过了好几个里程碑。
