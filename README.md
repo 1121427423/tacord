@@ -192,7 +192,8 @@ tacord/
 │   └── units/build_site.gd          # 工地：施工计时 / 建成转实体 / 被打掉拆地形
 ├── tests/
 │   ├── smoke_test.tscn              # M0–M7：154 项断言
-│   └── mobility_test.tscn           # M8：40 项断言（独立场景）
+│   ├── mobility_test.tscn           # M8：40 项断言（独立场景）
+│   └── medic_test.tscn              # M9：26 项断言（独立场景）
 ├── assets/                          # 美术资源占位目录
 └── PLAN.md                          # 技术栈决策 + M0~M8 里程碑
 ```
@@ -223,9 +224,9 @@ tacord/
 | Job | 内容 |
 | --- | --- |
 | `GDScript 静态检查` | pip 装 `gdtoolkit==4.5.0`，对 `scripts/` 与 `tests/` 跑 `gdparse` + `gdlint` |
-| `Headless 冒烟测试` | 下载 Godot 4.7.2 Linux 版 → `--headless --import` → **依次**跑 `tests/smoke_test.tscn` 与 `tests/mobility_test.tscn`，两个都必须退出码 0 |
+| `Headless 冒烟测试` | 下载 Godot 4.7.2 Linux 版 → `--headless --import` → **依次**跑 `tests/smoke_test.tscn`、`tests/mobility_test.tscn`、`tests/medic_test.tscn`，三个都必须退出码 0 |
 
-冒烟测试是**引擎原生**的（不依赖 GUT/gdUnit 等第三方插件）。M8 起按里程碑拆成两个场景——
+冒烟测试是**引擎原生**的（不依赖 GUT/gdUnit 等第三方插件）。M8 起按里程碑拆成三个场景——
 `smoke_test.gd` 已经 911 行、顶着 gdlint 的 1000 行上限，再往里塞后面的里程碑就没有落脚的地方。
 每个场景各自把断言总数写死在 `EXPECTED_CHECKS` 里，`_finish()` 比对**实际跑到的**条数，
 某个测试段中途崩掉时不会谎报全绿。
@@ -234,15 +235,19 @@ tacord/
   掩体几何、交火掉血、压制数值、倒地与救援、感知与记忆、弹药与后勤、建造与 FOB、俘虏与审讯
 - `mobility_test.tscn`（**40 项**）：翻越（跳矮墙 / 绕整墙两条互为反例）、三种姿态的命中轮廓
   与速度、伏地能开枪而滑铲不能、肉搏冷却与敌我判定、三个新打分的触发条件、端到端趴下与起身
+- `medic_test.tscn`（**26 项**）：医疗帐篷的落点与建成、建成后挡视线且 A\* 绕行、
+  治疗的四个过滤条件各自单列一条、治到 `max_hp` 封顶、施工中不治、
+  不碰胜负与编制、呼救气泡的相位在倒地时增长而起立后停跳
 
 CI 里 annotation 上限约 10 条且只保留最先发出的，所以**成功的场景一行不发**，
-失败的才把诊断摊开；三类日志另传成 `test-logs` artifact 兜底。
+失败的才把诊断摊开；四类日志另传成 `test-logs` artifact 兜底。
 
 本地跑同样的检查：
 
 ```bash
 godot --headless --path . tests/smoke_test.tscn    # 退出码 0 = 全通过
 godot --headless --path . tests/mobility_test.tscn # M8，同样退出码判定
+godot --headless --path . tests/medic_test.tscn    # M9，同样退出码判定
 ```
 
 ### `.github/workflows/web.yml`
@@ -323,10 +328,12 @@ DNS 传播最长 24 小时，之后 `Enforce HTTPS` 才可勾选（站点强制 
 
 ## 七、当前验证状态
 
-**已在真实引擎里跑通**：GitHub Actions 上用 Godot 4.7.2 headless 依次执行两个测试场景，
-**合计 194/194 项断言通过**——`smoke_test.tscn` 154 项（掩体几何评估、交火掉血、压制数值、
+**已在真实引擎里跑通**：GitHub Actions 上用 Godot 4.7.2 headless 依次执行三个测试场景，
+**合计 220/220 项断言通过**——`smoke_test.tscn` 154 项（掩体几何评估、交火掉血、压制数值、
 倒地与救援、感知与记忆、弹药与后勤、建造与 FOB、俘虏与审讯）+ `mobility_test.tscn` 40 项
-（翻越、三种姿态、肉搏、三个新打分、端到端趴下与起身）。每个总数本身也是一条断言——
+（翻越、三种姿态、肉搏、三个新打分、端到端趴下与起身）+ `medic_test.tscn` 26 项
+（医疗帐篷的治疗四条件、视线与绕行、不碰胜负与编制、呼救气泡的相位）。
+每个总数本身也是一条断言——
 `EXPECTED_CHECKS` 写死在测试里，某个测试段中途崩掉时退出码仍是 0，沙箱又读不到 CI 日志，
 所以必须让引擎自己判定数没数够。这套测试工作累计抓到 **12 个真 bug**：
 `cover` 地形曾可走导致 A\* 规划穿墙路径；`find_path` 曾因 `allow_partial_path=true`
@@ -395,5 +402,5 @@ HTTP 层已通但需要人眼确认；
 ② macOS 签名/公证（需真机）。
 
 技术选型理由、MVP 范围与全部里程碑（M1 交火 → M2 压制 → M3 倒地救援 → M4 感知记忆 →
-M5 弹药后勤 → M6 建造与 FOB → M7 俘虏审讯 → M8 机动与近战）
+M5 弹药后勤 → M6 建造与 FOB → M7 俘虏审讯 → M8 机动与近战 → M9 医疗帐篷与呼救气泡）
 见 **[PLAN.md](PLAN.md)**。
