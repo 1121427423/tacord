@@ -18,6 +18,9 @@ const ORDER_PRIORITY := {
 	"retreat": 0.0,
 }
 
+## 压制值达到这个阈值时停火（缩在掩体后）。
+const PINNED_FIRE_THRESHOLD := 0.75
+
 const SCAN_RADIUS := 360.0  # 感知半径（像素）
 const COVER_SCAN_CELLS := 6  # 找掩体时的搜索半径（格）
 const ARRIVAL_EPSILON := 3.0
@@ -82,6 +85,9 @@ func _process(delta: float) -> void:
 ## 放在 AI 层而不是 soldier 里，是为了让 M2 的压制能够直接卡住这一步。
 func _combat_step() -> void:
 	if weapon == null:
+		return
+	# 被压到抬不起头时就停火——压制衰减后会自己恢复，交火因此呈脉冲式。
+	if _suppression() >= PINNED_FIRE_THRESHOLD:
 		return
 	var target = _acquire_target()
 	if target == null:
@@ -168,15 +174,19 @@ func _register_considerations() -> void:
 func _consider_seek_cover() -> float:
 	var danger: float = _danger_pressure()
 	var wounded: float = 1.0 - _health_ratio()
-	return clampf(danger * 0.75 + wounded * 0.45, 0.0, 1.0)
+	var pinned: float = _suppression()
+	return clampf(danger * 0.6 + wounded * 0.4 + pinned * 0.65, 0.0, 1.0)
 
 
 func _consider_advance() -> float:
-	return clampf(_order_priority() * _health_ratio(), 0.0, 1.0)
+	# 被压制时推进欲望直接归零：没人会大摇大摆穿过火力杀伤区。
+	return clampf(_order_priority() * _health_ratio() * (1.0 - _suppression()), 0.0, 1.0)
 
 
 func _consider_flank() -> float:
-	return clampf(_flank_opportunity() * _health_ratio() * 1.15, 0.0, 1.0)
+	return clampf(
+		_flank_opportunity() * _health_ratio() * 1.15 * (1.0 - _suppression() * 0.8), 0.0, 1.0
+	)
 
 
 func _consider_hold() -> float:
@@ -185,6 +195,12 @@ func _consider_hold() -> float:
 
 
 # ---------------------------------------------------------------- 感知
+
+
+func _suppression() -> float:
+	if soldier == null:
+		return 0.0
+	return clampf(float(soldier.get("suppression")), 0.0, 1.0)
 
 
 func _health_ratio() -> float:
