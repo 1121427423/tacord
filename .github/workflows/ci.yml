@@ -39,10 +39,13 @@ jobs:
       - name: 风格检查 (gdlint)
         run: gdlint scripts tests
 
-  # 2) 真正跑引擎：headless 执行 tests/smoke_test.tscn
+  # 2) 真正跑引擎：headless 执行 tests/*.tscn（每个里程碑一个场景）
   smoke-test:
     name: Headless 冒烟测试
     runs-on: ubuntu-latest
+    # 有测试段 abort 时脚本可能压不到 quit()，headless 会一直挂着。
+    # 没有超时的话一次 CI 能挂到 Actions 默认的 6 小时才被杀。
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -65,31 +68,42 @@ jobs:
 
       - name: 运行冒烟测试
         run: |
-          set +e
-          # stdout / stderr 分别落盘：stdout 会被块缓冲（崩溃即丢），stderr 不缓冲，
-          # Godot 的崩溃回溯只会出现在 stderr。
-          godot --headless --path . tests/smoke_test.tscn >smoke_out.log 2>smoke_err.log
-          code=$?
-          set -e
-          echo "exit code = $code"
-          if [ "$code" -ge 128 ]; then
-            echo "::error::进程被信号 $((code - 128)) 终止（11=SIGSEGV 段错误）"
-          fi
-          # annotation 有数量上限（约 10 条）且保留**最先发出**的若干条，
-          # 所以诊断价值最高的 stderr 必须排在最前面——GDScript 的运行时错误
-          # 与回溯只在 stderr 里，而它恰恰是"某个测试段中途 abort"的唯一线索。
-          echo "::error::---- stderr（运行时错误在这里）----"
-          if [ -s smoke_err.log ]; then
-            nl -ba smoke_err.log | tac | head -40 | while IFS= read -r line; do echo "::error::${line}"; done
-          else
-            echo "::error::(stderr 为空)"
-          fi
-          if [ -f smoke_result.log ]; then
-            echo "::error::---- 失败项 ----"
-            grep -n "FAIL" smoke_result.log | while IFS= read -r line; do echo "::error::${line}"; done
-            echo "::error::---- 末尾 ----"
-            nl -ba smoke_result.log | tac | head -8 | while IFS= read -r line; do echo "::error::${line}"; done
-          else
-            echo "::error::没有生成 smoke_result.log —— 测试脚本没能开始执行"
-          fi
-          exit $code
+          # 一个场景一个日志前缀。M8 起测试按里程碑拆场景——smoke_test.gd 已经顶到
+          # gdlint 的 1000 行上限，再往里塞会让后面的里程碑没有落脚的地方。
+          run_scene() {
+            scene="$1"; tag="$2"
+            set +e
+            # stdout / stderr 分别落盘：stdout 会被块缓冲（崩溃即丢），stderr 不缓冲，
+            # Godot 的崩溃回溯只会出现在 stderr。
+            godot --headless --path . "$scene" >"${tag}_out.log" 2>"${tag}_err.log"
+            code=$?
+            set -e
+            echo "[$scene] exit code = $code"
+            if [ "$code" -ge 128 ]; then
+              echo "::error::${scene}: 进程被信号 $((code - 128)) 终止（11=SIGSEGV 段错误）"
+            fi
+            # annotation 有数量上限（约 10 条）且保留**最先发出**的若干条，
+            # 所以诊断价值最高的 stderr 必须排在最前面——GDScript 的运行时错误
+            # 与回溯只在 stderr 里，而它恰恰是"某个测试段中途 abort"的唯一线索。
+            echo "::error::---- ${scene} stderr（运行时错误在这里）----"
+            if [ -s "${tag}_err.log" ]; then
+              nl -ba "${tag}_err.log" | tac | head -40 | while IFS= read -r line; do echo "::error::${line}"; done
+            else
+              echo "::error::${scene}: (stderr 为空)"
+            fi
+            if [ -f "${tag}_result.log" ]; then
+              echo "::error::---- ${scene} 失败项 ----"
+              grep -n "FAIL" "${tag}_result.log" | while IFS= read -r line; do echo "::error::${line}"; done
+              echo "::error::---- ${scene} 末尾 ----"
+              nl -ba "${tag}_result.log" | tac | head -8 | while IFS= read -r line; do echo "::error::${line}"; done
+            else
+              echo "::error::没有生成 ${tag}_result.log —— ${scene} 没能开始执行"
+            fi
+            return $code
+          }
+
+          # smoke 与 mobility 都要跑：第一个失败也不跳过第二个，否则一次 CI 只修得了一个场景。
+          rc=0
+          run_scene tests/smoke_test.tscn smoke || rc=1
+          run_scene tests/mobility_test.tscn mobility || rc=1
+          exit $rc
