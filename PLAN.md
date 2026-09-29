@@ -457,6 +457,13 @@ c. 拆出去的独立场景里没有 `smoke_test` 搭好的那列掩体，
 d. 趴下那一刻压制本来就是 0（低于 0.35 的释放线），"一走就自动站起来"会不管走不走
    都在下一帧起立，是假阳性 → 必须先把压制抬到 0.9 才测得出"移动即起立"。
 
-**仍未验证**：① 浏览器里的实际画面（需开启 GitHub Pages，或下载 artifact 本地预览——
-沙箱到 Azure Blob 的 TLS 被拦，本环境两条路都走不通）；
+**Web 部署与 HTTP 层已验证**：`部署到 GitHub Pages: success`（该步骤已去掉
+`continue-on-error`，为真绿），deployment `6737748200` 状态 `success`。
+实测 `https://1121427423.github.io/tacord/` 返回 200 且 `<title>TACORD</title>`；
+`…/tacord/index.js` 返回 200（`wasm32.nothreads` 单线程版）；根路径 `/index.js` 返回 404，
+说明资源是相对路径引用，apex 自定义域名下同样成立。
+（沙箱自身到 `github.io` / Azure Blob 的 TLS 仍被拦，以上是用另一条网络出口取回的。）
+
+**仍未验证**：① 浏览器里的实际画面（WASM 与 `.pck` 真正加载、canvas 跑起来）——
+HTTP 层已通，需人眼确认；
 ② macOS 签名/公证（需真机）。

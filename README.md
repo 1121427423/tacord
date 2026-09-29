@@ -254,7 +254,7 @@ godot --headless --path . tests/mobility_test.tscn # M8，同样退出码判定
 选择 **GitHub Actions**。没开启时导出仍会成功、artifact 照常上传，只是最后一步发布会报
 `Failed to create deployment (status: 404)`。
 
-**两个都真实踩过的坑**，第二个特别阴险：
+**三个都真实踩过的坑**，第二个特别阴险：
 
 | 症状 | 原因 | 修法 |
 | --- | --- | --- |
@@ -276,9 +276,16 @@ gh run download <run-id> -n github-pages -D web_preview
 cd web_preview && python3 -m http.server 8080
 ```
 
-### 自定义域名（`tacord.games`）
+### 自定义域名（可选，**当前未启用**）
 
-按 GitHub 官方文档，**用自定义 Actions workflow 部署时不需要 `CNAME` 文件**：
+> 本项目暂不买自定义域名，走默认的 `https://1121427423.github.io/tacord/`。
+>
+> 期间试填过 `tacord.games`，踩到一个反直觉的副作用：**只要 `Custom domain` 里有值，
+> GitHub 就会把默认域名 301 重定向过去**。于是域名还没买、DNS 也不存在时，
+> `1121427423.github.io/tacord/` 跟着一起打不开——站点变成"哪儿都够不着"。
+> 已把 `Custom domain` 清空，恢复正常访问。
+>
+> 下面的配置步骤保留，将来要买域名照做即可。按 GitHub 官方文档，**用自定义 Actions workflow 部署时不需要 `CNAME` 文件**：
 域名登记在 `Settings → Pages → Custom domain`，仓库里就算塞了 `CNAME` 也会被忽略且不需要。
 因此要做的三步，且**顺序不能反**（官方明确要求先在 GitHub 登记域名，再去配 DNS，
 否则别人可以占用你某个子域来架站）：
@@ -370,9 +377,21 @@ API 逐个比对（脚本里的引擎/项目符号对 Godot **4.7.2** 与 **4.2*
 M2 新增代码用到的 `is_equal_approx` / `is_zero_approx` 也在 `@GlobalScope.xml` 里确认过；
 `project.godot` 的每个设置项与 `.tscn` 的每个属性名都在引擎源码中确认存在。
 
-**Web 导出已验证成功**（CI 里产出 10.3 MB 的 `github-pages` artifact）。
+**Web 已部署并可公开访问**：`Web 导出与部署` 全绿（`部署到 GitHub Pages: success`，
+13 个步骤无一失败，且该步骤已去掉 `continue-on-error`，是真绿），
+deployment `6737748200` 的状态为 `success`。HTTP 层实测：
 
-**仍未验证**：① 浏览器里的实际画面（需要开启 Pages 或本地预览 artifact）；
+| 检查 | 结果 |
+| --- | --- |
+| `https://1121427423.github.io/tacord/` | 200，`<title>TACORD</title>`，canvas 兜底文案可见 |
+| `…/tacord/index.js` | 200，引擎代码为 `godot.web.template_release.wasm32.nothreads`（单线程版，符合设计） |
+| `https://1121427423.github.io/index.js`（根路径） | 404 —— 说明资源走**相对路径**，将来换 apex 自定义域名（根路径）同样能加载 |
+
+`index.js` 内部用 `scriptDirectory = new URL(".", _scriptName).href` 解析资源，
+正是这套相对路径机制保证了 `/tacord/` 子路径与根路径两种部署都成立。
+
+**仍未验证**：① 浏览器里的实际画面（canvas 真正跑起来、WASM 与 `.pck` 加载成功），
+HTTP 层已通但需要人眼确认；
 ② macOS 签名/公证（需真机）。
 
 技术选型理由、MVP 范围与全部里程碑（M1 交火 → M2 压制 → M3 倒地救援 → M4 感知记忆 →
