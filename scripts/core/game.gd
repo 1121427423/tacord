@@ -68,6 +68,14 @@ func blackboard(team: int) -> Blackboard:
 	return _boards[team]
 
 
+## 一声枪响：记到所有**敌队**的黑板上。
+## 自己队不用记——他们知道自己在开枪；枪声的价值在于让听不见看不见的敌人暴露位置。
+func hear_gunshot(world_pos: Vector2, shooter_team: int) -> void:
+	for team in _boards.keys():
+		if int(team) != shooter_team:
+			_boards[team].report_gunshot(world_pos, shooter_team)
+
+
 ## 清空所有敌情记忆（重开一局时调用）。
 func clear_boards() -> void:
 	_boards.clear()

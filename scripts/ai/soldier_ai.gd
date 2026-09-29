@@ -153,10 +153,17 @@ func _combat_step() -> void:
 	soldier.call("try_fire", target_pos)
 
 
-## 自己开火时上报枪声：声音是给队友听的，不是给自己。
+## 自己开火时上报枪声。声音是给**敌人**听的：让 Game 把它分发到所有敌队黑板。
 func _on_own_shot_fired(from: Vector2, _to: Vector2, _hit_target: bool) -> void:
-	if board != null and soldier != null:
-		board.report_gunshot(from, int(soldier.get("team")))
+	if soldier == null:
+		return
+	var my_team: int = int(soldier.get("team"))
+	var game := get_node_or_null("/root/Game")
+	if game != null and game.has_method("hear_gunshot"):
+		game.call("hear_gunshot", from, my_team)
+	elif board != null:
+		# 没有 Game 的退化路径（单独实例化做测试）：至少自己这块黑板记得。
+		board.report_gunshot(from, my_team)
 
 
 ## 看不见敌人时，朝听得见的最近敌队枪声转头。
