@@ -8,6 +8,9 @@ signal shot_fired(from: Vector2, to: Vector2, hit_target: bool)
 ## 命中单位时发出。
 signal target_hit(target: Node, damage: int)
 
+## 弹药数量变化时发出（开火 / 换弹完成 / 摸尸体补弹）。HUD 用它刷新。
+signal ammo_changed(in_magazine: int, in_reserve: int)
+
 ## 物理层：1 = 单位，2 = 静态障碍。与 battle_map.gd / soldier.gd 保持一致。
 const LAYER_UNITS := 1
 const LAYER_OBSTACLES := 2
@@ -23,11 +26,30 @@ const LAYER_OBSTACLES := 2
 ## 一次贴脸近失带来的压制量（离弹道越近越接近这个值）。
 @export var suppression_per_near_miss: float = 0.3
 
+## 一个弹匣的容量。
+@export var magazine_size: int = 24
+
+## 开局携带的备弹（不含弹匣里那一匣）。
+@export var reserve_ammo: int = 72
+
+## 备弹上限：从尸体上摸弹也不会超过这个数。
+@export var max_reserve_ammo: int = 144
+
+## 换弹耗时（秒）。
+@export var reload_time: float = 2.2
+
 ## 所属士兵（父节点）。
 var owner_unit: CharacterBody2D = null
 
 var shots_fired: int = 0
 
+## 弹匣里的余弹。_ready 时填满。
+var ammo_in_mag: int = 0
+
+## 正在换弹。这段时间开不了枪。
+var is_reloading: bool = false
+
+var _reload_timer: float = 0.0
 var _cooldown: float = 0.0
 var _rng := RandomNumberGenerator.new()
 
@@ -38,16 +60,69 @@ func _ready() -> void:
 		push_error("Weapon 必须作为 CharacterBody2D（soldier.gd）的子节点。")
 		return
 	_rng.seed = hash(str(owner_unit.get_path()))
+	ammo_in_mag = magazine_size
 
 
-## 由士兵每帧调用，推进射击冷却。
+## 由士兵每帧调用，推进射击冷却与换弹计时。
 func tick(delta: float) -> void:
 	if _cooldown > 0.0:
 		_cooldown = maxf(0.0, _cooldown - delta)
+	if not is_reloading:
+		return
+	_reload_timer = maxf(0.0, _reload_timer - delta)
+	if _reload_timer <= 0.0:
+		_finish_reload()
 
 
 func can_fire() -> bool:
-	return _cooldown <= 0.0 and owner_unit != null and owner_unit.get("is_dead") != true
+	if _cooldown > 0.0 or is_reloading or owner_unit == null:
+		return false
+	if owner_unit.get("is_dead") == true:
+		return false
+	# 弹匣空了就得先换弹；备弹也空了就永远开不了枪了。
+	return ammo_in_mag > 0
+
+
+## 弹匣 + 备弹，一共还剩多少发。
+func total_ammo() -> int:
+	return ammo_in_mag + reserve_ammo
+
+
+## 彻底打光（弹匣空且没有备弹可换）。
+func is_dry() -> bool:
+	return total_ammo() <= 0
+
+
+## 开始换弹。没有备弹就换不了——这正是"阵地渐渐沉寂"的起点。
+func start_reload() -> bool:
+	if is_reloading or reserve_ammo <= 0 or ammo_in_mag >= magazine_size:
+		return false
+	is_reloading = true
+	_reload_timer = reload_time
+	return true
+
+
+func _finish_reload() -> void:
+	is_reloading = false
+	_reload_timer = 0.0
+	var take: int = mini(magazine_size - ammo_in_mag, reserve_ammo)
+	ammo_in_mag += take
+	reserve_ammo -= take
+	ammo_changed.emit(ammo_in_mag, reserve_ammo)
+
+
+## 从另一把武器（通常是尸体上那把）拿备弹。返回实际拿到的数量。
+func take_ammo_from(other) -> int:
+	if other == null or other == self or not other.has_method("total_ammo"):
+		return 0
+	var available: int = int(other.get("reserve_ammo"))
+	var take: int = mini(available, maxi(max_reserve_ammo - reserve_ammo, 0))
+	if take <= 0:
+		return 0
+	reserve_ammo += take
+	other.set("reserve_ammo", available - take)
+	ammo_changed.emit(ammo_in_mag, reserve_ammo)
+	return take
 
 
 ## 朝 target_pos 开一枪。返回是否命中了一个能承伤的单位。
@@ -55,7 +130,12 @@ func try_fire(target_pos: Vector2) -> bool:
 	if not can_fire():
 		return false
 	_cooldown = fire_interval
+	ammo_in_mag = maxi(ammo_in_mag - 1, 0)
 	shots_fired += 1
+	ammo_changed.emit(ammo_in_mag, reserve_ammo)
+	# 打空当场就开始换弹（没有备弹则换不了，这把枪就此沉寂）。
+	if ammo_in_mag <= 0:
+		start_reload()
 	var from: Vector2 = owner_unit.global_position
 	var direction: Vector2 = (target_pos - from).normalized()
 	if direction == Vector2.ZERO:
