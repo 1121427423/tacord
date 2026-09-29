@@ -14,8 +14,13 @@ var _map = null
 var _checks: int = 0
 var _failures: int = 0
 
+# 结果同时写入文件：Godot 自己设置 stdout 缓冲，进程异常退出时管道里的输出会丢，
+# 落盘 + flush 才能保证 CI 一定读得到崩溃前的最后一行。
+var _log: FileAccess = null
+
 
 func _ready() -> void:
+	_log = FileAccess.open("res://smoke_result.log", FileAccess.WRITE)
 	_setup()
 	_test_coordinates()
 	_test_terrain()
@@ -37,17 +42,17 @@ func _setup() -> void:
 func _check(condition: bool, label: String) -> void:
 	_checks += 1
 	if condition:
-		print("  PASS  %s" % label)
+		_emit("  PASS  %s" % label)
 	else:
 		_failures += 1
-		printerr("  FAIL  %s" % label)
+		_emit("  FAIL  %s" % label)
 
 
 # ---------------------------------------------------------------- 纯逻辑测试
 
 
 func _test_coordinates() -> void:
-	print("[坐标换算]")
+	_emit("[坐标换算]")
 	var cell := Vector2i(5, 7)
 	var world: Vector2 = _map.world_pos(cell)
 	_check(_map.cell_at(world) == cell, "cell_at(world_pos(cell)) 往返一致")
@@ -59,7 +64,7 @@ func _test_coordinates() -> void:
 
 
 func _test_terrain() -> void:
-	print("[地形]")
+	_emit("[地形]")
 	_check(_map.is_walkable(Vector2i(1, 1)), "默认 open 地形可走")
 	_map.set_terrain(Vector2i(3, 3), &"blocked")
 	_check(_map.get_terrain(Vector2i(3, 3)) == "blocked", "set_terrain / get_terrain 一致")
@@ -69,9 +74,9 @@ func _test_terrain() -> void:
 
 	var obstacles: Node = _map.get_node("Obstacles")
 	var before: int = obstacles.get_child_count()
-	print("  -- before add_obstacle")
+	_emit("  -- before add_obstacle")
 	_map.add_obstacle(Vector2i(2, 20))
-	print("  -- after add_obstacle")
+	_emit("  -- after add_obstacle")
 	# 回归测试：cover 格必须不可走，否则 A* 会规划出穿墙路径。
 	_check(not _map.is_walkable(Vector2i(2, 20)), "add_obstacle 的 cover 格不可走（防穿墙路径）")
 	_check(obstacles.get_child_count() == before + 1, "add_obstacle 生成了碰撞体")
@@ -80,7 +85,7 @@ func _test_terrain() -> void:
 
 
 func _test_pathfinding() -> void:
-	print("[AStar2D 寻路]")
+	_emit("[AStar2D 寻路]")
 	var rows: int = int(_map.grid_size.y)
 	for y in range(rows):
 		_map.set_terrain(Vector2i(WALL_X, y), &"blocked")
@@ -104,7 +109,7 @@ func _test_pathfinding() -> void:
 
 
 func _test_utility_ai() -> void:
-	print("[Utility AI]")
+	_emit("[Utility AI]")
 	var ai := UtilityAI.new()
 	var low = func() -> float:
 		return 0.2
@@ -138,7 +143,7 @@ func _test_utility_ai() -> void:
 
 
 func _test_cover_geometry() -> void:
-	print("[掩体几何评估]")
+	_emit("[掩体几何评估]")
 	for y in range(8, 14):
 		_map.add_obstacle(Vector2i(12, y))
 	await get_tree().physics_frame
@@ -165,7 +170,7 @@ func _test_cover_geometry() -> void:
 
 
 func _test_combat() -> void:
-	print("[交火]")
+	_emit("[交火]")
 	var shooter = SOLDIER_SCENE.instantiate()
 	var victim = SOLDIER_SCENE.instantiate()
 	shooter.set("team", 2)
@@ -193,10 +198,25 @@ func _test_combat() -> void:
 
 
 func _finish() -> void:
-	print("")
+	_emit("")
 	if _failures == 0:
-		print("SMOKE TEST PASSED: %d/%d" % [_checks, _checks])
+		_emit("SMOKE TEST PASSED: %d/%d" % [_checks, _checks])
+		_close_log()
 		get_tree().quit(0)
 	else:
-		printerr("SMOKE TEST FAILED: %d/%d 项未通过" % [_failures, _checks])
+		_emit("SMOKE TEST FAILED: %d/%d 项未通过" % [_failures, _checks])
+		_close_log()
 		get_tree().quit(1)
+
+
+func _emit(line: String) -> void:
+	print(line)
+	if _log != null:
+		_log.store_line(line)
+		_log.flush()
+
+
+func _close_log() -> void:
+	if _log != null:
+		_log.close()
+		_log = null

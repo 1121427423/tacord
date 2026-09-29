@@ -19,3 +19,8 @@ web_build/
 Thumbs.db
 *.tmp
 *.swp
+
+# ---- 测试产物 ----
+smoke_result.log
+smoke.log
+export.log
