@@ -74,6 +74,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			_place_build_site(&"fob")
 		elif event.keycode == KEY_6:
 			_place_build_site(&"sandbag")
+		elif event.keycode == KEY_7:
+			_place_build_site(&"tent")
 
 
 ## 在蓝方第一个活人脚下放一个工地（指挥官把工事下在自己部队所在位置）。
@@ -191,7 +193,7 @@ func _update_hud() -> void:
 	if game != null:
 		order = String(game.get("current_order"))
 	var text: String = "命令: %s    [1]进攻 [2]防守 [3]包抄 [4]待命    " % order
-	text += "[5]放FOB [6]放沙袋    [F1]掩体热区 [R]重开\n"
+	text += "[5]放FOB [6]放沙袋 [7]放医疗帐篷    [F1]掩体热区 [R]重开\n"
 	if game != null and game.has_method("is_team_defeated") and game.call(
 		"is_team_defeated", PLAYER_TEAM
 	):
@@ -342,7 +344,7 @@ func _build_text(game) -> String:
 				"%s%s %.0f%%" % [tag, site.call("label"), float(site.call("build_ratio")) * 100.0]
 			)
 	if sites.is_empty():
-		parts.append("无工地（按 5 放 FOB / 6 放沙袋）")
+		parts.append("无工地（按 5 放 FOB / 6 放沙袋 / 7 放医疗帐篷）")
 	else:
 		parts.append(" ".join(sites))
 	return "    ".join(parts)
