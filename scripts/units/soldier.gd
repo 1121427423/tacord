@@ -112,8 +112,16 @@ var posture: StringName = POSTURE_STAND:
 ## tactics.gd 要靠它判断"能不能再滑"，否则打分会空转在想滑却滑不出的状态上。
 var slide_cooldown: float = 0.0
 
-## 是否正在翻越（腾空的这一段不开枪）。由 _follow_path 维护。
-var is_vaulting: bool = false
+## 是否正在翻越。由 _follow_path 维护。做成属性而不是裸变量，是为了让"腾空"
+## 这个状态自己负责碰撞掩码：矮墙是真实存在的静态体，掩码不清掉的话，
+## 所谓翻越就是人贴着墙皮原地跑，永远够不到落点。
+var is_vaulting: bool = false:
+	set(value):
+		if is_vaulting == value:
+			return
+		is_vaulting = value
+		# 腾空时只摘掉障碍层；落地立刻恢复，正常值由 _ready 设的 LAYER_OBSTACLES 决定。
+		collision_mask = 0 if value else LAYER_OBSTACLES
 
 var is_dead: bool = false
 

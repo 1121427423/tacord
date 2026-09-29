@@ -157,6 +157,9 @@ func try_melee(target) -> bool:
 		return false
 	if target.get("is_dead") == true or target.get("is_downed") == true:
 		return false
+	# 只打敌人：枪托不认军服，但 API 必须认，否则调用方一个手滑就误伤友军。
+	if int(target.get("team")) == int(owner_unit.get("team")):
+		return false
 	if owner_unit.global_position.distance_to(target.global_position) > melee_range:
 		return false
 	_melee_cooldown = melee_interval
