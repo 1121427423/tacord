@@ -54,6 +54,15 @@ const AWARENESS_RADIUS := 720.0
 ## 毫无情报时的搜索半径（格）。
 const PATROL_RADIUS_CELLS := 6
 
+## 路过尸体多远以内能摸到弹匣（像素）。
+const LOOT_RADIUS := 26.0
+
+## 弹药压力对"找掩体"的加成权重（换弹当然要在掩体后换）。
+const AMMO_COVER_WEIGHT := 0.35
+
+## 彻底打光时对推进欲望的削弱。
+const DRY_ADVANCE_PENALTY := 0.6
+
 ## AI 思考间隔（秒）。单位数量上去后可调大以省 CPU（Web 导出尤其明显）。
 @export var think_interval: float = 0.25
 
@@ -132,6 +141,8 @@ func _process(delta: float) -> void:
 	if _think_accum < think_interval:
 		return
 	_think_accum = 0.0
+	# 摸弹是"路过顺手"的动作，跟着思考周期做，不必每帧扫全场。
+	_try_loot_ammo()
 	_think()
 
 
@@ -284,12 +295,18 @@ func _consider_seek_cover() -> float:
 	var danger: float = _danger_pressure()
 	var wounded: float = 1.0 - _health_ratio()
 	var pinned: float = _suppression()
-	return clampf(danger * 0.6 + wounded * 0.4 + pinned * 0.65, 0.0, 1.0)
+	var ammo: float = _ammo_pressure()
+	return clampf(
+		danger * 0.6 + wounded * 0.4 + pinned * 0.65 + ammo * AMMO_COVER_WEIGHT, 0.0, 1.0
+	)
 
 
 func _consider_advance() -> float:
 	# 被压制时推进欲望直接归零：没人会大摇大摆穿过火力杀伤区。
-	return clampf(_order_priority() * _health_ratio() * _mobility_factor(), 0.0, 1.0)
+	# 彻底打光时也要打折：端着空枪冲锋只是送死。
+	var dry: float = 1.0 - _dry_factor() * DRY_ADVANCE_PENALTY
+	var raw: float = _order_priority() * _health_ratio() * _mobility_factor() * dry
+	return clampf(raw, 0.0, 1.0)
 
 
 func _consider_flank() -> float:
@@ -345,6 +362,39 @@ func _health_ratio() -> float:
 		return 0.0
 	var max_hp: float = maxf(1.0, float(soldier.get("max_hp")))
 	return clampf(float(soldier.get("hp")) / max_hp, 0.0, 1.0)
+
+
+## 弹药压力 [0,1]：正在换弹或弹匣已空最急，其余按弹匣余量线性。
+func _ammo_pressure() -> float:
+	if weapon == null:
+		return 0.0
+	if weapon.get("is_reloading") == true:
+		return 1.0
+	var mag: int = int(weapon.get("magazine_size"))
+	if mag <= 0:
+		return 0.0
+	return 1.0 - clampf(float(int(weapon.get("ammo_in_mag"))) / float(mag), 0.0, 1.0)
+
+
+## 彻底打光（弹匣与备弹都空）时返回 1，否则 0。
+func _dry_factor() -> float:
+	if weapon == null or not weapon.has_method("is_dry"):
+		return 0.0
+	return 1.0 if weapon.call("is_dry") else 0.0
+
+
+## 路过尸体就摸弹匣（M5 唯一的补弹途径）。每个思考周期查一次就够了。
+func _try_loot_ammo() -> void:
+	if weapon == null or soldier == null:
+		return
+	for unit in get_tree().get_nodes_in_group(&"soldiers"):
+		if unit == soldier or unit.get("is_dead") != true:
+			continue
+		if soldier.global_position.distance_to(unit.global_position) > LOOT_RADIUS:
+			continue
+		var corpse_weapon = unit.get_node_or_null("Weapon")
+		if corpse_weapon != null:
+			weapon.call("take_ammo_from", corpse_weapon)
 
 
 func _order_priority() -> float:

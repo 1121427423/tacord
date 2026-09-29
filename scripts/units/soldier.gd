@@ -358,6 +358,13 @@ func weapon_range() -> float:
 	return float(weapon.get("max_range"))
 
 
+## 还剩多少发（弹匣 + 备弹）；没挂武器时返回 0。
+func ammo_left() -> int:
+	if weapon == null:
+		return 0
+	return int(weapon.call("total_ammo"))
+
+
 # ---------------------------------------------------------------- 内部
 
 
