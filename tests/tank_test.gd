@@ -11,7 +11,7 @@ const TANK_SCENE := preload("res://scenes/units/tank.tscn")
 const PERCEPTION_SCRIPT := preload("res://scripts/ai/perception.gd")
 
 # 本场景的断言总数。与其余三个场景同样的理由：只看"0 失败"会漏掉中途 abort。
-const EXPECTED_CHECKS := 43
+const EXPECTED_CHECKS := 40  # happy path：43 个调用点减去 3 个 else 占位
 
 var _map = null
 var _checks: int = 0
@@ -175,6 +175,10 @@ func _test_tank() -> void:
 	# ================================================================
 	# 4) 双向交火
 	# ================================================================
+	# **先等两帧再开枪**：刚 set 完 global_position 时，变换要到下一次
+	# physics_frame 才 flush 到 Physics2D，此刻 intersect_ray 打的是旧位置。
+	# smoke_test 里那条"命中掉血"断言之所以稳，是它本来就先等了 180 帧。
+	await _wait(2)
 	# 蓝方士兵 -> 红方坦克：子弹打在装甲上只留 1/4。
 	var tank_hp_before: int = int(alive_tank.get("hp"))
 	var did_hit: bool = bool(friend.get("weapon").call("try_fire", alive_tank.global_position))
@@ -209,19 +213,31 @@ func _test_tank() -> void:
 		await _wait_until(runner.has_arrived, 150), "约 1.6 秒后抵达（64px ÷ 40px/s）"
 	)
 	_check(start_pos.distance_to(runner.global_position) > 30.0, "确实挪了窝")
-	# 给地图加一堵墙，再考"绕行"与"打不通"两条。
+	# 一堵墙：路径必须绕开它。
 	_map.call("add_obstacle", Vector2i(9, 4))
-	_check(
-		not runner.call("move_to_cell", Vector2i(9, 4)),
-		"目标格被封死时规划失败（allow_partial_path=false）",
-	)
-	_check(runner.call("move_to_cell", Vector2i(14, 4)), "绕开障碍仍能规划成功")
 	var cells: Array = _map.call("find_path", Vector2i(6, 4), Vector2i(14, 4))
 	var through_wall: bool = false
 	for step in cells:
 		if step == Vector2i(9, 4):
 			through_wall = true
 	_check(not cells.is_empty() and not through_wall, "路径绕开那堵墙")
+	# 目标格本身被封死时**不会**失败：find_path 先走 nearest_walkable(radius=3)
+	# 把终点吸附到邻近可走格。原来断言"返回 false"是写错了前提，
+	# 真正该钉住的是"绝不会把墙本身当终点"。
+	var snap_cells: Array = _map.call("find_path", Vector2i(6, 4), Vector2i(9, 4))
+	_check(
+		not snap_cells.is_empty() and snap_cells[snap_cells.size() - 1] != Vector2i(9, 4),
+		"终点被封死时吸附到邻近可走格，绝不把墙本身当目标",
+	)
+	# 真正"打不通"：把目标半径 3 的 7×7 全封上，nearest_walkable 返回 (-1,-1)。
+	for by in range(1, 8):
+		for bx in range(13, 20):
+			_map.call("add_obstacle", Vector2i(bx, by))
+	runner.call("stop_moving")
+	_check(
+		not runner.call("move_to_cell", Vector2i(16, 4)),
+		"目标周围 7×7 全封死时规划失败（nearest_walkable 返回 (-1,-1)）",
+	)
 
 	# ================================================================
 	# 6) Utility 三选一：hold / advance / engage
@@ -250,13 +266,16 @@ func _test_tank() -> void:
 		"推进真的在动（位移 > 20px）",
 	)
 	# 放一个看得见的敌人：engage 1.0 压过一切，而且立刻停车开炮。
-	# 目标点放在推进路线前方，免得坦克一头撞进 30px 肉搏圈。
-	var victim = _spawn_soldier(Vector2i(10, 18), 2, 100)
+	# 目标放在推进路线**旁边两格**而不是正前方——正前方会被开过来的坦克骑上去。
+	var victim = _spawn_soldier(Vector2i(10, 16), 2, 100)
+	# 血量基线必须现在取：_wait_until(engage) 返回的那一帧，_act 已经把
+	# 第一炮打出去了（think 与 act 同帧先后执行），取晚了就会拿 60 当基线，
+	# 而下一炮要等 fire_interval=1.8s=108 帧，超出下面 90 帧的窗口。
+	var victim_hp: int = int(victim.get("hp"))
 	_check(
 		await _wait_until(_action_is(ai_tank, &"engage"), 60), "有通视敌人 -> 行为 engage"
 	)
 	var hold_pos: Vector2 = ai_tank.global_position
-	var victim_hp: int = int(victim.get("hp"))
 	_check(
 		await _wait_until(func (): return int(victim.get("hp")) < victim_hp, 90),
 		"engage 后坦克自主开炮，士兵掉血",
