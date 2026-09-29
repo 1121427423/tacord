@@ -640,10 +640,13 @@ M5 做了"打光"，这里补"告急"——打光前的最后一段弹链，射�
   均见于引擎类文档；`uid` 可省略由 `resource_format_text.cpp` 的 `next_tag.fields.has("uid")` 确认
 
 **已在真实引擎中验证**：GitHub Actions（`.github/workflows/ci.yml`）用 Godot 4.7.2 headless
-依次执行**八个**测试场景，**合计 415 项断言**。前五个（smoke / mobility / medic / tank /
-drone）合计 **297/297 已全绿**；M12–M14 新增的三个场景合计 **118 项**静态检查已过
-（gdparse/gdlint 全仓 `no problems found`），引擎级验证由本次推送后的 CI 首跑完成。
-每个场景都把总数写死在 `EXPECTED_CHECKS` 里由引擎自己判定数没数够（见下文）。
+依次执行**八个**测试场景，**合计 415 项断言，415/415 全绿**。M12–M14 新增的三个场景
+（grenade 49 / fpv 49 / ammo 20）同样把总数写死在 `EXPECTED_CHECKS` 里由引擎自己判定
+数没数够（见下文）。它们的首跑挂过 6 条 + 崩过一整场，四轮修复的根因全部写进了
+验证史——其中三条是产品真 bug：`draw_polygon` 参数序写反（引擎编译器拒载脚本，
+gdtoolkit 却不查引擎签名）、evade 的「趴」缺 prone_hold 窗口（M8 起身自动化只认
+压制，零压制的躲雷人一帧内被翻回站立）、`THROW_WEIGHT` 0.98 输给 flank 满分+粘性
+1.15（目标躲在掩体后时兵却永远在包抄侧翼，雷扔不出去——靠 CI 效用表快照一击定位）。
 第五个场景的 CI 首跑曾挂过两条（巡逻不动 / 盯梢贴脸），根因是测试把无类型
 数组字面量喂给 `set()`——4.7.2 对 `Array[Vector2]` 脚本属性静默失败，先装进类型化
 局部变量再传（与 main.gd `_spawn_drone` 同款）即全绿：
@@ -666,7 +669,7 @@ drone）合计 **297/297 已全绿**；M12–M14 新增的三个场景合计 **1
 感知拆分后测试还在调已被搬走的 `_ammo_pressure()`，中止了 9 条断言，报出 145/154 而不是谎报全绿。
 `.github/workflows/web.yml` 的 Web 导出也已成功产出 10.3 MB 的 `github-pages` artifact。
 
-这套测试工作累计抓到 **13 个真 bug**（均已修）。前四个是 CI 跑出来的：
+这套测试工作累计抓到 **16 个真 bug**（均已修）。前四个是 CI 跑出来的：
 1. `cover` 地形此前算作「可走」，而 `add_obstacle()` 会生成实体碰撞体 → A\* 规划出穿墙路径，
    士兵被 `move_and_slide` 卡在墙上，`has_arrived()` 永远为假、行为树一直 RUNNING。
 2. `find_path` 曾把 `AStar2D.get_point_path` 的 `allow_partial_path` 传 `true` → 目标不可达时
