@@ -249,13 +249,18 @@ cd web_preview && python3 -m http.server 8080
 ## 七、当前验证状态
 
 **已在真实引擎里跑通**：GitHub Actions 上用 Godot 4.7.2 headless 执行 `tests/smoke_test.tscn`，
-**32/32 项断言通过**（含掩体几何评估与交火掉血）。这套测试已经抓到两个真 bug：
+**42/42 项断言通过**（含掩体几何评估、交火掉血、压制数值）。这套测试已经抓到两个真 bug：
 `cover` 地形曾可走导致 A\* 规划穿墙路径；`find_path` 曾因 `allow_partial_path=true`
 在目标不可达时返回半截路径。
 
-静态验证：7 个脚本通过 `gdparse` 与 `gdlint`；引擎 API 逐个比对过 Godot **4.7.2** 与 **4.2**
-源码自带的类文档（均 0 问题）；跨文件鸭子调用 126 处核对无误；`project.godot` 的每个设置项
-与 `.tscn` 的每个属性名都在引擎源码中确认存在。
+压制（M2）的数值不是拍脑袋写的，是被断言钉住的：满压制时移动速度 `80 → 32`，
+30 物理帧后压制 `1.00 → 0.89`（衰减率 0.22/s），弹道旁 20 px 处压制 `0.150`
+（= 0.3 × (1 - 20/40)），200 px 外为 0。
+
+静态验证：8 个脚本加 `tests/smoke_test.gd` 通过 `gdparse` 与 `gdlint`；M0/M1 期间做过一次引擎
+API 逐个比对（脚本里的引擎/项目符号对 Godot **4.7.2** 与 **4.2** 源码自带的类文档，均 0 问题），
+M2 新增代码用到的 `is_equal_approx` / `is_zero_approx` 也在 `@GlobalScope.xml` 里确认过；
+`project.godot` 的每个设置项与 `.tscn` 的每个属性名都在引擎源码中确认存在。
 
 **Web 导出已验证成功**（CI 里产出 10.3 MB 的 `github-pages` artifact）。
 

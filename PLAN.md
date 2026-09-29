@@ -67,7 +67,7 @@ tacord/
 │   ├── main.tscn                    # Main(Node2D) + Camera2D + BattleMap 实例 + HUD
 │   ├── battle/battle_map.tscn       # Node2D + battle_map.gd
 │   └── units/soldier.tscn           # CharacterBody2D + ColorRect + CollisionShape2D + SoldierAI
-├── tests/smoke_test.tscn            # 引擎原生 headless 测试（32 项断言，退出码判定）
+├── tests/smoke_test.tscn            # 引擎原生 headless 测试（42 项断言，退出码判定）
 ├── .github/workflows/               # ci.yml（lint + 冒烟测试）、web.yml（导出 + Pages）
 ├── export_presets.cfg               # Web 导出预设（单线程），CI 复现用
 ├── scripts/
@@ -77,8 +77,8 @@ tacord/
 │   ├── ai/utility.gd                # 通用 Utility AI（Consideration + 响应曲线）
 │   ├── ai/behavior_tree.gd          # 极简 BT：Action / Condition / Sequence / Selector
 │   ├── ai/soldier_ai.gd             # 3+1 个考虑因素 + 每个行为一棵树
-│   ├── units/soldier.gd             # 移动 / HP / 命令 / 占位绘制 / 曳光
-│   └── units/weapon.gd              # hitscan 武器：散布、冷却、命中判定
+│   ├── units/soldier.gd             # 移动 / HP / 命令 / 压制 / 占位绘制 / 曳光
+│   └── units/weapon.gd              # hitscan 武器：散布、冷却、命中判定、近失压制
 ├── assets/.gitkeep
 └── PLAN.md
 ```
@@ -96,18 +96,37 @@ tacord/
 ## 4. 下一步顺序（含验收标准）
 
 > 原则：**先让掩体有后果，再让掩体有代价，最后才加复杂度。**
-> M1 已经让子弹飞起来了；下一步是让「被打」产生行为后果——M2 压制。
+> M1 让子弹飞起来，M2 让「被打」产生行为后果；下一步是让「打死」变成可挽回的状态——M3 倒地与救援。
 
 ### M1 · 交火与视线 ✅ 已完成
 - `scripts/units/weapon.gd`：射程、射速、散布、射线命中（第 1 层单位 + 第 2 层障碍）
 - 士兵在"有 LOS + 在射程内"时自动开火，无需玩家微操
-- 验收：✅ CI 里 32/32 断言通过，其中「无遮挡面对面时命中掉血（100 → 88）」直接覆盖这一条。
+- 验收：✅ CI 断言通过，其中「无遮挡面对面时命中掉血」直接覆盖这一条（M1 落地时全套 32 项）。
 
-### M2 · 压制与暴露
+### M2 · 压制与暴露 ✅ 已完成
 - 近失子弹（射线未命中但距离很近）→ 目标 `suppression` 上升，随时间衰减
 - `suppression` 接入 `seek_cover` 的原始输入，并降低 `move_speed`
-- 开火事件广播（为 M4 的"听枪声"复用）
-- 验收：被压制的士兵会主动缩到掩体后，火力停止后恢复推进。
+- 开火事件广播（为 M4 的"听枪声"复用）——`shot_fired(from, to, hit_target)` 已在 M1 就位
+- 验收：✅ 被压制的士兵会主动缩到掩体后，火力停止后恢复推进。
+
+实现要点（都是可调参数，不是硬编码）：
+
+| 参数 | 位置 | 值 | 作用 |
+| --- | --- | --- | --- |
+| `near_miss_radius` | `weapon.gd` | 40 px | 弹道多大范围内算擦身而过 |
+| `suppression_per_near_miss` | `weapon.gd` | 0.3 | 贴脸近失的压制量，按点到弹道的距离线性衰减 |
+| `SUPPRESSION_DECAY` | `soldier.gd` | 0.22 / s | 压制衰减速率（满压制约 4.5 s 恢复） |
+| `SUPPRESSION_SPEED_PENALTY` | `soldier.gd` | 0.6 | 满压制时只剩 40% 移动速度 |
+| `PINNED_FIRE_THRESHOLD` | `soldier_ai.gd` | 0.75 | 超过就停火 |
+
+近失判定用「点到弹道线段的最短距离」而不是射线是否命中，所以**真正中弹的人也会拿到接近满额的
+压制**——中弹当然更压人。压制的三处后果：`seek_cover` 加 `pinned * 0.65`、`advance` 乘
+`(1 - suppression)`、`flank` 乘 `(1 - suppression * 0.8)`（被压着还想去包抄的人死得最快）。
+
+验收（CI 里 42/42，其中 10 条覆盖 M2）：满压制时速度实测 `80 → 32`；30 帧后压制从 1.00 衰减到
+**0.89**（= 1 - 0.22 × 0.5，与公式一致）；弹道旁 20 px 的旁观者拿到 **0.150**
+（= 0.3 × (1 - 20/40)，与公式一致）；200 px 外的人压制为 0；满压制时 `advance = 0` 且
+`seek_cover > advance`，把压制清零后 `advance` 恢复到 1.0。
 
 ### M3 · 倒地 / 救援 / 救治
 - `hp <= 0` → `downed`（不是 `dead`）：失血计时、爬行、呼救
@@ -155,21 +174,22 @@ tacord/
 
 已在沙箱内执行的检查：
 
-- `gdparse`（gdtoolkit 4.5.0，Godot 4 GDScript 语法）：**7 个脚本全部通过**
+- `gdparse`（gdtoolkit 4.5.0，Godot 4 GDScript 语法）：**8 个脚本 + `tests/smoke_test.gd` 全部通过**
 - `gdlint`：**no problems found**
 - 引擎 API 交叉核对：把脚本里 **112 处**引擎/项目符号逐个比对 Godot 源码自带的
   `doc/classes/*.xml`（方法名、参数、常量、继承链），**4.7.2-stable 与 4.2-stable 两个版本
   各跑一遍，均 0 问题**——这使"脚本兼容 4.2+"成为已验证结论而非假设。
   这一步实际抓到一个真 bug：`battle_map.gd` 调用了未定义的 `_init_terrain()`，已补上。
-- 跨文件鸭子调用核对：**126 处**（`map.xxx()` / `soldier.call("xxx")` / `unit.get("xxx")` 等）：**0 问题**
+- 跨文件鸭子调用核对（M0/M1 期间那次审计）：**126 处**（`map.xxx()` / `soldier.call("xxx")` /
+  `unit.get("xxx")` 等）：**0 问题**
 - `project.godot` 的每个设置项都在引擎源码里确认存在（`project_settings.cpp`、`main.cpp`、
   `physics_server_2d.cpp`、`world_2d.cpp` 等）
 - `.tscn` 结构检查：资源路径全部存在、`load_steps` 计数正确、无 `uid=` 引用、节点类型与属性名
   均见于引擎类文档；`uid` 可省略由 `resource_format_text.cpp` 的 `next_tag.fields.has("uid")` 确认
 
 **已在真实引擎中验证**：GitHub Actions（`.github/workflows/ci.yml`）用 Godot 4.7.2 headless
-执行 `tests/smoke_test.tscn`，**32/32 断言通过**；`.github/workflows/web.yml` 的 Web 导出也
-已成功产出 10.3 MB 的 `github-pages` artifact。
+执行 `tests/smoke_test.tscn`，**42/42 断言通过**（M2 的 10 条在最新一次 CI 里逐条 PASS）；
+`.github/workflows/web.yml` 的 Web 导出也已成功产出 10.3 MB 的 `github-pages` artifact。
 
 这套测试已经抓到两个真 bug（均已修）：
 1. `cover` 地形此前算作「可走」，而 `add_obstacle()` 会生成实体碰撞体 → A\* 规划出穿墙路径，
