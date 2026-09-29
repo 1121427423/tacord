@@ -182,10 +182,11 @@ tacord/
 │   ├── core/battle_map.gd           # 网格/地形/AStar2D/视线/掩体评估/占位渲染
 │   ├── core/main.gd                 # 场景装配、演示地形与双方占位单位、HUD
 │   ├── ai/utility.gd                # 通用 Utility AI（Consideration + 响应曲线）
-│   ├── ai/blackboard.gd             # 小队黑板：同队共享的目击与枪声记忆
+│   ├── ai/blackboard.gd             # 小队黑板：目击/枪声记忆 + 审讯出的永久工事情报
+│   ├── ai/perception.gd             # 感知：把原始读数算成打分要用的 [0,1] 量（纯查询）
 │   ├── ai/behavior_tree.gd          # 极简 BT：Action / Condition / Sequence / Selector
-│   ├── ai/soldier_ai.gd             # seek_cover / advance / flank / hold / rescue / build
-│   ├── units/soldier.gd             # 移动 / HP / 命令 / 压制 / 倒地 / 占位绘制
+│   ├── ai/soldier_ai.gd             # seek_cover / advance / flank / hold / rescue / build / surrender / escort
+│   ├── units/soldier.gd             # 移动 / HP / 命令 / 压制 / 倒地 / 俘虏 / 占位绘制
 │   ├── units/weapon.gd              # hitscan 武器：散布、冷却、近失压制、弹匣与换弹
 │   └── units/build_site.gd          # 工地：施工计时 / 建成转实体 / 被打掉拆地形
 ├── assets/                          # 美术资源占位目录
@@ -258,11 +259,11 @@ cd web_preview && python3 -m http.server 8080
 ## 七、当前验证状态
 
 **已在真实引擎里跑通**：GitHub Actions 上用 Godot 4.7.2 headless 执行 `tests/smoke_test.tscn`，
-**125/125 项断言通过**（含掩体几何评估、交火掉血、压制数值、倒地与救援、感知与记忆、弹药与后勤、建造与 FOB）。这套测试工作累计抓到 5 个真 bug：
+**154/154 项断言通过**（含掩体几何评估、交火掉血、压制数值、倒地与救援、感知与记忆、弹药与后勤、建造与 FOB、俘虏与审讯）。这个总数本身也是一条断言——`EXPECTED_CHECKS` 写死在测试里，某个测试段中途崩掉时退出码仍是 0，沙箱又读不到 CI 日志，所以必须让引擎自己判定数没数够。这套测试工作累计抓到 8 个真 bug：
 `cover` 地形曾可走导致 A\* 规划穿墙路径；`find_path` 曾因 `allow_partial_path=true`
 在目标不可达时返回半截路径；`die()` 曾不清 `is_downed`（死人被当成可救援的伤员）；
 枪声曾只记在开枪者自己队的黑板上（听声转头永远不触发）；`clear_boards()` 曾丢掉整个字典
-（活着的士兵握着旧引用，重开后没人读新黑板）。清单见 PLAN.md §6。
+（活着的士兵握着旧引用，重开后没人读新黑板）；感知拆分后测试还在调已被搬走的 `_ammo_pressure()`，中止了 9 条断言（正是 `EXPECTED_CHECKS` 抓到的）。另有两条押送死锁是写代码时推演出来的，动第一行测试之前就改掉了。完整清单见 PLAN.md §6。
 
 压制（M2）的数值不是拍脑袋写的，是被断言钉住的：满压制时移动速度 `80 → 32`，
 30 物理帧后压制 `1.00 → 0.89`（衰减率 0.22/s），弹道旁 20 px 处压制 `0.150`
@@ -292,7 +293,14 @@ FOB 建成后部队上限从 6 提到 9，站在它 48 px 内的士兵以 8 发/
 即判负。效用上工地没修完时，`attack` 命令下的推进欲望会被施工压下去（0.65 对 0.89）。
 实测：放下工地后不做任何干预，士兵自己走完最后 96 px 并把它建完。
 
-静态验证：10 个脚本加 `tests/smoke_test.gd` 通过 `gdparse` 与 `gdlint`；M0/M1 期间做过一次引擎
+俘虏与审讯（M7）让「抓到活口」变成情报：被压制、看得见两个敌人、且 300 px 内没有还站着的战友时，
+士兵会举手投降（三道门槛缺一不可，少一道就是挨两枪就投降）。敌方就近派人抢押送权，把俘虏
+押回**自己**的 FOB——押到 64 px 内才问得出话，审完当场释放。审出来的敌方**已建成**工事坐标写进
+本队黑板，这类情报**不过期**（基地不会自己长腿跑掉），地图上从此画着那个十字准星：己方审出来的亮黄、
+对面审出来的暗红。押送是有风险的：押送者阵亡或倒地，俘虏当场跑掉。
+实测：完全不干预，俘虏自己投降、押送者 122 帧内完成认领与押送、审出第 2 条情报并放人。
+
+静态验证：11 个脚本加 `tests/smoke_test.gd` 通过 `gdparse` 与 `gdlint`；M0/M1 期间做过一次引擎
 API 逐个比对（脚本里的引擎/项目符号对 Godot **4.7.2** 与 **4.2** 源码自带的类文档，均 0 问题），
 M2 新增代码用到的 `is_equal_approx` / `is_zero_approx` 也在 `@GlobalScope.xml` 里确认过；
 `project.godot` 的每个设置项与 `.tscn` 的每个属性名都在引擎源码中确认存在。

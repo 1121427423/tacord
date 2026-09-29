@@ -57,7 +57,7 @@
 
 ---
 
-## 3. 当前进度（M0–M6 已完成，下一个是 M7 俘虏与审讯）
+## 3. 当前进度（M0–M7 全部里程碑已完成）
 
 ```
 tacord/
@@ -68,7 +68,7 @@ tacord/
 │   ├── main.tscn                    # Main(Node2D) + Camera2D + BattleMap 实例 + HUD
 │   ├── battle/battle_map.tscn       # Node2D + battle_map.gd
 │   └── units/soldier.tscn           # CharacterBody2D + ColorRect + CollisionShape2D + SoldierAI
-├── tests/smoke_test.tscn            # 引擎原生 headless 测试（125 项断言，退出码判定）
+├── tests/smoke_test.tscn            # 引擎原生 headless 测试（154 项断言，退出码判定）
 ├── .github/workflows/               # ci.yml（lint + 冒烟测试）、web.yml（导出 + Pages）
 ├── export_presets.cfg               # Web 导出预设（单线程），CI 复现用
 ├── scripts/
@@ -76,10 +76,11 @@ tacord/
 │   ├── core/battle_map.gd           # 网格/地形/AStar2D/视线/掩体评估/占位渲染
 │   ├── core/main.gd                 # 主场景装配、演示地形与双方占位单位、HUD
 │   ├── ai/utility.gd                # 通用 Utility AI（Consideration + 响应曲线）
-│   ├── ai/blackboard.gd             # 小队黑板：同队共享的目击与枪声记忆
+│   ├── ai/blackboard.gd             # 小队黑板：目击/枪声记忆 + 审讯出的永久工事情报
+│   ├── ai/perception.gd             # 感知：把原始读数算成打分要用的 [0,1] 量（纯查询）
 │   ├── ai/behavior_tree.gd          # 极简 BT：Action / Condition / Sequence / Selector
-│   ├── ai/soldier_ai.gd             # 6 个考虑因素 + 每个行为一棵树
-│   ├── units/soldier.gd             # 移动 / HP / 命令 / 压制 / 倒地 / 占位绘制 / 曳光
+│   ├── ai/soldier_ai.gd             # 8 个考虑因素 + 每个行为一棵树
+│   ├── units/soldier.gd             # 移动 / HP / 命令 / 压制 / 倒地 / 俘虏 / 占位绘制
 │   ├── units/weapon.gd              # hitscan 武器：散布、冷却、命中判定、近失压制、弹药换弹
 │   └── units/build_site.gd          # 工地：施工计时 / 建成转实体 / 被打掉拆地形
 ├── assets/.gitkeep
@@ -99,16 +100,20 @@ tacord/
 看不见敌人时朝 520 px 内的敌队枪声转头，并朝最后已知位置搜索；
 弹匣打空自动换弹，备弹也空了就得去尸体上摸弹——一局打久了阵地会自己安静下来；
 按 `5` 放一座 FOB，附近的士兵会自己跑过去把它建起来（3 人·秒一座，边打边建），
-建成后部队上限 +3、站在旁边就能回备弹，被打掉则本队判负。
+建成后部队上限 +3、站在旁边就能回备弹，被打掉则本队判负；
+被压制 + 看得见两个敌人 + 300 px 内没有站着的战友时会举手投降，
+敌方就近派人押着俘虏回自己的 FOB——押到 64 px 内才问得出话，
+审完把敌方**已建成**工事的坐标写进黑板，地图上从此画着那个十字准星，人则当场释放。
 
 ---
 
-## 4. 下一步顺序（含验收标准）
+## 4. 里程碑顺序与验收标准（M0–M7 全部完成）
 
 > 原则：**先让掩体有后果，再让掩体有代价，最后才加复杂度。**
 > M1 让子弹飞起来，M2 让「被打」产生行为后果，M3 让「打死」变成可挽回的状态，
 > M4 让士兵只知道自己该知道的（去掉透视），M5 让火力有尽头；
 > 下一步是让士兵能改变地形——M6 建造与 FOB。
+> M7 让「抓到活口」变成情报，是最后一个里程碑。
 
 ### M1 · 交火与视线 ✅ 已完成
 - `scripts/units/weapon.gd`：射程、射速、散布、射线命中（第 1 层单位 + 第 2 层障碍）
@@ -270,15 +275,31 @@ HUD 两处可见：每个士兵 `弹=18/72`（换弹时标「换弹中」、空�
   建成才升到障碍层并 `set_terrain()`（`fob` → `blocked`，`sandbag` → `cover`）让 A\* 绕开
 - `game.gd`：`place_build_site()`（不可走的格子直接拒绝）、`unit_cap = 6 + 3×FOB`、
   `can_reinforce()`、`_check_fob_defeat()` 每帧判负
-- `soldier_ai.gd`：第 6 个考虑因素 `build`，工位取工地**旁边**一格，进度累加进 BT；
+- `soldier_ai.gd`：考虑因素 `build`，工位取工地**旁边**一格，进度累加进 BT；
   `_try_resupply()` 让站在已建成 FOB 48 px 内的士兵回备弹（8 发/秒）
 - `main.gd`：`5` / `6` 放建筑，`_spawn_unit` 在超出上限时拒绝增援，HUD 加工事行与战败行
 - 验收（CI 里 125/125，其中 26 条覆盖 M6）：放下工地后无人干预，士兵自己跑过去建完；
   1 座 FOB 把上限从 6 提到 9；打掉唯一 FOB 后 `is_team_defeated` 为真。
 
-### M7 · 俘虏与审讯（可选）
-- 被包围 + 被压制 + 无援 → 投降；押送、审讯、情报落到雷达上
-- 验收：抓一个俘虏，敌方基地出现在地图上。
+### M7 · 俘虏与审讯 ✅ 已完成
+- `soldier.gd`：`surrender(by_team)` / `release()`，`is_captive` + `captor_team`；
+  俘虏不开枪、不吃压制、以 0.9 倍速被押着走，自己倒地即解除、阵亡则一并清掉。
+  顺手删掉三个全仓库零引用的死方法（`target_cell` / `is_enemy_of` / `ammo_left`）——
+  这个文件顶在 gdlint 的 20 个公开方法上限上，不删就放不下新 API
+- `soldier_ai.gd`：第 7 个考虑因素 `surrender`（三道门槛同时满足才给满分，注册在最前且
+  权重 1.5，否则会被带粘性的推进压住）、第 8 个 `escort`（押送权靠 `claim_escort` 抢，
+  同样用 `ESCORT_BACKLOG_ORDER_PENALTY` 打折机动性，否则 `attack` 下没人会去押人）
+- `game.gd`：`captives()` / `claim_escort()`（**同一个人可续押**，否则 leash 断开后
+  序列复位就永久卡死）/ `drop_escort()` / `escort_of()` / `interrogate()`；
+  `_check_captives()` 每帧兜底——押送者阵亡或倒地，俘虏当场 `release()`
+- `blackboard.gd`：`report_structure()` / `nearest_structure()` / `structure_count()`。
+  这类情报**不过期**：基地不会自己长腿跑掉，`_prune()` 特意不碰它；也不并进
+  `best_memory()`——那条链的语义是「去查最后看见的地方」，混进来会让士兵永远只往基地走
+- `main.gd`：HUD 加「俘虏」行，地图上画审出来的敌方工事（己方亮黄、敌方暗红）
+- 验收（CI 里 154/154，其中 29 条覆盖 M7）：端到端无人干预——俘虏自己投降、
+  押送者跑过去认领、押回本方 FOB、审出第 2 条工事情报、当场放人。
+  另有两条纯推演抓出的死锁（押送落点 64 px 卡在 48 px 判定之外；
+  `claim_escort` 拒绝自己续押）与一条 CI 抓到的回归（见 §6）。
 
 ### 贯穿始终的两件事
 - **平台冒烟**：M1 结束就跑一次 Web 导出 + 一次 macOS 导出，别把兼容问题留到最后。
@@ -303,7 +324,7 @@ HUD 两处可见：每个士兵 `弹=18/72`（换弹时标「换弹中」、空�
 
 已在沙箱内执行的检查：
 
-- `gdparse`（gdtoolkit 4.5.0，Godot 4 GDScript 语法）：**10 个脚本 + `tests/smoke_test.gd` 全部通过**
+- `gdparse`（gdtoolkit 4.5.0，Godot 4 GDScript 语法）：**11 个脚本 + `tests/smoke_test.gd` 全部通过**
 - `gdlint`：**no problems found**
 - 引擎 API 交叉核对：把脚本里 **112 处**引擎/项目符号逐个比对 Godot 源码自带的
   `doc/classes/*.xml`（方法名、参数、常量、继承链），**4.7.2-stable 与 4.2-stable 两个版本
@@ -317,10 +338,14 @@ HUD 两处可见：每个士兵 `弹=18/72`（换弹时标「换弹中」、空�
   均见于引擎类文档；`uid` 可省略由 `resource_format_text.cpp` 的 `next_tag.fields.has("uid")` 确认
 
 **已在真实引擎中验证**：GitHub Actions（`.github/workflows/ci.yml`）用 Godot 4.7.2 headless
-执行 `tests/smoke_test.tscn`，**125/125 断言通过**（M2 的 10 条、M3 的 23 条、M4 的 11 条、M5 的 23 条、M6 的 26 条都在最新一次 CI 里逐条 PASS）；
+执行 `tests/smoke_test.tscn`，**154/154 断言通过**（M2 的 10 条、M3 的 23 条、M4 的 11 条、M5 的 23 条、M6 的 26 条、M7 的 29 条都在最新一次 CI 里逐条 PASS）。
+这个数字本身也是一条断言：`EXPECTED_CHECKS` 写死在测试里，`_finish()` 打印的
+「`_checks/_checks`」是*实际跑到的*条数——某个测试段中途崩掉时后面的断言不会执行，
+退出码却仍是 0；沙箱又读不到 CI 日志，所以总数必须由引擎自己判定。M7 期间它立刻见效：
+感知拆分后测试还在调已被搬走的 `_ammo_pressure()`，中止了 9 条断言，报出 145/154 而不是谎报全绿。
 `.github/workflows/web.yml` 的 Web 导出也已成功产出 10.3 MB 的 `github-pages` artifact。
 
-这套测试工作累计抓到 5 个真 bug（均已修）。前两个是 CI 跑出来的：
+这套测试工作累计抓到 8 个真 bug（均已修）。前三个是 CI 跑出来的：
 1. `cover` 地形此前算作「可走」，而 `add_obstacle()` 会生成实体碰撞体 → A\* 规划出穿墙路径，
    士兵被 `move_and_slide` 卡在墙上，`has_arrived()` 永远为假、行为树一直 RUNNING。
 2. `find_path` 曾把 `AStar2D.get_point_path` 的 `allow_partial_path` 传 `true` → 目标不可达时
@@ -334,6 +359,18 @@ HUD 两处可见：每个士兵 `弹=18/72`（换弹时标「换弹中」、空�
    → 两边一夹，听声转头永远不会触发，M4 第一条验收标准直接落空。改成由 Game 分发给敌队。
 5. `clear_boards()` 原来 `_boards.clear()` 丢掉整个字典，而活着的士兵手里握着旧黑板引用
    → 重开一局后 `hear_gunshot` 会写进一块没人读的新黑板。改成逐块清内容。
+6. M7 把感知段拆进 `perception.gd` 之后，冒烟测试还在调已被搬走的 `_ammo_pressure()`；
+   Godot 里运行时的 `Invalid call` 会中止当前协程，后面 9 条断言没跑就结束。
+   **新装的 `EXPECTED_CHECKS` 守卫正是为抓这个而生**——它报 145/154 而不是谎报 145/145。
+
+后两条是 M7 写代码时推演出来的，都在动第一行测试之前就改掉了：
+
+7. 押送落点：让俘虏跟在押送者身后（背向 FOB），结果他停在离 FOB 64 px 处，
+   恰好卡在 `DELIVER_RANGE`（48 px）之外，`_march_and_deliver` 永远 RUNNING、交不了人；
+   而且「身后那一格」可不可走取决于挑中哪个邻居，挑到侧向时反而会成交——不确定性本身就是 bug。
+8. `claim_escort` 会拒绝**已经握着押送权的同一个人**续押 → `BTSequence` 一遇 FAILURE 就
+   reset 回第 0 个子节点，下一 tick 重新认领时被自己拒绝，序列永远走不到「重新接近」，
+   押送权也不会被别人接走，这个俘虏就此废掉。
 
 **仍未验证**：① 浏览器里的实际画面（需开启 GitHub Pages，或下载 artifact 本地预览）；
 ② macOS 签名/公证（需真机）。
