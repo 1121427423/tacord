@@ -13,6 +13,12 @@ const LAYER_OBSTACLES := 2
 const ARRIVAL_TOLERANCE := 3.0
 const TRACER_DURATION := 0.08
 const HIT_FLASH_DURATION := 0.12
+
+## 压制：每秒自然衰减量。
+const SUPPRESSION_DECAY := 0.22
+
+## 压制对机动性的最大削弱（满压制时只能跑出 40% 速度）。
+const SUPPRESSION_SPEED_PENALTY := 0.6
 const TEAM_COLORS := {
 	1: Color(0.404, 0.635, 1.0),  # 蓝方
 	2: Color(1.0, 0.427, 0.345),  # 红方
@@ -28,6 +34,10 @@ var is_dead: bool = false
 
 ## 单位朝向（单位向量）。AI 用它判断谁把侧翼暴露给了谁。
 var facing: Vector2 = Vector2.RIGHT
+
+## 压制值 [0, 1]：擦身而过的子弹会累积，随时间衰减。
+## 影响三处：seek_cover 的效用输入、推进欲望、实际移动速度。
+var suppression: float = 0.0
 
 # BattleMap（battle_map.gd），不标注类型以便鸭子调用其查询接口。
 var battle_map = null
@@ -76,6 +86,8 @@ func _physics_process(delta: float) -> void:
 ## 曳光与受击闪白的衰减。放在 is_dead 判断之前，避免士兵阵亡后特效卡住不消失。
 func _decay_effects(delta: float) -> void:
 	var dirty: bool = false
+	if suppression > 0.0:
+		suppression = maxf(0.0, suppression - SUPPRESSION_DECAY * delta)
 	if _tracer_ttl > 0.0:
 		_tracer_ttl = maxf(0.0, _tracer_ttl - delta)
 		dirty = true
@@ -153,6 +165,18 @@ func take_damage(amount: int) -> void:
 		die()
 
 
+## 被压制（近失子弹）。累积到 [0, 1] 上限。
+func apply_suppression(amount: float) -> void:
+	if is_dead or amount <= 0.0:
+		return
+	suppression = clampf(suppression + amount, 0.0, 1.0)
+
+
+## 压制会压慢脚步：满压制时只剩 1 - SUPPRESSION_SPEED_PENALTY 的速度。
+func effective_speed() -> float:
+	return move_speed * (1.0 - SUPPRESSION_SPEED_PENALTY * suppression)
+
+
 func heal(amount: int) -> void:
 	if is_dead:
 		return
@@ -227,7 +251,7 @@ func _follow_path() -> void:
 		return
 	var direction: Vector2 = to_target / distance
 	facing = direction
-	velocity = direction * move_speed
+	velocity = direction * effective_speed()
 	move_and_slide()
 
 
