@@ -68,7 +68,7 @@ tacord/
 │   ├── main.tscn                    # Main(Node2D) + Camera2D + BattleMap 实例 + HUD
 │   ├── battle/battle_map.tscn       # Node2D + battle_map.gd
 │   └── units/soldier.tscn           # CharacterBody2D + ColorRect + CollisionShape2D + SoldierAI
-├── tests/smoke_test.tscn            # 引擎原生 headless 测试（63 项断言，退出码判定）
+├── tests/smoke_test.tscn            # 引擎原生 headless 测试（65 项断言，退出码判定）
 ├── .github/workflows/               # ci.yml（lint + 冒烟测试）、web.yml（导出 + Pages）
 ├── export_presets.cfg               # Web 导出预设（单线程），CI 复现用
 ├── scripts/
@@ -164,11 +164,15 @@ hp > 0 ──take_damage──> hp <= 0 ──go_down()──> downed ──appl
 2. **必须有 `DOWNED_ALLY_ORDER_PENALTY`。** 否则 `attack` 命令下 `_consider_advance` 恒为 1.0，
    永远压过救援分数——医疗兵根本不会动，M3 的验收标准就成了空话。
 
-验收（CI 里 63/63，其中 21 条覆盖 M3）：失血计时到点真的 `die()`；倒地后 `try_fire` 返回 false、
+验收（CI 里 65/65，其中 23 条覆盖 M3）：失血计时到点真的 `die()`；倒地后 `try_fire` 返回 false、
 `apply_suppression` 无效、`effective_speed` = 80 × 0.35 = 28；`apply_rescue(1.0)` 后
 `rescue_ratio` = 1/3，医疗兵 2 倍速一次补满即救活；救活后 `hp = 30`、`max_hp = 85`；
 连续倒地到第 4 次才 `is_dead`；没人倒地时 `_consider_rescue() == 0`，
 有战友倒地时 `_consider_advance()` 从 1.00 掉到 **0.50** 且医疗兵救援分数反超。
+
+最后一条是端到端的：把 `hurt` 打倒后完全不做干预，只等物理帧——队友自己跑过去、拖、包扎，
+**135 帧（2.25 秒模拟时间）** 后 `is_downed` 变回 false，且没有死。这条才是 M3 验收标准本身，
+前面 22 条只是把它的每个零件钉住。
 
 ### M4 · 感知与记忆
 - 听觉事件、"最后已知位置"记忆、小队黑板共享敌情
@@ -224,7 +228,7 @@ hp > 0 ──take_damage──> hp <= 0 ──go_down()──> downed ──appl
   均见于引擎类文档；`uid` 可省略由 `resource_format_text.cpp` 的 `next_tag.fields.has("uid")` 确认
 
 **已在真实引擎中验证**：GitHub Actions（`.github/workflows/ci.yml`）用 Godot 4.7.2 headless
-执行 `tests/smoke_test.tscn`，**63/63 断言通过**（M2 的 10 条、M3 的 21 条都在最新一次 CI 里逐条 PASS）；
+执行 `tests/smoke_test.tscn`，**65/65 断言通过**（M2 的 10 条、M3 的 23 条都在最新一次 CI 里逐条 PASS）；
 `.github/workflows/web.yml` 的 Web 导出也已成功产出 10.3 MB 的 `github-pages` artifact。
 
 这套测试已经抓到两个真 bug（均已修）：
