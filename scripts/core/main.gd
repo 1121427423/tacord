@@ -159,6 +159,7 @@ func _update_hud() -> void:
 		blue_alive, blue_down, red_alive, red_down
 	]
 	text += "情报: %s\n" % _intel_text(game)
+	text += "弹药: %s\n" % _ammo_text()
 	text += "— 士兵自主决策 —\n"
 	for unit in units:
 		if unit.get("is_dead") == true:
@@ -172,9 +173,10 @@ func _update_hud() -> void:
 				float(unit.call("rescue_ratio")) * 100.0,
 			]
 			continue
-		text += "%s  hp=%d  压制=%.2f  命令=%s  行为=%s\n" % [
+		text += "%s  hp=%d  弹=%s  压制=%.2f  命令=%s  行为=%s\n" % [
 			_unit_tag(unit),
 			int(unit.get("hp")),
+			_unit_ammo_text(unit),
 			float(unit.get("suppression")),
 			String(unit.get("current_order")),
 			String(unit.call("current_action")),
@@ -184,6 +186,44 @@ func _update_hud() -> void:
 
 func _unit_tag(unit) -> String:
 	return String(unit.get("name"))
+
+
+## 单个士兵的弹药读数，形如 "18/72"，换弹时加标注。
+func _unit_ammo_text(unit) -> String:
+	var unit_weapon = unit.get_node_or_null("Weapon")
+	if unit_weapon == null:
+		return "无武器"
+	var text: String = "%d/%d" % [
+		int(unit_weapon.get("ammo_in_mag")), int(unit_weapon.get("reserve_ammo"))
+	]
+	if unit_weapon.get("is_reloading") == true:
+		text += "换弹中"
+	elif int(unit_weapon.call("total_ammo")) <= 0:
+		text += "打光"
+	return text
+
+
+## 双方剩余弹药总量与打光人数——"阵地渐渐沉寂"要能一眼看出来。
+func _ammo_text() -> String:
+	var parts: Array = []
+	for team in [PLAYER_TEAM, ENEMY_TEAM]:
+		var tag: String = "蓝" if team == PLAYER_TEAM else "红"
+		var total: int = 0
+		var dry: int = 0
+		var count: int = 0
+		for unit in units:
+			if unit.get("is_dead") == true or int(unit.get("team")) != team:
+				continue
+			var unit_weapon = unit.get_node_or_null("Weapon")
+			if unit_weapon == null:
+				continue
+			count += 1
+			var left: int = int(unit_weapon.call("total_ammo"))
+			total += left
+			if left <= 0:
+				dry += 1
+		parts.append("%s方 %d 发（%d/%d 人打光）" % [tag, total, dry, count])
+	return "    ".join(parts)
 
 
 ## 双方小队黑板里最值得追的那条记忆。让「靠记忆搜索」在画面上看得见。
