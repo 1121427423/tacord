@@ -66,10 +66,14 @@ jobs:
       - name: 运行冒烟测试
         run: |
           set +e
-          godot --headless --path . tests/smoke_test.tscn 2>&1 | tee smoke.log
+          # stdbuf 强制行缓冲：进程崩溃时才不会丢掉最后的输出
+          stdbuf -oL -eL godot --headless --path . tests/smoke_test.tscn 2>&1 | tee smoke.log
           code=${PIPESTATUS[0]}
           set -e
           echo "exit code = $code"
+          if [ "$code" -ge 128 ]; then
+            echo "::error::进程被信号 $((code - 128)) 终止（11=SIGSEGV 段错误）"
+          fi
           # 把完整输出发成 workflow annotation（不依赖被拦截的日志 CDN）。
           nl -ba smoke.log | head -90 | while IFS= read -r line; do
             echo "::error::${line}"
