@@ -48,6 +48,12 @@ const DRAG_COVER_CELLS := 3
 ## 枪声传播半径（像素）。超过这个距离就听不见。
 const GUNSHOT_HEAR_RADIUS := 520.0
 
+## 视觉感知半径（像素）。看得多远由通视决定，这里只是搜索上限。
+const AWARENESS_RADIUS := 720.0
+
+## 毫无情报时的搜索半径（格）。
+const PATROL_RADIUS_CELLS := 6
+
 ## AI 思考间隔（秒）。单位数量上去后可调大以省 CPU（Web 导出尤其明显）。
 @export var think_interval: float = 0.25
 
@@ -177,25 +183,33 @@ func _resolve_board() -> Blackboard:
 	return Blackboard.new()
 
 
-## 射程内、且有通视的最近敌人；没有则返回 null。
+## 射程内、且有通视的最近敌人；没有则返回 null。顺手把目击报给全队。
 func _acquire_target():
-	if soldier == null or map == null:
+	if soldier == null:
 		return null
 	var reach: float = float(soldier.call("weapon_range"))
 	if reach <= 0.0:
 		return null
+	var best = _visible_enemy(reach)
+	# 看见就是看见：报给全队，这样别人看不见也能来搜。
+	if best != null and board != null:
+		board.report_sighting(best, best.global_position)
+	return best
+
+
+## 有通视的最近敌人（不限射程，用于决定往哪推进）；没有则 null。
+func _visible_enemy(radius: float):
+	if soldier == null or map == null:
+		return null
 	var best = null
-	var best_dist: float = reach
-	for enemy in _nearby_enemies(reach):
+	var best_dist: float = radius
+	for enemy in _nearby_enemies(radius):
 		if not map.has_line_of_sight(soldier.global_position, enemy.global_position):
 			continue
 		var distance: float = soldier.global_position.distance_to(enemy.global_position)
 		if distance <= best_dist:
 			best_dist = distance
 			best = enemy
-	# 看见就是看见：报给全队，这样别人看不见也能来搜。
-	if best != null and board != null:
-		board.report_sighting(best, best.global_position)
 	return best
 
 
@@ -368,15 +382,7 @@ func _nearest_downed_ally(radius: float):
 	return best
 
 
-func _nearest_enemy(radius: float):
-	var best = null
-	var best_dist: float = radius
-	for unit in _nearby_enemies(radius):
-		var d: float = soldier.global_position.distance_to(unit.global_position)
-		if d <= best_dist:
-			best_dist = d
-			best = unit
-	return best
+
 
 
 ## 危险压力 [0,1]：距离越近、越被通视，压力越大。
@@ -456,17 +462,47 @@ func _pick_cover_target(_ctx: Dictionary, _delta: float) -> int:
 	return BehaviorTree.Status.SUCCESS
 
 
+## 推进落点三级优先：看得见的人 > 最后已知位置 > 就近搜索。
+## 关键点是第二、三级——M4 之前这里用的是 _nearest_enemy(1e9)，
+## 等于每个士兵都开着透视直接走向敌人真实坐标；现在看不见就只能靠记忆和搜索。
 func _pick_advance_target(_ctx: Dictionary, _delta: float) -> int:
 	if map == null:
 		return BehaviorTree.Status.FAILURE
-	var enemy = _nearest_enemy(1e9)
-	if enemy == null:
-		return BehaviorTree.Status.FAILURE
-	# 推进落点：贴近敌人但保留 2 格开火距离，并在落点周围挑掩体质量最好的格子。
-	var to_enemy: Vector2 = (enemy.global_position - soldier.global_position).normalized()
-	var standoff: Vector2 = enemy.global_position - to_enemy * float(map.cell_size) * 2.0
+	var enemy = _visible_enemy(AWARENESS_RADIUS)
+	if enemy != null:
+		# 贴近敌人但保留 2 格开火距离，并在落点周围挑掩体质量最好的格子。
+		return _advance_on_position(enemy.global_position, 2)
+	var memory: Dictionary = {}
+	if board != null:
+		memory = board.best_memory(int(soldier.get("team")))
+	if not memory.is_empty():
+		# 去查最后已知位置本身（不留开火距离：那里可能已经没人了）。
+		return _advance_on_position(memory["pos"], 0)
+	return _patrol_nearby()
+
+
+## 朝某个世界坐标推进；standoff_cells > 0 时在目标前留出这么多格的开火距离。
+func _advance_on_position(world_pos: Vector2, standoff_cells: int) -> int:
+	var to_target: Vector2 = world_pos - soldier.global_position
+	var standoff: Vector2 = world_pos
+	if standoff_cells > 0 and to_target.length_squared() > 1.0:
+		standoff = world_pos - to_target.normalized() * float(map.cell_size) * float(standoff_cells)
 	var cell: Vector2i = _best_cell_around(map.cell_at(standoff), 3)
 	if cell.x < 0 or not _start_move(cell):
+		return BehaviorTree.Status.FAILURE
+	return BehaviorTree.Status.SUCCESS
+
+
+## 毫无情报时的搜索：在附近随机挑一个可走的格子走过去，而不是原地发呆。
+func _patrol_nearby() -> int:
+	var options: Array = []
+	for cell in map.cells_in_radius(map.cell_at(soldier.global_position), PATROL_RADIUS_CELLS):
+		if map.is_walkable(cell):
+			options.append(cell)
+	if options.is_empty():
+		return BehaviorTree.Status.FAILURE
+	var pick: Vector2i = options[_rng.randi_range(0, options.size() - 1)]
+	if not _start_move(pick):
 		return BehaviorTree.Status.FAILURE
 	return BehaviorTree.Status.SUCCESS
 
