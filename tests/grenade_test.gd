@@ -322,44 +322,19 @@ func _test_grenade() -> void:
 	#    watcher8(16,10) AI 开；雷落在 (14,10)，距它 64px：
 	#    够躲（≤ 96px）、不够炸（> 56px）、也掀不着（> 40px）。
 	# ================================================================
+	# 场地卫生（CI 效用表快照定位到的真坑）：late5 / foe6 还活着，是 flank
+	# 的高分目标——watcher8 会一边"包抄侧翼"一边走出 evade 半径，fuse 窗口
+	# 开启（第 48 帧起）时人已走到 101px 外（实测距雷 83→161px），两个窗口
+	# 完美错过、evade 永远拿不到分。清掉它走开的理由，evade 才有独占窗口。
+	late5.call("die")
+	foe6.call("die")
 	var watcher8 = _spawn_soldier(Vector2i(16, 10), 1, 100, true)
 	var thrower8 = _spawn_soldier(Vector2i(11, 10), 1)
 	var g8 = _throw_grenade(thrower8.global_position, _map.world_pos(Vector2i(14, 10)), thrower8)
-	# evade 的正例连续两轮 CI 不触发而反例全过，静态推演无懈可击——
-	# 只剩引擎里的实际分数能一击定位。轮询中每 15 帧（一个思考节拍）
-	# 抓一份效用表快照（_emit 不占断言数），失败时摊开看谁赢了。
-	var evade_seen: bool = false
-	var evade_snapshots: Array = []
-	for i in range(150):
-		if watcher8.get("posture") == Soldier.POSTURE_PRONE:
-			evade_seen = true
-			break
-		# 雷寿命 108 帧 < 轮询 150 帧：雷炸掉后快照再去摸它的 global_position
-		# 会崩协程（上轮 CI 实测）。雷没了，窗口也就关了，直接收摊。
-		if not is_instance_valid(g8):
-			break
-		if i % 15 == 0:
-			# 快照把雷的现场也摊开：evade 分数恒 0 而雷明明在窗口内，
-			# 组/距离/引信哪个环节断了，下一轮日志一眼定位。
-			var g8_pos: Vector2 = g8.global_position
-			var g8_fuse: float = float(g8.call("fuse_remaining"))
-			var g8_dist: float = watcher8.global_position.distance_to(g8_pos)
-			evade_snapshots.append(
-				"[第%d帧] 雷=(%.0f,%.0f) fuse=%.2f 距=%.0f 组数=%d | %s"
-				% [
-					i,
-					g8_pos.x,
-					g8_pos.y,
-					g8_fuse,
-					g8_dist,
-					get_tree().get_nodes_in_group(&"grenades").size(),
-					watcher8.get_node("SoldierAI").call("scores_text"),
-				]
-			)
-		await get_tree().physics_frame
-	_check(evade_seen, "AI 兵在 96px 内出现快炸的雷时扑倒（posture = prone）")
-	for line in evade_snapshots:
-		_emit("  [观测] %s" % line)
+	_check(
+		await _wait_until(_posture_is(watcher8, Soldier.POSTURE_PRONE), 150),
+		"AI 兵在 96px 内出现快炸的雷时扑倒（posture = prone）",
+	)
 	_check(
 		await _wait_until(_posture_is(watcher8, Soldier.POSTURE_STAND), 90),
 		"雷炸完后起身恢复——prone 不会粘住不放（M8 的起身自动化接管）",
@@ -405,21 +380,12 @@ func _test_grenade() -> void:
 		# 1.0 衰减 1.2s（可捡窗口）后仍有 0.74 > 0.7，整个窗口他都没胆子。
 		hidden10.set("suppression", 1.0)
 		game.call("blackboard", 1).call("report_sighting", hidden10, hidden10.global_position)
-		# 投掷正例同样连挂两轮——同款观测：每 15 帧抓一份效用表快照。
-		var thrown: bool = false
-		var throw_snapshots: Array = []
-		for i in range(60):
-			if not get_tree().get_nodes_in_group(&"grenades").is_empty():
-				thrown = true
-				break
-			if i % 15 == 0:
-				throw_snapshots.append(
-					"[第%d帧] %s" % [i, thrower10.get_node("SoldierAI").call("scores_text")]
-				)
-			await get_tree().physics_frame
-		_check(thrown, "黑板有记忆且无通视 -> 雷被投出（grenades 组出现一颗）")
-		for line in throw_snapshots:
-			_emit("  [观测] %s" % line)
+		_check(
+			await _wait_until(
+				func (): return not get_tree().get_nodes_in_group(&"grenades").is_empty(), 60
+			),
+			"黑板有记忆且无通视 -> 雷被投出（grenades 组出现一颗）",
+		)
 		_check(int(thrower10.get("grenades")) == 0, "投掷者 grenades 减 1（1 -> 0）")
 		_check(
 			int(thrower10.get("weapon").get("ammo_in_mag"))
