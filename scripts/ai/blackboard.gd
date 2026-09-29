@@ -115,6 +115,14 @@ func structure_count() -> int:
 	return _structures.size()
 
 
+## 已揭露工事的坐标列表（副本）。地图上的情报标记靠它画。
+func structures() -> Array:
+	var out: Array = []
+	for entry in _structures:
+		out.append(entry["pos"])
+	return out
+
+
 ## 离 from_pos 最近的已揭露工事；没有则返回空字典。
 ## 与 best_memory 分开：那条链是"去查最后看见的地方"，
 ## 这条是"我们已经知道敌人基地在哪，去打它"。

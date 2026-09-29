@@ -30,6 +30,35 @@ func _ready() -> void:
 
 func _process(_delta: float) -> void:
 	_update_hud()
+	# 审讯出新情报时要立刻重画标记。
+	queue_redraw()
+
+
+## 已审出的敌方工事画在地图上——M7 的验收标准是「敌方基地出现在地图上」，
+## 光在 HUD 上写个数字不算数。Main 与 BattleMap 都在原点，世界坐标可以直接用。
+func _draw() -> void:
+	var game := get_node_or_null("/root/Game")
+	if game == null or not game.has_method("blackboard"):
+		return
+	for team in [PLAYER_TEAM, ENEMY_TEAM]:
+		# 自己审出来的画亮色，对面审出来的画暗色：AI 也知道，但不该抢玩家的注意力。
+		var color := (
+			Color(1.0, 0.86, 0.25, 0.95)
+			if team == PLAYER_TEAM
+			else Color(1.0, 0.45, 0.3, 0.35)
+		)
+		var board = game.call("blackboard", team)
+		for pos in board.call("structures"):
+			_draw_intel_marker(pos, color)
+
+
+## 十字准星 + 圆圈：一眼能和木箱、墙区分开。
+func _draw_intel_marker(pos: Vector2, color: Color) -> void:
+	draw_arc(pos, 15.0, 0.0, TAU, 24, color, 2.0)
+	for offset in [Vector2(-22, 0), Vector2(8, 0)]:
+		draw_line(pos + offset, pos + offset + Vector2(14, 0), color, 1.5)
+	for offset in [Vector2(0, -22), Vector2(0, 8)]:
+		draw_line(pos + offset, pos + offset + Vector2(0, 14), color, 1.5)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -188,6 +217,7 @@ func _update_hud() -> void:
 		blue_alive, blue_down, red_alive, red_down
 	]
 	text += "情报: %s\n" % _intel_text(game)
+	text += "俘虏: %s\n" % _captive_text(game)
 	text += "弹药: %s\n" % _ammo_text()
 	text += "工事: %s\n" % _build_text(game)
 	text += "— 士兵自主决策 —\n"
@@ -201,6 +231,13 @@ func _update_hud() -> void:
 				float(unit.get("bleed_timer")),
 				int(unit.get("down_count")),
 				float(unit.call("rescue_ratio")) * 100.0,
+			]
+			continue
+		if unit.get("is_captive") == true:
+			text += "%s  俘虏（押往 %s方）  hp=%d\n" % [
+				_unit_tag(unit),
+				"蓝" if int(unit.get("captor_team")) == PLAYER_TEAM else "红",
+				int(unit.get("hp")),
 			]
 			continue
 		text += "%s  hp=%d  弹=%s  压制=%.2f  命令=%s  行为=%s\n" % [
@@ -253,6 +290,21 @@ func _ammo_text() -> String:
 			if left <= 0:
 				dry += 1
 		parts.append("%s方 %d 发（%d/%d 人打光）" % [tag, total, dry, count])
+	return "    ".join(parts)
+
+
+## 俘虏与审讯战果：在押人数 + 已经审出多少处敌方工事。
+func _captive_text(game) -> String:
+	if game == null or not game.has_method("captives"):
+		return "无（没有 Game 自动加载）"
+	var parts: Array = []
+	for team in [PLAYER_TEAM, ENEMY_TEAM]:
+		var tag: String = "蓝" if team == PLAYER_TEAM else "红"
+		var held: int = int(game.call("captives", team).size())
+		var revealed: int = 0
+		if game.has_method("blackboard"):
+			revealed = int(game.call("blackboard", team).call("structure_count"))
+		parts.append("%s方在押 %d · 已审出 %d 处工事" % [tag, held, revealed])
 	return "    ".join(parts)
 
 
