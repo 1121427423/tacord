@@ -10,6 +10,7 @@ const ACTION_FLANK := &"flank"
 const ACTION_HOLD := &"hold"
 const ACTION_RESCUE := &"rescue"
 const ACTION_BUILD := &"build"
+const ACTION_SURRENDER := &"surrender"
 
 ## 命令优先级：宏观命令通过它影响效用打分，士兵仍然自己决定怎么执行。
 const ORDER_PRIORITY := {
@@ -81,6 +82,21 @@ const BUILD_BACKLOG_ORDER_PENALTY := 0.35
 ## 站在建成的己方 FOB 旁边的补弹半径与速率（发/秒）。
 const RESUPPLY_RADIUS := 48.0
 const RESUPPLY_PER_SECOND := 8.0
+
+## 投降的三道门槛（M7），必须同时满足：被压制、被包围、无援。
+## 少一道就是普通士兵都会犯的错——挨两枪就举手，仗没法打。
+const SURRENDER_SUPPRESSION := 0.55
+const SURRENDER_ENEMIES_NEEDED := 2
+const SURRENDER_SUPPORT_RADIUS := 300.0
+
+## 投降的权重。必须高于 1.0 + stickiness，否则会被带粘性的推进压住（见注册处）。
+const SURRENDER_WEIGHT := 1.5
+
+## 愿意为押送俘虏跑多远（像素）。
+const ESCORT_SCAN_RADIUS := 1200.0
+
+## 押送时与俘虏保持的距离（像素）。太近会互相顶，太远他跟不上。
+const ESCORT_LEASH := 46.0
 
 ## AI 思考间隔（秒）。单位数量上去后可调大以省 CPU（Web 导出尤其明显）。
 @export var think_interval: float = 0.25
@@ -154,6 +170,9 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	# 倒地的人什么都不做（不开火、不决策），只能等队友来拖。
 	if soldier == null or soldier.get("is_dead") == true or soldier.get("is_downed") == true:
+		return
+	# 俘虏既不开火也不决策：枪已经交出去了，路线由押送者给。
+	if soldier.get("is_captive") == true:
 		return
 	if _owns_board and board != null:
 		board.advance(delta)
@@ -293,6 +312,14 @@ func _reset_trees() -> void:
 
 
 func _register_considerations() -> void:
+	# 0) 投降。两道保险都要：
+	# ① 注册在**最前面**——evaluate 用严格大于，平分归先注册者；
+	# ② 权重 1.5——evaluate 给当前行为加 stickiness(0.15)，
+	#    attack 命令下 advance 能到 1.0+0.15=1.15，权重 1.0 的投降会被它压住。
+	# 分数只有 0 或 1.5 两档：门槛是二值的，投降不该和别的欲望讨价还价。
+	utility.register_consideration(
+		ACTION_SURRENDER, _consider_surrender, 0.0, 1.0, SURRENDER_WEIGHT, UtilityAI.CurveType.LINEAR
+	)
 	# 1) 危险越高（附近敌人多且近、被通视、自己受伤），越想去找掩体。
 	utility.register_consideration(
 		ACTION_SEEK_COVER, _consider_seek_cover, 0.0, 1.0, 1.05, UtilityAI.CurveType.SMOOTHSTEP
@@ -327,6 +354,28 @@ func _consider_seek_cover() -> float:
 	return clampf(
 		danger * 0.6 + wounded * 0.4 + pinned * 0.65 + ammo * AMMO_COVER_WEIGHT, 0.0, 1.0
 	)
+
+
+## 投降（M7）：被压制 + 被包围 + 无援，三者缺一即返回 0。
+## 满足就给满分——这是个终局决定，不该和别的欲望讨价还价。
+func _consider_surrender() -> float:
+	if soldier == null or soldier.get("is_captive") == true:
+		return 0.0
+	if _suppression() < SURRENDER_SUPPRESSION:
+		return 0.0
+	# 被包围：看得见的敌人不止一个（光有枪声不算，得真看见人）。
+	var visible: Array = []
+	for enemy in _nearby_enemies(SCAN_RADIUS):
+		if map != null and map.has_method("has_line_of_sight") and map.has_line_of_sight(
+			soldier.global_position, enemy.global_position
+		):
+			visible.append(enemy)
+	if visible.size() < SURRENDER_ENEMIES_NEEDED:
+		return 0.0
+	# 无援：附近没有还站着能打的战友。有人能来救，就没人会举白旗。
+	if _nearest_standing_ally(SURRENDER_SUPPORT_RADIUS) != null:
+		return 0.0
+	return 1.0
 
 
 func _consider_advance() -> float:
@@ -497,11 +546,35 @@ func _nearby_enemies(radius: float) -> Array:
 		if unit == soldier or int(unit.get("team")) == my_team:
 			continue
 		# 倒地的人不算有效目标：不鞭尸，也不为已经趴下的敌人计算危险压力。
+		# 俘虏同理——他已经退出战斗，围着他不会让人更想投降。
 		if unit.get("is_dead") == true or unit.get("is_downed") == true:
+			continue
+		if unit.get("is_captive") == true:
 			continue
 		if soldier.global_position.distance_to(unit.global_position) <= radius:
 			out.append(unit)
 	return out
+
+
+## 最近的、还站着能打的友军（排除倒地与已被俘的）；没有则返回 null。
+func _nearest_standing_ally(radius: float):
+	if soldier == null:
+		return null
+	var best = null
+	var best_dist: float = radius
+	var my_team: int = int(soldier.get("team"))
+	for unit in get_tree().get_nodes_in_group(&"soldiers"):
+		if unit == soldier or int(unit.get("team")) != my_team:
+			continue
+		if unit.get("is_dead") == true or unit.get("is_downed") == true:
+			continue
+		if unit.get("is_captive") == true:
+			continue
+		var d: float = soldier.global_position.distance_to(unit.global_position)
+		if d <= best_dist:
+			best_dist = d
+			best = unit
+	return best
 
 
 ## 最近的倒地友军；没有则返回 null。
@@ -576,6 +649,8 @@ func _build_trees() -> void:
 		[BehaviorTree.action(&"pick_flank", _pick_flank_target), BehaviorTree.action(&"walk", _walk)]
 	)
 	_trees[ACTION_HOLD] = BehaviorTree.action(ACTION_HOLD, _do_hold)
+	# 投降：单动作。举手之后本 AI 就不再决策（见 _process 的俘虏短路）。
+	_trees[ACTION_SURRENDER] = BehaviorTree.action(ACTION_SURRENDER, _do_surrender)
 	# 救援：接近伤员 -> 走到他身边 -> 拖到掩体并包扎。
 	# 掩护火力不需要单独子树：_combat_step 每帧都会对可见敌人还击，
 	# 所以医疗兵是一边压着对面一边救人的。
@@ -691,6 +766,18 @@ func _do_hold(_ctx: Dictionary, _delta: float) -> int:
 	_move_started = false
 	if soldier != null:
 		soldier.call("stop_moving")
+	return BehaviorTree.Status.SUCCESS
+
+
+## 向最近那个看得见的敌人举白旗。看不见人就返回 FAILURE（听声不算被包围）。
+func _do_surrender(_ctx: Dictionary, _delta: float) -> int:
+	if soldier == null or soldier.get("is_captive") == true:
+		return BehaviorTree.Status.SUCCESS
+	var enemy = _visible_enemy(SCAN_RADIUS)
+	if enemy == null:
+		return BehaviorTree.Status.FAILURE
+	if not bool(soldier.call("surrender", int(enemy.get("team")))):
+		return BehaviorTree.Status.FAILURE
 	return BehaviorTree.Status.SUCCESS
 
 
