@@ -64,4 +64,15 @@ jobs:
         run: godot --headless --path . --import
 
       - name: 运行冒烟测试
-        run: godot --headless --path . tests/smoke_test.tscn
+        run: |
+          set +e
+          godot --headless --path . tests/smoke_test.tscn 2>&1 | tee smoke.log
+          code=${PIPESTATUS[0]}
+          set -e
+          {
+            echo "## 冒烟测试输出（exit=$code）"
+            echo '```'
+            cat smoke.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $code

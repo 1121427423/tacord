@@ -56,8 +56,21 @@ jobs:
       - name: 导出 Web（单线程预设）
         run: |
           mkdir -p web_build
-          godot --headless --path . --export-release "Web" web_build/index.html
-          ls -la web_build
+          set +e
+          godot --headless --path . --export-release "Web" web_build/index.html 2>&1 | tee export.log
+          code=${PIPESTATUS[0]}
+          set -e
+          {
+            echo "## Web 导出输出（exit=$code）"
+            echo '```'
+            cat export.log
+            echo '```'
+            echo "### 产物"
+            echo '```'
+            ls -la web_build
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $code
 
       - name: 上传构建产物
         uses: actions/upload-pages-artifact@v3
@@ -66,7 +79,18 @@ jobs:
 
       - name: 配置 Pages
         uses: actions/configure-pages@v5
+        continue-on-error: true
 
       - name: 部署到 GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+        continue-on-error: true
+
+      - name: 部署结果提示
+        if: always()
+        run: |
+          {
+            echo "### 部署状态：${{ steps.deployment.outcome }}"
+            echo "若失败，请到 Settings → Pages → Build and deployment → Source 选择 **GitHub Actions**，"
+            echo "然后重跑本 workflow。导出产物已作为 artifact 上传，可直接下载本地预览。"
+          } >> "$GITHUB_STEP_SUMMARY"
