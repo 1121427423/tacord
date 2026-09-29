@@ -38,6 +38,11 @@ const LAYER_OBSTACLES := 2
 ## 换弹耗时（秒）。
 @export var reload_time: float = 2.2
 
+## 肉搏（M8）：枪托横扫。**不消耗弹药**——这正是打光子弹之后最后的活路。
+@export var melee_damage: int = 35
+@export var melee_interval: float = 0.6
+@export var melee_range: float = 30.0
+
 ## 所属士兵（父节点）。
 var owner_unit: CharacterBody2D = null
 
@@ -51,6 +56,7 @@ var is_reloading: bool = false
 
 var _reload_timer: float = 0.0
 var _cooldown: float = 0.0
+var _melee_cooldown: float = 0.0
 var _rng := RandomNumberGenerator.new()
 
 
@@ -67,6 +73,8 @@ func _ready() -> void:
 func tick(delta: float) -> void:
 	if _cooldown > 0.0:
 		_cooldown = maxf(0.0, _cooldown - delta)
+	if _melee_cooldown > 0.0:
+		_melee_cooldown = maxf(0.0, _melee_cooldown - delta)
 	if not is_reloading:
 		return
 	_reload_timer = maxf(0.0, _reload_timer - delta)
@@ -133,6 +141,27 @@ func add_reserve(amount: int) -> int:
 	reserve_ammo += take
 	ammo_changed.emit(ammo_in_mag, reserve_ammo)
 	return take
+
+
+## 肉搏冷却是否已经转好。
+func can_melee() -> bool:
+	return _melee_cooldown <= 0.0 and owner_unit != null and owner_unit.get("is_dead") != true
+
+
+## 用枪托砸 target（必须是站着的活人）。返回是否打中。
+## 射程只有 melee_range，所以这一下只在贴身时成立；与弹药、换弹、射击冷却全部无关。
+func try_melee(target) -> bool:
+	if not can_melee():
+		return false
+	if target == null or not is_instance_valid(target) or not target.has_method("take_damage"):
+		return false
+	if target.get("is_dead") == true or target.get("is_downed") == true:
+		return false
+	if owner_unit.global_position.distance_to(target.global_position) > melee_range:
+		return false
+	_melee_cooldown = melee_interval
+	target.call("take_damage", melee_damage)
+	return true
 
 
 ## 朝 target_pos 开一枪。返回是否命中了一个能承伤的单位。
