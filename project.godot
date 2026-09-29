@@ -1,0 +1,37 @@
+; TACORD — 2D 俯视角战术 RTS 工程配置
+; 目标引擎：Godot 4.7.x stable（脚本保持 Godot 4.2+ 语法兼容）
+; 渲染方式固定为 GL Compatibility：Web 导出只支持 WebGL 2.0（= Compatibility），
+; 同一份配置在 macOS 26 上也避开 MoltenVK/Forward+ 的不必要风险。
+
+config_version=5
+
+[application]
+
+config/name="TACORD"
+config/description="2D top-down tactical RTS：指挥官只下达宏观命令，士兵用 Utility AI 自主决策。"
+run/main_scene="res://scenes/main.tscn"
+config/features=PackedStringArray("4.2", "GL Compatibility")
+config/icon="res://icon.svg"
+
+[autoload]
+
+Game="*res://scripts/core/game.gd"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+
+[physics]
+
+common/physics_ticks_per_second=60
+2d/default_gravity=0.0
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+environment/defaults/default_clear_color=Color(0.086, 0.094, 0.11, 1)
+textures/canvas_textures/default_texture_filter=0

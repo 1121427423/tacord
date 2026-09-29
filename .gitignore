@@ -1,0 +1,19 @@
+# ---- Godot 4 ----
+.godot/
+*.import
+export_presets.cfg
+.mono/
+data_*/
+mono_crash.*.json
+*.translation
+
+# ---- 导出产物 ----
+build/
+export/
+web_build/
+
+# ---- 系统 / 编辑器 ----
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
