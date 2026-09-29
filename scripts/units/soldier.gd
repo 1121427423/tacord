@@ -310,6 +310,9 @@ func die() -> void:
 	if is_dead:
 		return
 	is_dead = true
+	# 死人不是"可救援的倒地状态"，救援判定与 HUD 都依赖这个区分。
+	is_downed = false
+	bleed_timer = 0.0
 	velocity = Vector2.ZERO
 	stop_moving()
 	set_physics_process(false)

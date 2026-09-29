@@ -32,6 +32,7 @@ func _ready() -> void:
 	await _test_cover_geometry()
 	await _test_combat()
 	await _test_suppression()
+	await _test_downed_and_rescue()
 	_finish()
 
 
@@ -195,8 +196,12 @@ func _test_combat() -> void:
 	_check(shots > 0, "Weapon 开过枪（shots_fired=%d）" % shots)
 	_check(hp_after < hp_before, "无遮挡面对面时命中掉血（%d -> %d）" % [hp_before, hp_after])
 
+	# M3 起血量归零不再直接阵亡，而是进入可救援的倒地状态。
 	victim.call("take_damage", 9999)
-	_check(victim.get("is_dead") == true, "血量归零触发 die()")
+	_check(
+		victim.get("is_downed") == true and victim.get("is_dead") == false,
+		"血量归零进入倒地而不是阵亡"
+	)
 
 
 func _test_suppression() -> void:
@@ -258,6 +263,105 @@ func _test_suppression() -> void:
 		"擦身而过的子弹按距离产生压制（%.3f）" % float(bystander.get("suppression"))
 	)
 	_check(float(faraway.get("suppression")) == 0.0, "离弹道 200px 不受压制")
+
+
+func _test_downed_and_rescue() -> void:
+	_emit("[倒地与救援]")
+	# 清场：前面几节留下的倒地者会干扰救援判定，先判死（死人不算可救援目标）。
+	for unit in get_tree().get_nodes_in_group(&"soldiers"):
+		if unit.get("is_downed") == true:
+			unit.call("die")
+
+	# 1) 失血致死：把致死时间调到 0.3s，30 个物理帧（0.5s）后应当真的阵亡。
+	#    这一步放在医疗兵登场之前，免得 AI 在半路把人救活。
+	var bleeder = SOLDIER_SCENE.instantiate()
+	_map.add_child(bleeder)
+	bleeder.global_position = _map.world_pos(Vector2i(26, 8))
+	bleeder.set("bleed_out_time", 0.3)
+	bleeder.call("take_damage", 9999)
+	_check(is_equal_approx(float(bleeder.get("bleed_timer")), 0.3), "倒地即开始失血计时")
+	for _frame in range(30):
+		await get_tree().physics_frame
+	_check(bleeder.get("is_dead") == true, "无人救治则失血致死")
+	_check(bleeder.get("is_downed") == false, "阵亡后不再是可救援的倒地状态")
+
+	# 2) 没人倒地时，救援欲望为 0，进攻命令下推进满值。
+	var medic = SOLDIER_SCENE.instantiate()
+	_map.add_child(medic)
+	medic.global_position = _map.world_pos(Vector2i(24, 6))
+	medic.call("set_order", "attack")
+	var medic_ai = medic.get_node("SoldierAI")
+	medic_ai.set("is_medic", true)
+	_check(float(medic_ai.call("_consider_rescue")) == 0.0, "没有倒地友军时救援欲望为 0")
+	_check(
+		is_equal_approx(float(medic_ai.call("_consider_advance")), 1.0),
+		"没有倒地友军时进攻命令下推进欲望满值"
+	)
+
+	# 3) 打倒一个友军。
+	var casualty = SOLDIER_SCENE.instantiate()
+	_map.add_child(casualty)
+	casualty.global_position = _map.world_pos(Vector2i(26, 6))
+	casualty.call("take_damage", 9999)
+	_check(casualty.get("is_downed") == true, "打空血量 -> 倒地")
+	_check(int(casualty.get("down_count")) == 1, "倒地次数累加")
+
+	# 4) 倒地的人开不了枪、不吃压制、只能爬。
+	_check(
+		casualty.call("try_fire", casualty.global_position + Vector2(50.0, 0.0)) == false,
+		"倒地不能开火"
+	)
+	casualty.call("apply_suppression", 1.0)
+	_check(float(casualty.get("suppression")) == 0.0, "倒地的人不再累积压制")
+	_check(
+		is_equal_approx(
+			float(casualty.call("effective_speed")), float(casualty.get("move_speed")) * 0.35
+		),
+		"倒地后只能以 35% 速度爬行"
+	)
+
+	# 5) 效用：医疗兵去救人，推进欲望因战友倒地打对折。
+	var rescue_medic: float = float(medic_ai.call("_consider_rescue"))
+	var advance_now: float = float(medic_ai.call("_consider_advance"))
+	_check(is_equal_approx(advance_now, 0.5), "有战友倒地时推进欲望打对折")
+	_check(rescue_medic > advance_now, "医疗兵的救援欲望压过推进（%.2f > %.2f）" % [
+		rescue_medic, advance_now
+	])
+
+	# 6) 同样位置的普通兵救援意愿低于医疗兵（所以去救人的是医疗兵）。
+	var rifleman = SOLDIER_SCENE.instantiate()
+	_map.add_child(rifleman)
+	rifleman.global_position = medic.global_position
+	rifleman.call("set_order", "attack")
+	var rifle_ai = rifleman.get_node("SoldierAI")
+	_check(
+		float(rifle_ai.call("_consider_rescue")) < rescue_medic,
+		"医疗兵的救援意愿高于普通兵"
+	)
+
+	# 7) 倒地后中弹加速失血。
+	var before_bleed: float = float(casualty.get("bleed_timer"))
+	casualty.call("take_damage", 10)
+	_check(float(casualty.get("bleed_timer")) < before_bleed, "倒地后中弹加速失血")
+
+	# 8) 包扎：1 倍速累积 1/3，2 倍速一次补满 3 秒即救活。
+	casualty.call("apply_rescue", 1.0, 1.0)
+	_check(
+		is_equal_approx(float(casualty.call("rescue_ratio")), 1.0 / 3.0),
+		"包扎进度按 1 倍速累积到 1/3"
+	)
+	var just_revived: bool = casualty.call("apply_rescue", 1.0, 2.0)
+	_check(just_revived == true, "医疗兵 2 倍速一次补满并触发救活")
+	_check(casualty.get("is_downed") == false, "救活后不再倒地")
+	_check(int(casualty.get("hp")) == 30, "救活时血量回到 30")
+	_check(int(casualty.get("max_hp")) == 85, "每次倒地留下永久虚弱（100 -> 85）")
+
+	# 9) 倒满 3 次之后，再倒一次才真正阵亡。
+	for _i in range(3):
+		casualty.call("take_damage", 9999)
+		casualty.call("revive")
+	_check(int(casualty.get("down_count")) == 4, "连续倒地计数到 4")
+	_check(casualty.get("is_dead") == true, "倒满 3 次后再倒即阵亡")
 
 
 func _finish() -> void:
