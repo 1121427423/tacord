@@ -165,7 +165,9 @@ func rebuild_pathfinding() -> void:
 	path_graph_rebuilt.emit()
 
 
-## A* 寻路，返回格子坐标序列（含起点与终点）。找不到路返回空数组。
+## A* 寻路，返回格子坐标序列（含起点与终点）。
+## 目标不可达时返回空数组：allow_partial_path 传 false，否则 A* 会返回一条"走到墙边为止"
+## 的半截路径，调用方无法区分"到达终点"和"卡在半路"。
 func find_path(from_cell: Vector2i, to_cell: Vector2i) -> Array:
 	var result: Array = []
 	var start: Vector2i = nearest_walkable(from_cell)
@@ -175,7 +177,7 @@ func find_path(from_cell: Vector2i, to_cell: Vector2i) -> Array:
 	if not _astar.has_point(_point_id(start)) or not _astar.has_point(_point_id(goal)):
 		return result
 	var world_points: PackedVector2Array = _astar.get_point_path(
-		_point_id(start), _point_id(goal), true
+		_point_id(start), _point_id(goal), false
 	)
 	for point in world_points:
 		result.append(cell_at(point))
