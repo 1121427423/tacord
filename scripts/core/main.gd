@@ -4,6 +4,7 @@ extends Node2D
 const SOLDIER_SCENE := preload("res://scenes/units/soldier.tscn")
 const TANK_SCENE := preload("res://scenes/units/tank.tscn")
 const DRONE_SCENE := preload("res://scenes/units/drone.tscn")
+const FPV_SCENE := preload("res://scenes/units/fpv_drone.tscn")
 
 const PLAYER_TEAM := 1
 const ENEMY_TEAM := 2
@@ -21,6 +22,9 @@ var tanks: Array = []
 
 ## 侦察无人机同坦克的思路单列：不占编制、不影响判负，掉一架少一架。
 var drones: Array = []
+## FPV 自杀无人机（M13）。单列数组，同 drones 的边界思路：
+## 不占编制、不影响判负，撞完即兑现使命。
+var fpvs: Array = []
 
 @onready var camera: Camera2D = $Camera2D
 
@@ -148,6 +152,7 @@ func _spawn_demo_units() -> void:
 		_spawn_unit(ENEMY_TEAM, red_cells[i % red_cells.size()], as_medic)
 	_spawn_tanks()
 	_spawn_drones()
+	_spawn_fpvs()
 	# 蓝方守、红方攻：这样一开局就能看到 Utility AI 分化出不同行为。
 	_issue_initial_orders()
 
@@ -220,6 +225,23 @@ func _spawn_drone(team: int, cell: Vector2i, waypoint_cells: Array) -> void:
 	drones.append(drone)
 
 
+## FPV 自杀无人机（M13）：双方各一架，出生即自主锁定最近敌人俯冲。
+## 出生点放在远离前线的角落——给玩家留几秒看清"它选中了谁再冲"。
+func _spawn_fpvs() -> void:
+	if map == null:
+		return
+	_spawn_fpv(PLAYER_TEAM, Vector2i(3, 20))
+	_spawn_fpv(ENEMY_TEAM, Vector2i(28, 3))
+
+
+func _spawn_fpv(team: int, cell: Vector2i) -> void:
+	var fpv := FPV_SCENE.instantiate()
+	fpv.set("team", team)
+	map.add_child(fpv)
+	fpv.global_position = map.world_pos(cell)
+	fpvs.append(fpv)
+
+
 func _next_unit_name(team: int) -> String:
 	var prefix := "蓝" if team == PLAYER_TEAM else "红"
 	var count: int = 0
@@ -275,6 +297,7 @@ func _update_hud() -> void:
 	]
 	text += "装甲: %s\n" % _tank_text()
 	text += "空中: %s\n" % _drone_text()
+	text += "FPV: %s\n" % _fpv_text()
 	text += "情报: %s\n" % _intel_text(game)
 	text += "俘虏: %s\n" % _captive_text(game)
 	text += "弹药: %s\n" % _ammo_text()
@@ -352,6 +375,29 @@ func _drone_text() -> String:
 			(
 				"%s方 hp=%d 行为=%s"
 				% [side, int(drone.get("hp")), String(drone.call("current_action"))]
+			)
+		)
+	return "   ".join(parts)
+
+
+## FPV 状态一行：撞完的画"已引爆"，被击落的画"已坠毁"——两种下场都值得看。
+func _fpv_text() -> String:
+	if fpvs.is_empty():
+		return "无"
+	var parts: Array = []
+	for fpv in fpvs:
+		var side: String = "蓝" if int(fpv.get("team")) == PLAYER_TEAM else "红"
+		if fpv.get("is_dead") == true:
+			# 两种下场都值得看：撞完目标的是"已引爆"，被击落的是"已坠毁"（哑弹）。
+			# GDScript 的 get() 不检查下划线约定，私有账目照读。
+			var verdict: String = "已引爆" if fpv.get("_exploded") == true else "已坠毁"
+			parts.append("%s方 %s" % [side, verdict])
+			continue
+		var locked: String = "锁定" if fpv.get("target") != null else "搜索中"
+		parts.append(
+			(
+				"%s方 hp=%d %s"
+				% [side, int(fpv.get("hp")), locked]
 			)
 		)
 	return "   ".join(parts)
