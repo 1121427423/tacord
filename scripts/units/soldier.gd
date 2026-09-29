@@ -3,6 +3,12 @@ class_name Soldier
 extends CharacterBody2D
 
 signal died(unit: CharacterBody2D)
+
+## hp 归零进入倒地（可救援）时发出。
+signal went_down(unit: CharacterBody2D)
+
+## 被队友救活时发出；rescuer 为 null 表示非救援途径。
+signal revived(unit: CharacterBody2D, rescuer: CharacterBody2D)
 signal health_changed(current: int, maximum: int)
 signal order_changed(order: String)
 
@@ -19,6 +25,27 @@ const SUPPRESSION_DECAY := 0.22
 
 ## 压制对机动性的最大削弱（满压制时只能跑出 40% 速度）。
 const SUPPRESSION_SPEED_PENALTY := 0.6
+
+## 倒地后无人救治、失血致死的秒数。
+const BLEED_OUT_TIME := 20.0
+
+## 被救活时的血量。
+const REVIVE_HP := 30
+
+## 每倒一次地永久损失的最大血量（“虚弱”）。
+const WEAKNESS_PER_DOWN := 15
+
+## 倒地时的爬行速度系数（被拖动时用）。
+const CRAWL_SPEED_FACTOR := 0.35
+
+## 倒这么多次之后，再倒一次就真正阵亡。
+const MAX_DOWNS := 3
+
+## 标准包扎耗时（秒）。医疗兵按倍数加速。
+const RESCUE_TIME := 3.0
+
+## 倒地后再挨打对失血计时的加速：每点伤害提前这么多秒。
+const BLEED_PER_DAMAGE := 0.12
 const TEAM_COLORS := {
 	1: Color(0.404, 0.635, 1.0),  # 蓝方
 	2: Color(1.0, 0.427, 0.345),  # 红方
@@ -30,7 +57,22 @@ const TEAM_COLORS := {
 @export var team: int = 1  # 1 = 蓝方，2 = 红方
 @export var current_order: String = "hold"
 
+## 失血致死时间（秒）。做成导出项，测试可以把它调短。
+@export var bleed_out_time: float = BLEED_OUT_TIME
+
 var is_dead: bool = false
+
+## 倒地：hp 归零先进这个状态，可被队友救活。
+var is_downed: bool = false
+
+## 倒地次数：每次叠加虚弱，超过 MAX_DOWNS 才真正阵亡。
+var down_count: int = 0
+
+## 剩余失血时间（秒），归零即阵亡。
+var bleed_timer: float = 0.0
+
+## 包扎进度，达到 RESCUE_TIME 即被救活。
+var rescue_progress: float = 0.0
 
 ## 单位朝向（单位向量）。AI 用它判断谁把侧翼暴露给了谁。
 var facing: Vector2 = Vector2.RIGHT
@@ -78,9 +120,26 @@ func _physics_process(delta: float) -> void:
 	_decay_effects(delta)
 	if is_dead:
 		return
+	if is_downed:
+		_bleed(delta)
+		# 倒地的人仍会被队友拖着爬行（effective_speed 已换成爬行速度）。
+		_follow_path()
+		return
 	if weapon != null:
 		weapon.call("tick", delta)
 	_follow_path()
+
+
+## 失血计时。归零就是真正的阵亡。
+func _bleed(delta: float) -> void:
+	if bleed_timer <= 0.0:
+		return
+	var shown_before: int = int(bleed_timer)
+	bleed_timer = maxf(0.0, bleed_timer - delta)
+	if bleed_timer <= 0.0:
+		die()
+	elif int(bleed_timer) != shown_before:
+		queue_redraw()
 
 
 ## 曳光与受击闪白的衰减。放在 is_dead 判断之前，避免士兵阵亡后特效卡住不消失。
@@ -154,31 +213,102 @@ func set_order(order: String) -> void:
 func take_damage(amount: int) -> void:
 	if is_dead:
 		return
-	hp = maxi(hp - amount, 0)
-	health_changed.emit(hp, max_hp)
 	_hit_flash_ttl = HIT_FLASH_DURATION
 	if body_rect != null:
 		# modulate 是乘法，>1 才能"提亮"，实现受击闪白。
 		body_rect.modulate = Color(2.2, 2.2, 2.2)
+	if is_downed:
+		# 已经倒地了：不会再倒一次，但每发子弹都在加速失血。
+		bleed_timer = maxf(0.0, bleed_timer - float(amount) * BLEED_PER_DAMAGE)
+		queue_redraw()
+		return
+	hp = maxi(hp - amount, 0)
+	health_changed.emit(hp, max_hp)
 	queue_redraw()
 	if hp <= 0:
+		go_down()
+
+
+## hp 归零：先倒地（可救），不直接阵亡。倒够 MAX_DOWNS 次之后才真的死。
+func go_down() -> void:
+	if is_dead or is_downed:
+		return
+	down_count += 1
+	if down_count > MAX_DOWNS:
 		die()
+		return
+	is_downed = true
+	bleed_timer = bleed_out_time
+	rescue_progress = 0.0
+	# 倒地的人不会继续被压制（他已经趴下了）。
+	suppression = 0.0
+	velocity = Vector2.ZERO
+	stop_moving()
+	if body_rect != null:
+		body_rect.modulate = Color(1.0, 1.0, 1.0, 0.75)
+	went_down.emit(self)
+	queue_redraw()
+
+
+## 推进包扎进度；返回 true 表示这一次调用刚好把人救活。
+## speed_multiplier 让医疗兵比普通兵快（见 soldier_ai.gd 的 is_medic）。
+func apply_rescue(
+	delta: float, speed_multiplier: float = 1.0, rescuer: CharacterBody2D = null
+) -> bool:
+	if is_dead or not is_downed:
+		return false
+	rescue_progress = minf(rescue_progress + delta * maxf(0.1, speed_multiplier), RESCUE_TIME)
+	if rescue_progress < RESCUE_TIME:
+		return false
+	revive(rescuer)
+	return true
+
+
+## 被救活：站起来，但每次倒地都留下永久虚弱。
+func revive(rescuer: CharacterBody2D = null) -> void:
+	if is_dead or not is_downed:
+		return
+	is_downed = false
+	bleed_timer = 0.0
+	rescue_progress = 0.0
+	hp = mini(REVIVE_HP, max_hp)
+	max_hp = maxi(max_hp - WEAKNESS_PER_DOWN, REVIVE_HP + 1)
+	health_changed.emit(hp, max_hp)
+	if body_rect != null:
+		body_rect.modulate = Color.WHITE
+	revived.emit(self, rescuer)
+	queue_redraw()
+
+
+## 失血剩余比例 [0, 1]，用于 HUD 与占位渲染。
+func bleed_ratio() -> float:
+	if bleed_out_time <= 0.0:
+		return 0.0
+	return clampf(bleed_timer / bleed_out_time, 0.0, 1.0)
+
+
+## 失去战斗力（倒地或阵亡）。敌人索敌与 HUD 都看这个。
+func is_incapacitated() -> bool:
+	return is_dead or is_downed
 
 
 ## 被压制（近失子弹）。累积到 [0, 1] 上限。
 func apply_suppression(amount: float) -> void:
-	if is_dead or amount <= 0.0:
+	if is_dead or is_downed or amount <= 0.0:
 		return
 	suppression = clampf(suppression + amount, 0.0, 1.0)
 
 
-## 压制会压慢脚步：满压制时只剩 1 - SUPPRESSION_SPEED_PENALTY 的速度。
+## 压制会压慢脚步（满压制只剩 40%）；倒地的人只能爬。
 func effective_speed() -> float:
+	if is_downed:
+		return move_speed * CRAWL_SPEED_FACTOR
 	return move_speed * (1.0 - SUPPRESSION_SPEED_PENALTY * suppression)
 
 
+## 医疗包的即时回血（倒地的人得靠 apply_rescue 包扎，不吃这个）。
 func heal(amount: int) -> void:
-	if is_dead:
+	if is_dead or is_downed:
 		return
 	hp = mini(hp + amount, max_hp)
 	health_changed.emit(hp, max_hp)
@@ -220,9 +350,9 @@ func aim_at(world_target: Vector2) -> void:
 	queue_redraw()
 
 
-## 朝某个世界坐标开一枪（冷却由 Weapon 组件内部处理）。
+## 朝某个世界坐标开一枪（冷却由 Weapon 组件内部处理）。倒地的人开不了枪。
 func try_fire(target_pos: Vector2) -> bool:
-	if weapon == null:
+	if weapon == null or is_downed:
 		return false
 	return bool(weapon.call("try_fire", target_pos))
 
@@ -269,6 +399,16 @@ func _draw() -> void:
 	# 占位渲染：圆形轮廓 + 朝向指示 + 血条。
 	draw_circle(Vector2.ZERO, 9.0, Color(1.0, 1.0, 1.0, 0.16))
 	draw_line(Vector2.ZERO, facing * 10.0, Color(1.0, 1.0, 1.0, 0.7), 1.5)
+	if is_downed:
+		# 倒地：红十字 + 失血条（剩余时间），包扎进度画在下方。
+		draw_line(Vector2(-4.0, 0.0), Vector2(4.0, 0.0), Color(0.95, 0.25, 0.25, 0.95), 2.0)
+		draw_line(Vector2(0.0, -4.0), Vector2(0.0, 4.0), Color(0.95, 0.25, 0.25, 0.95), 2.0)
+		draw_rect(Rect2(-8.0, -14.0, 16.0, 3.0), Color(0.0, 0.0, 0.0, 0.65))
+		draw_rect(Rect2(-8.0, -14.0, 16.0 * bleed_ratio(), 3.0), Color(0.93, 0.33, 0.27))
+		if rescue_progress > 0.0:
+			var rescue_ratio: float = clampf(rescue_progress / RESCUE_TIME, 0.0, 1.0)
+			draw_rect(Rect2(-8.0, 11.0, 16.0 * rescue_ratio, 2.0), Color(0.45, 0.95, 0.6))
+		return
 	var ratio: float = clampf(float(hp) / maxf(1.0, float(max_hp)), 0.0, 1.0)
 	draw_rect(Rect2(-8.0, -14.0, 16.0, 3.0), Color(0.0, 0.0, 0.0, 0.65))
 	var bar_color := Color(0.32, 0.88, 0.45) if ratio > 0.4 else Color(0.93, 0.33, 0.27)
