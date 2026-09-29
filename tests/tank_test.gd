@@ -155,7 +155,9 @@ func _test_tank() -> void:
 	#    阵形：friend(14,14) 蓝 —— alive_tank(14,10) 红 —— foe(14,6) 蓝
 	#    同列 128px，全部在步枪 260px 与坦克 380px 射程之内。
 	# ================================================================
-	var foe = _spawn_soldier(Vector2i(14, 6), 2, 100)
+	# foe 必须是**蓝方**：它要是和红方坦克同队，weapon 的近失压制会按
+	# team 过滤直接跳过——掉血照给（try_fire 不查阵营），压制却是 0。
+	var foe = _spawn_soldier(Vector2i(14, 6), 1, 100)
 	var friend = _spawn_soldier(Vector2i(14, 14), 1, 100)
 	var alive_tank = _spawn_tank(Vector2i(14, 10), 2)
 	# 一辆**活着的**同队坦克：只有"同队"这一个条件能把它排除掉，
@@ -182,7 +184,15 @@ func _test_tank() -> void:
 	# 蓝方士兵 -> 红方坦克：子弹打在装甲上只留 1/4。
 	var tank_hp_before: int = int(alive_tank.get("hp"))
 	var did_hit: bool = bool(friend.get("weapon").call("try_fire", alive_tank.global_position))
-	_check(did_hit, "士兵的子弹能命中坦克（layer 1 + take_damage 天然打通）")
+	_check(
+		did_hit,
+		"士兵的子弹能命中坦克（子弹 %d 发，坦克 %d → %d 血）"
+		% [
+			int(friend.get_node("Weapon").get("shots_fired")),
+			tank_hp_before,
+			int(alive_tank.get("hp")),
+		],
+	)
 	_check(int(alive_tank.get("hp")) == tank_hp_before - 3, "命中后坦克只掉 3 血")
 	_check(
 		is_equal_approx(float(alive_tank.get("suppression")), 0.0), "挨打不会给载具攒压制"
@@ -195,10 +205,15 @@ func _test_tank() -> void:
 	var gun = alive_tank.get("weapon")
 	gun.call("try_fire", foe.global_position)
 	await _wait(2)
-	_check(int(foe.get("hp")) < soldier_hp_before, "坦克主炮打中士兵（40 点，士兵没有装甲）")
+	_check(
+		int(foe.get("hp")) < soldier_hp_before,
+		"坦克主炮打中士兵（主炮 %d 发，%d → %d 血）"
+		% [int(gun.get("shots_fired")), soldier_hp_before, int(foe.get("hp"))],
+	)
 	_check(
 		float(foe.get("suppression")) > 0.2,
-		"中弹同时吃到接近满额的压制（命中目标离弹道≈0，强度接近 1）",
+		"中弹同时吃到接近满额的压制（实测 suppression=%.3f）"
+		% float(foe.get("suppression")),
 	)
 	_check(int(gun.get("ammo_in_mag")) == 5, "主炮打掉一发：弹匣 6 -> 5")
 
