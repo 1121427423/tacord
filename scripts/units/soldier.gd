@@ -11,6 +11,8 @@ const LAYER_UNITS := 1
 const LAYER_OBSTACLES := 2
 
 const ARRIVAL_TOLERANCE := 3.0
+const TRACER_DURATION := 0.08
+const HIT_FLASH_DURATION := 0.12
 const TEAM_COLORS := {
 	1: Color(0.404, 0.635, 1.0),  # 蓝方
 	2: Color(1.0, 0.427, 0.345),  # 红方
@@ -33,6 +35,9 @@ var battle_map = null
 var _path: PackedVector2Array = PackedVector2Array()
 var _path_index: int = 0
 var _target_cell := Vector2i(-1, -1)
+var _tracer: Array = []  # [起点, 终点]（世界坐标）
+var _tracer_ttl: float = 0.0
+var _hit_flash_ttl: float = 0.0
 
 # SoldierAI 子节点。不标注类型，避免与 scripts/ai/soldier_ai.gd 形成脚本循环依赖。
 @onready var ai = $SoldierAI
@@ -54,15 +59,39 @@ func _ready() -> void:
 	if battle_map == null:
 		push_warning("Soldier: 场景中没有 BattleMap（group: battle_map），无法寻路。")
 	_apply_team_color()
+	if weapon != null and weapon.has_signal("shot_fired"):
+		weapon.connect("shot_fired", _on_shot_fired)
 	queue_redraw()
 
 
 func _physics_process(delta: float) -> void:
+	_decay_effects(delta)
 	if is_dead:
 		return
 	if weapon != null:
 		weapon.call("tick", delta)
 	_follow_path()
+
+
+## 曳光与受击闪白的衰减。放在 is_dead 判断之前，避免士兵阵亡后特效卡住不消失。
+func _decay_effects(delta: float) -> void:
+	var dirty: bool = false
+	if _tracer_ttl > 0.0:
+		_tracer_ttl = maxf(0.0, _tracer_ttl - delta)
+		dirty = true
+	if _hit_flash_ttl > 0.0:
+		_hit_flash_ttl = maxf(0.0, _hit_flash_ttl - delta)
+		if body_rect != null and _hit_flash_ttl <= 0.0 and not is_dead:
+			body_rect.modulate = Color.WHITE
+		dirty = true
+	if dirty:
+		queue_redraw()
+
+
+func _on_shot_fired(from: Vector2, to: Vector2, _hit_target: bool) -> void:
+	_tracer = [from, to]
+	_tracer_ttl = TRACER_DURATION
+	queue_redraw()
 
 
 # ---------------------------------------------------------------- 对外接口
@@ -115,6 +144,10 @@ func take_damage(amount: int) -> void:
 		return
 	hp = maxi(hp - amount, 0)
 	health_changed.emit(hp, max_hp)
+	_hit_flash_ttl = HIT_FLASH_DURATION
+	if body_rect != null:
+		# modulate 是乘法，>1 才能"提亮"，实现受击闪白。
+		body_rect.modulate = Color(2.2, 2.2, 2.2)
 	queue_redraw()
 	if hp <= 0:
 		die()
@@ -205,6 +238,10 @@ func _apply_team_color() -> void:
 
 
 func _draw() -> void:
+	# 曳光：把世界坐标的弹道转成本地坐标画出来。
+	if _tracer_ttl > 0.0 and _tracer.size() == 2:
+		var alpha: float = _tracer_ttl / TRACER_DURATION
+		draw_line(to_local(_tracer[0]), to_local(_tracer[1]), Color(1.0, 0.86, 0.42, alpha), 1.0)
 	# 占位渲染：圆形轮廓 + 朝向指示 + 血条。
 	draw_circle(Vector2.ZERO, 9.0, Color(1.0, 1.0, 1.0, 0.16))
 	draw_line(Vector2.ZERO, facing * 10.0, Color(1.0, 1.0, 1.0, 0.7), 1.5)
