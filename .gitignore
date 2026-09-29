@@ -23,5 +23,6 @@ Thumbs.db
 # ---- 测试产物 ----
 smoke_result.log
 mobility_result.log
+medic_result.log
 smoke.log
 export.log
