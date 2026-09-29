@@ -26,5 +26,8 @@ mobility_result.log
 medic_result.log
 tank_result.log
 drone_result.log
+grenade_result.log
+fpv_result.log
+ammo_result.log
 smoke.log
 export.log
