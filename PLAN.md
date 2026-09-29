@@ -68,7 +68,7 @@ tacord/
 │   ├── main.tscn                    # Main(Node2D) + Camera2D + BattleMap 实例 + HUD
 │   ├── battle/battle_map.tscn       # Node2D + battle_map.gd
 │   └── units/soldier.tscn           # CharacterBody2D + ColorRect + CollisionShape2D + SoldierAI
-├── tests/smoke_test.tscn            # 引擎原生 headless 测试（65 项断言，退出码判定）
+├── tests/smoke_test.tscn            # 引擎原生 headless 测试（76 项断言，退出码判定）
 ├── .github/workflows/               # ci.yml（lint + 冒烟测试）、web.yml（导出 + Pages）
 ├── export_presets.cfg               # Web 导出预设（单线程），CI 复现用
 ├── scripts/
@@ -76,6 +76,7 @@ tacord/
 │   ├── core/battle_map.gd           # 网格/地形/AStar2D/视线/掩体评估/占位渲染
 │   ├── core/main.gd                 # 主场景装配、演示地形与双方占位单位、HUD
 │   ├── ai/utility.gd                # 通用 Utility AI（Consideration + 响应曲线）
+│   ├── ai/blackboard.gd             # 小队黑板：同队共享的目击与枪声记忆
 │   ├── ai/behavior_tree.gd          # 极简 BT：Action / Condition / Sequence / Selector
 │   ├── ai/soldier_ai.gd             # 3+1 个考虑因素 + 每个行为一棵树
 │   ├── units/soldier.gd             # 移动 / HP / 命令 / 压制 / 占位绘制 / 曳光
@@ -97,8 +98,8 @@ tacord/
 ## 4. 下一步顺序（含验收标准）
 
 > 原则：**先让掩体有后果，再让掩体有代价，最后才加复杂度。**
-> M1 让子弹飞起来，M2 让「被打」产生行为后果，M3 让「打死」变成可挽回的状态；
-> 下一步是让士兵「知道」战场——M4 感知与记忆。
+> M1 让子弹飞起来，M2 让「被打」产生行为后果，M3 让「打死」变成可挽回的状态，
+> M4 让士兵只知道自己该知道的（去掉透视）；下一步是让火力有尽头——M5 弹药与后勤。
 
 ### M1 · 交火与视线 ✅ 已完成
 - `scripts/units/weapon.gd`：射程、射速、散布、射线命中（第 1 层单位 + 第 2 层障碍）
@@ -174,9 +175,48 @@ hp > 0 ──take_damage──> hp <= 0 ──go_down()──> downed ──appl
 **135 帧（2.25 秒模拟时间）** 后 `is_downed` 变回 false，且没有死。这条才是 M3 验收标准本身，
 前面 22 条只是把它的每个零件钉住。
 
-### M4 · 感知与记忆
+### M4 · 感知与记忆 ✅ 已完成
 - 听觉事件、"最后已知位置"记忆、小队黑板共享敌情
-- 验收：士兵会转向看不见的枪声，并向最后已知位置搜索而不是原地发呆。
+- 验收：✅ 士兵会转向看不见的枪声，并向最后已知位置搜索而不是原地发呆。
+
+M4 真正改掉的是一处**作弊**：`_pick_advance_target` 原来调 `_nearest_enemy(1e9)`，
+不看通视直接拿敌人真实坐标——等于每个士兵都开着全图透视。现在推进是三级优先：
+
+```
+看得见的敌人（有通视） ──> 压到 2 格开火距离
+        │ 看不见
+        ▼
+黑板上有记忆 ──────────> 去查最后已知位置（目击优先于枪声）
+        │ 什么都不知道
+        ▼
+就近 6 格随机搜索 ─────> 绝不原地发呆
+```
+
+| 参数 | 位置 | 值 | 作用 |
+| --- | --- | --- | --- |
+| `GUNSHOT_HEAR_RADIUS` | `soldier_ai.gd` | 520 px | 枪声传播半径（声音不看视线） |
+| `AWARENESS_RADIUS` | `soldier_ai.gd` | 720 px | 视觉搜索上限（能否看见仍由通视决定） |
+| `PATROL_RADIUS_CELLS` | `soldier_ai.gd` | 6 格 | 毫无情报时的搜索半径 |
+| `MEMORY_TTL` | `blackboard.gd` | 12 s | 记忆保鲜期，过期即遗忘 |
+| `MAX_GUNSHOTS` | `blackboard.gd` | 8 | 一块黑板最多记住几声枪响 |
+
+三个设计决定：
+1. **枪声记在敌人的黑板上。** `Game.hear_gunshot()` 把每声枪响分发给所有**敌队**的黑板——
+   自己队不用记（他们知道自己在开枪），枪声的全部价值就在于让看不见的人暴露位置。
+   （第一版写成记在自己队黑板上，被 `nearest_enemy_gunshot` 的友军过滤一夹就永远听不见，
+   是写测试时推演出来的。）
+2. **转头只对"新的一声"响应。** 枪声带自增 id，`_heard_shot_id` 去重；
+   否则士兵会僵在同一朝向上，别的判断全被冻住。
+3. **黑板的时钟由 Game 统一推进。** 放在士兵身上会让一队 6 个人的记忆走快 6 倍。
+
+HUD 新增一行「情报: 蓝方 sighting 3.2s 前 @(848,208)　红方 无」，
+让"看不见敌人、靠记忆去搜"这件事在画面上直接可见。
+
+验收（CI 里 76/76，其中 11 条覆盖 M4）：黑板本体 7 条（目击记忆 / 超期遗忘 /
+听得见敌队枪声 / 自己队枪声不算威胁 / 超半径听不见 / 目击优先于枪声）；
+端到端 3 条——看不见敌人时朝向实测 `facing=(0.00,-1.00)`（正北，即枪声方向）、
+敌队真的开火后 320 px 外的听者转向声源（这条专门验证分发路由）、
+毫无情报时 1 秒内走了 **73 px** 而不是发呆。
 
 ### M5 · 弹药与后勤（轻量版）
 - 弹匣 / 换弹 / 弹药耗尽导致火力衰减；路过尸体可补弹
@@ -228,14 +268,23 @@ hp > 0 ──take_damage──> hp <= 0 ──go_down()──> downed ──appl
   均见于引擎类文档；`uid` 可省略由 `resource_format_text.cpp` 的 `next_tag.fields.has("uid")` 确认
 
 **已在真实引擎中验证**：GitHub Actions（`.github/workflows/ci.yml`）用 Godot 4.7.2 headless
-执行 `tests/smoke_test.tscn`，**65/65 断言通过**（M2 的 10 条、M3 的 23 条都在最新一次 CI 里逐条 PASS）；
+执行 `tests/smoke_test.tscn`，**76/76 断言通过**（M2 的 10 条、M3 的 23 条、M4 的 11 条都在最新一次 CI 里逐条 PASS）；
 `.github/workflows/web.yml` 的 Web 导出也已成功产出 10.3 MB 的 `github-pages` artifact。
 
-这套测试已经抓到两个真 bug（均已修）：
+这套测试工作累计抓到 5 个真 bug（均已修）。前两个是 CI 跑出来的：
 1. `cover` 地形此前算作「可走」，而 `add_obstacle()` 会生成实体碰撞体 → A\* 规划出穿墙路径，
    士兵被 `move_and_slide` 卡在墙上，`has_arrived()` 永远为假、行为树一直 RUNNING。
 2. `find_path` 曾把 `AStar2D.get_point_path` 的 `allow_partial_path` 传 `true` → 目标不可达时
    返回「走到墙边为止」的半截路径，调用方无法区分到达终点与卡在半路。
+
+后三个是写断言时推演出来的（推演比跑起来更早发现问题）：
+
+3. `die()` 没有清 `is_downed` / `bleed_timer` → 死人和「可救援的倒地者」分不开，
+   救援判定和 HUD 都会把尸体当成能救的伤员。
+4. 枪声只记在**开枪者自己队**的黑板上，而 `nearest_enemy_gunshot` 又会过滤掉本队枪声
+   → 两边一夹，听声转头永远不会触发，M4 第一条验收标准直接落空。改成由 Game 分发给敌队。
+5. `clear_boards()` 原来 `_boards.clear()` 丢掉整个字典，而活着的士兵手里握着旧黑板引用
+   → 重开一局后 `hear_gunshot` 会写进一块没人读的新黑板。改成逐块清内容。
 
 **仍未验证**：① 浏览器里的实际画面（需开启 GitHub Pages，或下载 artifact 本地预览）；
 ② macOS 签名/公证（需真机）。
