@@ -335,8 +335,22 @@ func _test_grenade() -> void:
 			evade_seen = true
 			break
 		if i % 15 == 0:
+			# 快照把雷的现场也摊开：evade 分数恒 0 而雷明明在窗口内，
+			# 组/距离/引信哪个环节断了，下一轮日志一眼定位。
+			var g8_pos: Vector2 = g8.global_position
+			var g8_fuse: float = float(g8.call("fuse_remaining"))
+			var g8_dist: float = watcher8.global_position.distance_to(g8_pos)
 			evade_snapshots.append(
-				"[第%d帧] %s" % [i, watcher8.get_node("SoldierAI").call("scores_text")]
+				"[第%d帧] 雷=(%.0f,%.0f) fuse=%.2f 距=%.0f 组数=%d | %s"
+				% [
+					i,
+					g8_pos.x,
+					g8_pos.y,
+					g8_fuse,
+					g8_dist,
+					get_tree().get_nodes_in_group(&"grenades").size(),
+					watcher8.get_node("SoldierAI").call("scores_text"),
+				]
 			)
 		await get_tree().physics_frame
 	_check(evade_seen, "AI 兵在 96px 内出现快炸的雷时扑倒（posture = prone）")
