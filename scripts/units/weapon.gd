@@ -15,6 +15,13 @@ signal ammo_changed(in_magazine: int, in_reserve: int)
 const LAYER_UNITS := 1
 const LAYER_OBSTACLES := 2
 
+## 弹药告急线（M14）：剩余总量（弹匣+备弹）≤ magazine_size × 这个匣数即告急。
+const CONSERVING_THRESHOLD_MAGS := 1
+
+## 告急时的冷却倍率：0.35s -> 0.875s——"长点射变成单发"的占位实现。
+## 降级只是冷却变长，散布/伤害/换弹一概照旧。
+const CONSERVING_FACTOR := 2.5
+
 @export var damage: int = 12
 @export var fire_interval: float = 0.35
 @export var max_range: float = 260.0
@@ -54,6 +61,11 @@ var ammo_in_mag: int = 0
 ## 正在换弹。这段时间开不了枪。
 var is_reloading: bool = false
 
+## 弹药告急（M14）："长点射变成单发"的读数，HUD/测试直接读（不占公开方法额度）。
+## 每帧 tick() 重算：剩余总量跌到告急线（≤ 1 匣）且尚未彻底打光时为 true。
+## 边界：打光（is_dry）≠ 告急——彻底哑火的枪已谈不上"省着打"，读数回 false。
+var is_conserving: bool = false
+
 var _reload_timer: float = 0.0
 var _cooldown: float = 0.0
 var _melee_cooldown: float = 0.0
@@ -71,6 +83,8 @@ func _ready() -> void:
 
 ## 由士兵每帧调用，推进射击冷却与换弹计时。
 func tick(delta: float) -> void:
+	# 告急读数每帧重算——放在一切早退之前，换弹中也要保持新鲜。
+	_update_conserving()
 	if _cooldown > 0.0:
 		_cooldown = maxf(0.0, _cooldown - delta)
 	if _melee_cooldown > 0.0:
@@ -99,6 +113,14 @@ func total_ammo() -> int:
 ## 彻底打光（弹匣空且没有备弹可换）。
 func is_dry() -> bool:
 	return total_ammo() <= 0
+
+
+## 重算弹药告急读数：总量跌到告急线（≤ 1 匣）即进入省弹模式；
+## 但打光（is_dry）不算告急——已经沉寂的枪无所谓"省着打"，回 false。
+func _update_conserving() -> void:
+	is_conserving = (
+		total_ammo() <= magazine_size * CONSERVING_THRESHOLD_MAGS and not is_dry()
+	)
 
 
 ## 开始换弹。没有备弹就换不了——这正是"阵地渐渐沉寂"的起点。
@@ -167,11 +189,17 @@ func try_melee(target) -> bool:
 	return true
 
 
+## 实际射击冷却：告急时拉长 CONSERVING_FACTOR 倍，其余状态照旧。
+func _effective_interval() -> float:
+	return fire_interval * CONSERVING_FACTOR if is_conserving else fire_interval
+
+
 ## 朝 target_pos 开一枪。返回是否命中了一个能承伤的单位。
 func try_fire(target_pos: Vector2) -> bool:
 	if not can_fire():
 		return false
-	_cooldown = fire_interval
+	# 告急降级（M14）只体现在这一行：冷却按当前读数取正常或加长档。
+	_cooldown = _effective_interval()
 	ammo_in_mag = maxi(ammo_in_mag - 1, 0)
 	shots_fired += 1
 	ammo_changed.emit(ammo_in_mag, reserve_ammo)
