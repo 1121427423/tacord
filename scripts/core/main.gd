@@ -158,6 +158,7 @@ func _update_hud() -> void:
 	text += "蓝方 %d 存活（%d 倒地）    红方 %d 存活（%d 倒地）\n" % [
 		blue_alive, blue_down, red_alive, red_down
 	]
+	text += "情报: %s\n" % _intel_text(game)
 	text += "— 士兵自主决策 —\n"
 	for unit in units:
 		if unit.get("is_dead") == true:
@@ -183,3 +184,28 @@ func _update_hud() -> void:
 
 func _unit_tag(unit) -> String:
 	return String(unit.get("name"))
+
+
+## 双方小队黑板里最值得追的那条记忆。让「靠记忆搜索」在画面上看得见。
+func _intel_text(game) -> String:
+	if game == null or not game.has_method("blackboard"):
+		return "无（没有 Game 自动加载）"
+	var parts: Array = []
+	for team in [PLAYER_TEAM, ENEMY_TEAM]:
+		var tag: String = "蓝" if team == PLAYER_TEAM else "红"
+		var board = game.call("blackboard", team)
+		var memory: Dictionary = board.call("best_memory", team)
+		if memory.is_empty():
+			parts.append("%s方 无" % tag)
+			continue
+		parts.append(
+			"%s方 %s %.1fs 前 @(%d,%d)"
+			% [
+				tag,
+				String(memory["kind"]),
+				float(memory["age"]),
+				int((memory["pos"] as Vector2).x),
+				int((memory["pos"] as Vector2).y),
+			]
+		)
+	return "    ".join(parts)
