@@ -86,8 +86,9 @@ jobs:
       - name: 部署结果提示
         if: always()
         run: |
-          {
-            echo "### 部署状态：${{ steps.deployment.outcome }}"
-            echo "若失败，请到 Settings → Pages → Build and deployment → Source 选择 **GitHub Actions**，"
-            echo "然后重跑本 workflow。导出产物已作为 artifact 上传，可直接下载本地预览。"
-          } >> "$GITHUB_STEP_SUMMARY"
+          outcome="${{ steps.deployment.outcome }}"
+          echo "部署步骤结果：$outcome"
+          if [ "$outcome" != "success" ]; then
+            echo "::warning::Pages 未发布（$outcome）。请到 Settings → Pages → Build and deployment → Source 选择 GitHub Actions，再重跑本 workflow。"
+            echo "::warning::导出产物已上传为 artifact 'github-pages'，下载解压后用 python3 -m http.server 即可本地预览。"
+          fi
