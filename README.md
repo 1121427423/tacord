@@ -200,15 +200,67 @@ tacord/
 
 ---
 
-## 六、当前验证状态
+## 六、CI 与自动部署
 
-已完成的静态验证：7 个脚本通过 `gdparse`（Godot 4 语法）与 `gdlint`；脚本里 **112 处**引擎 API
-**同时**逐个比对过 Godot **4.7.2** 与 **4.2** 源码自带的类文档（两边都 0 问题，所以"兼容 4.2+"
-不是口头承诺）；**126 处**跨文件调用核对无误；`project.godot` 的每个设置项与 `.tscn` 的每个
-属性名都在引擎源码中确认存在。
+仓库里有两个 GitHub Actions workflow，push 到 `main` 或 `arena/**` 分支即触发。
 
-**尚未验证**：引擎实际运行画面（"F5 看到网格和士兵"）需要在本地 Godot 4.7.x 里确认一次。
-macOS 签名/公证同样需要真机验证。
+### `.github/workflows/ci.yml`
+
+| Job | 内容 |
+| --- | --- |
+| `GDScript 静态检查` | pip 装 `gdtoolkit==4.5.0`，对 `scripts/` 与 `tests/` 跑 `gdparse` + `gdlint` |
+| `Headless 冒烟测试` | 下载 Godot 4.7.2 Linux 版 → `--headless --import` → 跑 `tests/smoke_test.tscn`，用退出码判定 |
+
+冒烟测试是**引擎原生**的（不依赖 GUT/gdUnit 等第三方插件），当前覆盖 **32 项**断言：
+坐标换算、地形读写、`add_obstacle` 不可走（穿墙路径回归）、AStar2D 封死/绕行、
+UtilityAI 择优/权重/粘性/曲线单调、掩体几何（墙后得分更高、被绕侧翼后失效）、
+交火（开枪 + 掉血 + `die()`）。
+
+本地跑同样的检查：
+
+```bash
+godot --headless --path . tests/smoke_test.tscn   # 退出码 0 = 全通过
+```
+
+### `.github/workflows/web.yml`
+
+下载 Godot + 导出模板（约 1.3 GB）→ `--export-release "Web"` → 上传 artifact `github-pages`
+→ 发布到 GitHub Pages。
+
+**一次性设置（必须手动做一次）**：仓库 `Settings → Pages → Build and deployment → Source`
+选择 **GitHub Actions**。没开启时导出仍会成功、artifact 照常上传，只是最后一步发布会报
+`Failed to create deployment (status: 404)`。
+
+开启后重跑 workflow，站点地址为 `https://<用户名>.github.io/tacord/`。
+在开启之前，可以下载 artifact 本地预览：
+
+```bash
+gh run download <run-id> -n github-pages -D web_preview
+cd web_preview && python3 -m http.server 8080
+```
+
+> CI 读日志的坑：Actions 的日志文件存在 `*.blob.core.windows.net`，某些网络环境访问不到。
+> 因此两个 workflow 都把关键输出用 `::error::` / `::warning::` 发成 **annotation**，
+> 可以直接用 `gh api /repos/<owner>/<repo>/check-runs/<id>/annotations` 取回。
+> 注意 annotation 有数量上限且保留**最先发出**的若干条，所以失败项要放在最前面发。
+
+---
+
+## 七、当前验证状态
+
+**已在真实引擎里跑通**：GitHub Actions 上用 Godot 4.7.2 headless 执行 `tests/smoke_test.tscn`，
+**32/32 项断言通过**（含掩体几何评估与交火掉血）。这套测试已经抓到两个真 bug：
+`cover` 地形曾可走导致 A\* 规划穿墙路径；`find_path` 曾因 `allow_partial_path=true`
+在目标不可达时返回半截路径。
+
+静态验证：7 个脚本通过 `gdparse` 与 `gdlint`；引擎 API 逐个比对过 Godot **4.7.2** 与 **4.2**
+源码自带的类文档（均 0 问题）；跨文件鸭子调用 126 处核对无误；`project.godot` 的每个设置项
+与 `.tscn` 的每个属性名都在引擎源码中确认存在。
+
+**Web 导出已验证成功**（CI 里产出 10.3 MB 的 `github-pages` artifact）。
+
+**仍未验证**：① 浏览器里的实际画面（需要开启 Pages 或本地预览 artifact）；
+② macOS 签名/公证（需真机）。
 
 技术选型理由、MVP 范围与后续里程碑（M1 交火 → M2 压制 → M3 倒地救援 → … → M7 俘虏审讯）
 见 **[PLAN.md](PLAN.md)**。

@@ -56,7 +56,7 @@
 
 ---
 
-## 3. 当前进度（M0 已完成）
+## 3. 当前进度（M0 + M1 已完成）
 
 ```
 tacord/
@@ -67,6 +67,9 @@ tacord/
 │   ├── main.tscn                    # Main(Node2D) + Camera2D + BattleMap 实例 + HUD
 │   ├── battle/battle_map.tscn       # Node2D + battle_map.gd
 │   └── units/soldier.tscn           # CharacterBody2D + ColorRect + CollisionShape2D + SoldierAI
+├── tests/smoke_test.tscn            # 引擎原生 headless 测试（32 项断言，退出码判定）
+├── .github/workflows/               # ci.yml（lint + 冒烟测试）、web.yml（导出 + Pages）
+├── export_presets.cfg               # Web 导出预设（单线程），CI 复现用
 ├── scripts/
 │   ├── core/game.gd                 # autoload：引导、命令下发、全局查询
 │   ├── core/battle_map.gd           # 网格/地形/AStar2D/视线/掩体评估/占位渲染
@@ -74,7 +77,8 @@ tacord/
 │   ├── ai/utility.gd                # 通用 Utility AI（Consideration + 响应曲线）
 │   ├── ai/behavior_tree.gd          # 极简 BT：Action / Condition / Sequence / Selector
 │   ├── ai/soldier_ai.gd             # 3+1 个考虑因素 + 每个行为一棵树
-│   └── units/soldier.gd             # 移动 / HP / 命令 / 占位绘制
+│   ├── units/soldier.gd             # 移动 / HP / 命令 / 占位绘制 / 曳光
+│   └── units/weapon.gd              # hitscan 武器：散布、冷却、命中判定
 ├── assets/.gitkeep
 └── PLAN.md
 ```
@@ -92,12 +96,12 @@ tacord/
 ## 4. 下一步顺序（含验收标准）
 
 > 原则：**先让掩体有后果，再让掩体有代价，最后才加复杂度。**
-> 现在掩体评估已经能算分，但没人开枪，所以掩体毫无意义——M1 是优先级最高的一块。
+> M1 已经让子弹飞起来了；下一步是让「被打」产生行为后果——M2 压制。
 
-### M1 · 交火与视线（先做这个）
+### M1 · 交火与视线 ✅ 已完成
 - `scripts/units/weapon.gd`：射程、射速、散布、射线命中（第 1 层单位 + 第 2 层障碍）
 - 士兵在"有 LOS + 在射程内"时自动开火，无需玩家微操
-- 验收：红蓝双方在演示地图上自发交火，有人阵亡；HUD 显示存活数下降。
+- 验收：✅ CI 里 32/32 断言通过，其中「无遮挡面对面时命中掉血（100 → 88）」直接覆盖这一条。
 
 ### M2 · 压制与暴露
 - 近失子弹（射线未命中但距离很近）→ 目标 `suppression` 上升，随时间衰减
@@ -163,6 +167,15 @@ tacord/
 - `.tscn` 结构检查：资源路径全部存在、`load_steps` 计数正确、无 `uid=` 引用、节点类型与属性名
   均见于引擎类文档；`uid` 可省略由 `resource_format_text.cpp` 的 `next_tag.fields.has("uid")` 确认
 
-**未验证**：本沙箱无法下载 Godot 可执行文件（GitHub release 资源 CDN 被网络策略拦截），
-因此**没有真正跑起引擎**——"按 F5 看到网格和士兵"这一步属于未验证，需要在本地 Godot 4.7.x
-里确认一次。脚本语法、引擎 API 签名、场景文件结构都已静态验证。
+**已在真实引擎中验证**：GitHub Actions（`.github/workflows/ci.yml`）用 Godot 4.7.2 headless
+执行 `tests/smoke_test.tscn`，**32/32 断言通过**；`.github/workflows/web.yml` 的 Web 导出也
+已成功产出 10.3 MB 的 `github-pages` artifact。
+
+这套测试已经抓到两个真 bug（均已修）：
+1. `cover` 地形此前算作「可走」，而 `add_obstacle()` 会生成实体碰撞体 → A\* 规划出穿墙路径，
+   士兵被 `move_and_slide` 卡在墙上，`has_arrived()` 永远为假、行为树一直 RUNNING。
+2. `find_path` 曾把 `AStar2D.get_point_path` 的 `allow_partial_path` 传 `true` → 目标不可达时
+   返回「走到墙边为止」的半截路径，调用方无法区分到达终点与卡在半路。
+
+**仍未验证**：① 浏览器里的实际画面（需开启 GitHub Pages，或下载 artifact 本地预览）；
+② macOS 签名/公证（需真机）。
