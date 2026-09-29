@@ -10,6 +10,10 @@ const TERRAIN_COVER := &"cover"
 const TERRAIN_HIGH := &"high"
 const TERRAIN_BLOCKED := &"blocked"
 
+## 不可走的地形：凡是 add_obstacle() 会生成实体碰撞体的类型都必须列在这里，
+## 否则 A* 会规划出"穿墙"路径，士兵被 move_and_slide 卡在墙上永远走不到终点。
+const UNWALKABLE_TERRAIN := [&"cover", &"blocked"]
+
 ## 物理层：1 = 单位，2 = 静态障碍（墙/木箱）。视线射线只打第 2 层。
 const LAYER_UNITS := 1
 const LAYER_OBSTACLES := 2
@@ -84,7 +88,7 @@ func in_bounds(cell: Vector2i) -> bool:
 func is_walkable(cell: Vector2i) -> bool:
 	if not in_bounds(cell):
 		return false
-	return terrain.get(cell, TERRAIN_BLOCKED) != TERRAIN_BLOCKED
+	return not UNWALKABLE_TERRAIN.has(terrain.get(cell, TERRAIN_BLOCKED))
 
 
 func set_terrain(cell: Vector2i, terrain_type: StringName) -> void:
