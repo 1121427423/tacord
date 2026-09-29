@@ -94,7 +94,7 @@ godot --path . --editor   # 打开编辑器
 ### 步骤 4 · 运行（F5）
 
 主场景是 `scenes/main.tscn`，会看到 32×24 的网格地图、中央带缺口的墙、几堆木箱，
-以及左侧 3 个蓝色士兵、右侧 3 个红色士兵。
+左侧 3 个蓝色士兵、右侧 3 个红色士兵，以及每方一辆装甲车和一架沿航点绕场的侦察无人机。
 
 | 按键 | 作用 |
 | --- | --- |
@@ -111,6 +111,13 @@ godot --path . --editor   # 打开编辑器
 每队第 3 人是医疗兵（名字带「医」），他会一边朝可见敌人还击一边跑过去，把伤员往附近掩体拖，
 包扎 3 秒（医疗兵 2 倍速）把人救活——救活后只有 30 血，且最大血量永久 -15，倒满 3 次就救不回来了。
 倒地的士兵单列一行显示失血秒数 / 倒地次数 / 包扎进度。
+
+装甲车（M10）200 血、装甲只吃 1/4 伤害、6 发主炮，`hold` 时钉在原地、`attack` 才开进；
+侦察无人机（M11）是 30 血的脆皮——三发步枪弹就坠毁，但它不吃压制、不能被俘，
+墙挡得住地面视线、挡不住俯瞰：260 px 内的敌人哪怕躲在墙后，也被直接写进本队黑板
+（HUD 的「情报」行里那条 sighting 就是它喂的），被盯上时它绕着目击位置转六边形的圈。
+HUD 的「装甲」「空中」两行实时显示载具与机体的状态；它们不占编制、不影响判负，
+但对方步兵的子弹照样打得下它们。
 
 ### 步骤 5 · 静态检查（可选，但建议提交前跑）
 
@@ -176,7 +183,9 @@ tacord/
 ├── scenes/
 │   ├── main.tscn                    # Main + Camera2D + BattleMap 实例 + HUD
 │   ├── battle/battle_map.tscn       # Node2D + battle_map.gd
-│   └── units/soldier.tscn           # CharacterBody2D + ColorRect + CollisionShape2D + SoldierAI
+│   ├── units/soldier.tscn           # CharacterBody2D + ColorRect + CollisionShape2D + SoldierAI
+│   ├── units/tank.tscn             # M10：装甲车 + Weapon(主炮) + TankAI
+│   └── units/drone.tscn            # M11：无人机 + DroneAI（无武器节点）
 ├── scripts/
 │   ├── core/game.gd                 # autoload：引导、命令下发、全局查询
 │   ├── core/battle_map.gd           # 网格/地形/AStar2D/视线/掩体评估/占位渲染
@@ -187,18 +196,21 @@ tacord/
 │   ├── ai/behavior_tree.gd          # 极简 BT：Action / Condition / Sequence / Selector
 │   ├── ai/soldier_ai.gd             # 8 个考虑因素 + 每个行为一棵树（987 行，顶着 1000 上限）
 │   ├── ai/tactics.gd                # M8：近战 / 伏地 / 滑铲 3 个考虑因素与对应行为
+│   ├── ai/tank_ai.gd                # M10：载具 Utility AI（交战 / 推进 / 待命）
+│   ├── ai/drone_ai.gd               # M11：无人机 Utility AI（盯梢 / 巡逻）
 │   ├── units/soldier.gd             # 移动 / HP / 命令 / 压制 / 倒地 / 俘虏 / 姿态与翻越
 │   ├── units/weapon.gd              # hitscan 武器：散布、冷却、近失压制、弹匣换弹、枪托
 │   ├── units/build_site.gd          # 工地：施工计时 / 建成转实体 / 被打掉拆地形
 │   ├── units/tank.gd                # M10：装甲车本体（装甲减伤 / A* 机动 / 占位车体）
-│   └── ai/tank_ai.gd                # M10：载具 Utility AI（交战 / 推进 / 待命）
+│   └── units/drone.gd               # M11：侦察无人机本体（直线飞行 / 俯瞰侦察 / 脆皮）
 ├── tests/
 │   ├── smoke_test.tscn              # M0–M7：154 项断言
 │   ├── mobility_test.tscn           # M8：40 项断言（独立场景）
 │   ├── medic_test.tscn              # M9：26 项断言（独立场景）
-│   └── tank_test.tscn               # M10：40 项断言（独立场景）
+│   ├── tank_test.tscn               # M10：40 项断言（独立场景）
+│   └── drone_test.tscn              # M11：37 项断言（独立场景）
 ├── assets/                          # 美术资源占位目录
-└── PLAN.md                          # 技术栈决策 + M0~M8 里程碑
+└── PLAN.md                          # 技术栈决策 + M0~M11 里程碑
 ```
 
 物理层约定：**1 = 单位，2 = 静态障碍**（视线射线只打第 2 层）。
@@ -227,9 +239,9 @@ tacord/
 | Job | 内容 |
 | --- | --- |
 | `GDScript 静态检查` | pip 装 `gdtoolkit==4.5.0`，对 `scripts/` 与 `tests/` 跑 `gdparse` + `gdlint` |
-| `Headless 冒烟测试` | 下载 Godot 4.7.2 Linux 版 → `--headless --import` → **依次**跑 `tests/smoke_test.tscn`、`tests/mobility_test.tscn`、`tests/medic_test.tscn`、`tests/tank_test.tscn`，四个都必须退出码 0 |
+| `Headless 冒烟测试` | 下载 Godot 4.7.2 Linux 版 → `--headless --import` → **依次**跑 `tests/smoke_test.tscn`、`tests/mobility_test.tscn`、`tests/medic_test.tscn`、`tests/tank_test.tscn`、`tests/drone_test.tscn`，五个都必须退出码 0 |
 
-冒烟测试是**引擎原生**的（不依赖 GUT/gdUnit 等第三方插件）。M8 起按里程碑拆成四个场景——
+冒烟测试是**引擎原生**的（不依赖 GUT/gdUnit 等第三方插件）。M8 起按里程碑拆成五个场景——
 `smoke_test.gd` 已经 911 行、顶着 gdlint 的 1000 行上限，再往里塞后面的里程碑就没有落脚的地方。
 每个场景各自把断言总数写死在 `EXPECTED_CHECKS` 里，`_finish()` 比对**实际跑到的**条数，
 某个测试段中途崩掉时不会谎报全绿。
@@ -245,6 +257,13 @@ tacord/
   装甲减伤三档与溢出击毁、步枪与主炮的双向交火及中弹压制、同图 A\* 机动
   （含"目标 7×7 全封死才规划失败"）、`hold→advance→engage` 三选一依次触发、
   载具不被 `game.soldiers()` / 最近友军 / 医疗帐篷认领
+- `drone_test.tscn`（**37 项**）：无人机的身段与边界（vehicles 组、恒 false 双项、
+  无 apply_suppression、命令广播）、三发步枪弹坠毁且残骸不掉血、直线穿墙
+  （同时钉住"y 没有偏移"以防它其实是绕过去的）、巡航速度实测、
+  盯梢/巡逻两选一（目击过期自动回巡逻）、墙后目击写进本队黑板
+  （先钉前提"墙确实挡住地面视线"，再测俯瞰照样报）、`best_memory` 链路贯通、
+  超半径 / 同队不报、红队一无所知、不被 `game.soldiers()` / 最近友军 / 帐篷认领，
+  以及反制——步兵 64 px 处一枪打得下它（散布偏移 < 命中半径，确定性命中）
 
 CI 里 annotation 上限约 10 条且只保留最先发出的，所以**成功的场景一行不发**，
 失败的才把诊断摊开；五类日志另传成 `test-logs` artifact 兜底。
@@ -256,6 +275,7 @@ godot --headless --path . tests/smoke_test.tscn    # 退出码 0 = 全通过
 godot --headless --path . tests/mobility_test.tscn # M8，同样退出码判定
 godot --headless --path . tests/medic_test.tscn    # M9，同样退出码判定
 godot --headless --path . tests/tank_test.tscn     # M10，同样退出码判定
+godot --headless --path . tests/drone_test.tscn    # M11，同样退出码判定
 ```
 
 ### `.github/workflows/web.yml`
@@ -336,13 +356,15 @@ DNS 传播最长 24 小时，之后 `Enforce HTTPS` 才可勾选（站点强制 
 
 ## 七、当前验证状态
 
-**已在真实引擎里跑通**：GitHub Actions 上用 Godot 4.7.2 headless 依次执行四个测试场景，
-**合计 260/260 项断言通过**——`smoke_test.tscn` 154 项（掩体几何评估、交火掉血、压制数值、
+**已在真实引擎里跑通**：GitHub Actions 上用 Godot 4.7.2 headless 依次执行五个测试场景。
+前四个场景 **260/260 项断言全绿**——`smoke_test.tscn` 154 项（掩体几何评估、交火掉血、压制数值、
 倒地与救援、感知与记忆、弹药与后勤、建造与 FOB、俘虏与审讯）+ `mobility_test.tscn` 40 项
 （翻越、三种姿态、肉搏、三个新打分、端到端趴下与起身）+ `medic_test.tscn` 26 项
 （医疗帐篷的治疗四条件、视线与绕行、不碰胜负与编制、呼救气泡的相位）
 + `tank_test.tscn` 40 项（装甲减伤、双向交火与压制、同图 A\* 机动、
 Utility 三选一、载具不被步兵逻辑认领）。
+第五个 `drone_test.tscn` 37 项（M11 侦察无人机）随该里程碑新增，
+静态检查已过，引擎级验证由推送后的 CI 首跑完成——总数同样写死在 `EXPECTED_CHECKS` 里。
 每个总数本身也是一条断言——
 `EXPECTED_CHECKS` 写死在测试里，某个测试段中途崩掉时退出码仍是 0，沙箱又读不到 CI 日志，
 所以必须让引擎自己判定数没数够。这套测试工作累计抓到 **13 个真 bug**：
@@ -394,7 +416,7 @@ FOB 建成后部队上限从 6 提到 9，站在它 48 px 内的士兵以 8 发/
 对面审出来的暗红。押送是有风险的：押送者阵亡或倒地，俘虏当场跑掉。
 实测：完全不干预，俘虏自己投降、押送者 122 帧内完成认领与押送、审出第 2 条情报并放人。
 
-静态验证：12 个脚本加 `tests/` 下两个测试脚本通过 `gdparse` 与 `gdlint`；M0/M1 期间做过一次引擎
+静态验证：16 个脚本加 `tests/` 下五个测试脚本通过 `gdparse` 与 `gdlint`；M0/M1 期间做过一次引擎
 API 逐个比对（脚本里的引擎/项目符号对 Godot **4.7.2** 与 **4.2** 源码自带的类文档，均 0 问题），
 M2 新增代码用到的 `is_equal_approx` / `is_zero_approx` 也在 `@GlobalScope.xml` 里确认过；
 `project.godot` 的每个设置项与 `.tscn` 的每个属性名都在引擎源码中确认存在。
@@ -418,5 +440,5 @@ HTTP 层已通但需要人眼确认；
 
 技术选型理由、MVP 范围与全部里程碑（M1 交火 → M2 压制 → M3 倒地救援 → M4 感知记忆 →
 M5 弹药后勤 → M6 建造与 FOB → M7 俘虏审讯 → M8 机动与近战 → M9 医疗帐篷与呼救气泡
-→ M10 装甲车）
+→ M10 装甲车 → M11 侦察无人机）
 见 **[PLAN.md](PLAN.md)**。

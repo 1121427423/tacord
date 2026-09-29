@@ -54,12 +54,12 @@
 - 弹药与后勤（打光弹药、从尸体摸弹匣、补给线）
 - 建造与 FOB（士兵亲手施工、FOB 归属即胜负）
 - 俘虏与审讯、翻越/滑铲/扑倒/肉搏 ✅（M7/M8）
-- ✅ **坦克（M10 已完成，装甲车本体 + 独立载具 AI；无人机仍未开工）**
-- 对话气泡本地化、无人机
+- ✅ **坦克与无人机（M10/M11 已完成：装甲车 + 侦察无人机，本体与各自独立 AI）**
+- 对话气泡本地化
 
 ---
 
-## 3. 当前进度（M0–M10 全部里程碑已完成）
+## 3. 当前进度（M0–M11 全部里程碑已完成）
 
 ```
 tacord/
@@ -70,11 +70,13 @@ tacord/
 │   ├── main.tscn                    # Main(Node2D) + Camera2D + BattleMap 实例 + HUD
 │   ├── battle/battle_map.tscn       # Node2D + battle_map.gd
 │   ├── units/soldier.tscn           # CharacterBody2D + ColorRect + CollisionShape2D + SoldierAI
-│   └── units/tank.tscn              # M10：CharacterBody2D + 矩形车体 + Weapon(主炮) + TankAI
+│   ├── units/tank.tscn              # M10：CharacterBody2D + 矩形车体 + Weapon(主炮) + TankAI
+│   └── units/drone.tscn             # M11：CharacterBody2D + 圆形机身 + DroneAI（无武器节点）
 ├── tests/smoke_test.tscn            # M0–M7：154 项断言（退出码判定）
 ├── tests/mobility_test.tscn         # M8：40 项断言，独立场景（见 §4 M8）
 ├── tests/medic_test.tscn            # M9：26 项断言，独立场景（见 §4 M9）
 ├── tests/tank_test.tscn             # M10：40 项断言，独立场景（见 §4 M10）
+├── tests/drone_test.tscn            # M11：37 项断言，独立场景（见 §4 M11）
 ├── .github/workflows/               # ci.yml（lint + 冒烟测试）、web.yml（导出 + Pages）
 ├── export_presets.cfg               # Web 导出预设（单线程），CI 复现用
 ├── scripts/
@@ -88,10 +90,12 @@ tacord/
 │   ├── ai/soldier_ai.gd             # 8 个考虑因素 + 每个行为一棵树（987 行，顶着 1000 上限）
 │   ├── ai/tactics.gd                # M8：近战/伏地/滑铲 3 个考虑因素与对应的行为
 │   ├── ai/tank_ai.gd                # M10：载具 Utility AI（交战 / 推进 / 待命）
+│   ├── ai/drone_ai.gd               # M11：无人机 Utility AI（盯梢 / 巡逻）
 │   ├── units/soldier.gd             # 移动 / HP / 命令 / 压制 / 倒地 / 俘虏 / 姿态与翻越
 │   ├── units/weapon.gd              # hitscan 武器：散布、冷却、命中判定、近失压制、弹药、枪托
 │   ├── units/build_site.gd          # 工地：施工计时 / 建成转实体 / 被打掉拆地形
-│   └── units/tank.gd                # M10：装甲车本体（装甲减伤 / A* 机动 / 占位车体）
+│   ├── units/tank.gd                # M10：装甲车本体（装甲减伤 / A* 机动 / 占位车体）
+│   └── units/drone.gd               # M11：侦察无人机本体（直线飞行 / 俯瞰侦察 / 脆皮）
 ├── assets/.gitkeep
 └── PLAN.md
 ```
@@ -119,10 +123,13 @@ tacord/
 被压制 + 看得见两个敌人 + 300 px 内没有站着的战友时会举手投降，
 敌方就近派人押着俘虏回自己的 FOB——押到 64 px 内才问得出话，
 审完把敌方**已建成**工事的坐标写进黑板，地图上从此画着那个十字准星，人则当场释放。
+双方头顶各有一架侦察无人机沿航点绕场：它不吃压制、不能被俘、三发步枪弹就坠毁，
+但墙挡得住地面视线、挡不住俯瞰——260 px 半径内的敌人哪怕躲在墙后，也被直接写进本队黑板，
+步兵的「最后已知位置」从此可以由天上来喂；被盯上时它绕着目击位置转六边形的圈，离敌人不近也不远。
 
 ---
 
-## 4. 里程碑顺序与验收标准（M0–M10 全部完成）
+## 4. 里程碑顺序与验收标准（M0–M11 全部完成）
 
 > 原则：**先让掩体有后果，再让掩体有代价，最后才加复杂度。**
 > M1 让子弹飞起来，M2 让「被打」产生行为后果，M3 让「打死」变成可挽回的状态，
@@ -402,6 +409,44 @@ HUD 两处可见：每个士兵 `弹=18/72`（换弹时标「换弹中」、空�
   （`game.soldiers()` / 最近友军 / 医疗帐篷三处）。
 - 头两轮 CI 暴露的**全是测试写法问题，产品代码零改动**（§6 末尾 e–h）。
 
+### M11 · 侦察无人机 ✅ 已完成
+
+- `scripts/units/drone.gd` + `scenes/units/drone.tscn`：`CharacterBody2D` 机体。
+  身段与坦克同款三条：进 `vehicles` 组、不进 `soldiers` 组（救援 / 押送 /
+  帐篷治疗 / FOB 补弹全扫 `soldiers`，不进去就一个都误伤不到它）；
+  `is_downed` / `is_captive` 恒 false；不提供 `apply_suppression`——
+  三条全是「让步兵的过滤逻辑原样复用，一行不改」的边界设计。
+- **飞行不寻路**：`fly_to` 直线 110 px/s，`collision_mask = 0`（谁都不挡它、
+  它也不挡任何地面单位——步兵和坦克的 mask 本来就只有障碍层），
+  `collision_layer = 1`（子弹射线 1|2 打得着它），**零物理层改动**。
+  墙挡得住坦克的 A*，挡不住直线——这是它与地面载具最本质的机动差别。
+- **侦察 `scan_now()`**：260 px 半径扫 `soldiers` + `vehicles` 两组、每 0.4 s 一次，
+  **不做通视判定**（从上往下看）——步兵的目击必须先过 `has_line_of_sight`，
+  无人机的目击直接 `report_sighting` 进本队黑板，这就是它的全部战场价值：
+  喂给全队「墙后的敌人」的最后已知位置。`latest_spot` / `spot_age` 做成
+  **公开变量**（gdlint 只数公开方法，同坦克的 `objective` 约定）。
+- **脆皮**：`hp=30`、无装甲系数，三发步枪弹（12 点）坠毁，残骸画小叉。
+- `scripts/ai/drone_ai.gd`：`UtilityAI` 两选一，同样不引入行为树——
+  无人机连武器都没有，「选完就飞」就是全部逻辑。`track` 1.0（输入按目击
+  新鲜度线性衰减）> `patrol` 0.4 保底；目击一丢（1.2 s 过期）巡逻分自动接管。
+  盯梢不是飞过去贴脸：绕目击位置转**六边形圈**（半径 120，每抵达一角转 60°，
+  `latest_spot` 每次侦察都在刷新，敌人挪窝圈心跟着挪）。宏观命令 `set_order`
+  照收但不改行为——`hold` 让步兵蹲坑有道理，把天上的眼睛收回来没有。
+- `main.gd`：双方各出一架（蓝 `(3,3)` / 红 `(28,20)`，航点各绕半场一圈）；
+  `drones` 单列数组，同 `tanks` 的边界思路——**不占 `unit_cap` 编制、不影响判负**；
+  HUD 加「空中」行显示血量 / 行为 / 坠毁。
+- 验收（**独立场景 `tests/drone_test.tscn`，37/37**）：身段 7（组归属、
+  恒 false 双项、无 `apply_suppression`、命令广播）、脆皮 5（三枪坠毁、
+  残骸不掉血）、飞行 6（**穿墙同时钉住"y 没有偏移"**——只看抵达可能是
+  绕过去的；速度实测；坠毁后拒绝指令）、AI 两选一 5（无目击 patrol 有位移、
+  有目击 track、盘旋距离不贴脸、目击过期回 patrol）、侦察 8
+  （**先钉前提"墙确实挡住地面视线"**再测无人机照样报——否则测试可能在
+  验证一个不存在的差别；黑板链路 `has_sighting`/`memory_of`/`best_memory`
+  贯通、超半径不报、同队不报、红方黑板一无所知）、不搅局 6
+  （`game.soldiers()` 不认、最近友军 null、帐篷不治、以及反制——
+  步兵 64 px 处一枪打得下它：64×sin3° ≈ 3.4 px 最大散布 < 5 px 命中半径，
+  这一枪是确定性的）。
+
 ### 贯穿始终的两件事
 - **平台冒烟**：M1 结束就跑一次 Web 导出 + 一次 macOS 导出，别把兼容问题留到最后。
 - **性能预算**：AI tick 已按 `think_interval = 0.25s` 打散相位；射线查询按"每 tick 每单位
@@ -425,8 +470,8 @@ HUD 两处可见：每个士兵 `弹=18/72`（换弹时标「换弹中」、空�
 
 已在沙箱内执行的检查：
 
-- `gdparse`（gdtoolkit 4.5.0，Godot 4 GDScript 语法）：**12 个脚本 + `tests/` 下四个测试脚本全部通过**
-- `gdlint`：**no problems found**
+- `gdparse`（gdtoolkit 4.5.0，Godot 4 GDScript 语法）：**16 个脚本 + `tests/` 下五个测试脚本全部通过**
+- `gdlint`：**no problems found**（M11 的 drone.gd / drone_ai.gd / drone_test.gd 与改动后的 main.gd 均在本地复跑确认）
 - 引擎 API 交叉核对：把脚本里 **112 处**引擎/项目符号逐个比对 Godot 源码自带的
   `doc/classes/*.xml`（方法名、参数、常量、继承链），**4.7.2-stable 与 4.2-stable 两个版本
   各跑一遍，均 0 问题**——这使"脚本兼容 4.2+"成为已验证结论而非假设。
@@ -439,7 +484,10 @@ HUD 两处可见：每个士兵 `弹=18/72`（换弹时标「换弹中」、空�
   均见于引擎类文档；`uid` 可省略由 `resource_format_text.cpp` 的 `next_tag.fields.has("uid")` 确认
 
 **已在真实引擎中验证**：GitHub Actions（`.github/workflows/ci.yml`）用 Godot 4.7.2 headless
-依次执行**四个**测试场景，**合计 260/260 断言通过**：
+依次执行**五个**测试场景，**合计 297 项断言**。前四个场景（smoke / mobility / medic / tank）
+的 **260/260 已全绿**；第五个 `drone_test.tscn`（M11，37 项）随本里程碑新增，
+同样把 37 写死在 `EXPECTED_CHECKS` 里由引擎自己判定数没数够（见下文），
+由推送后的 CI 首跑验证：
 
 | 场景 | 断言 | 覆盖 |
 | --- | --- | --- |
@@ -447,8 +495,9 @@ HUD 两处可见：每个士兵 `弹=18/72`（换弹时标「换弹中」、空�
 | `tests/mobility_test.tscn` | 40 | M8：翻越 / 三种姿态 / 肉搏 / 三个新打分 / 端到端趴下与起身 |
 | `tests/medic_test.tscn` | 26 | M9：医疗帐篷的落点/建成/视线/治疗四条件/不碰胜负、呼救气泡相位 |
 | `tests/tank_test.tscn` | 40 | M10：组归属与边界、装甲三档、双向交火与压制、同图 A*、Utility 三选一、不被步兵逻辑认领 |
+| `tests/drone_test.tscn` | 37 | M11：身段与边界、三枪坠毁、直线穿墙（y 不偏移）、盯梢/巡逻两选一、墙后目击进黑板（含前提断言）、不被认领且子弹打得下它 |
 
-四个场景都必须退出码 0，CI 才算绿；一个失败也不跳过后面的。
+五个场景都必须退出码 0，CI 才算绿；一个失败也不跳过后面的。
 这个数字本身也是一条断言：`EXPECTED_CHECKS` 写死在测试里，`_finish()` 打印的
 「`_checks/_checks`」是*实际跑到的*条数——某个测试段中途崩掉时后面的断言不会执行，
 退出码却仍是 0；沙箱又读不到 CI 日志，所以总数必须由引擎自己判定。M7 期间它立刻见效：
