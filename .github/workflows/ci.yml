@@ -77,13 +77,13 @@ jobs:
           fi
           echo "::error::---- smoke_result.log（测试自述，逐行 flush）----"
           if [ -f smoke_result.log ]; then
-            nl -ba smoke_result.log | tail -40 | while IFS= read -r line; do echo "::error::${line}"; done
+            nl -ba smoke_result.log | tac | head -40 | while IFS= read -r line; do echo "::error::${line}"; done
           else
             echo "::error::没有生成 smoke_result.log —— 测试脚本没能开始执行"
           fi
           echo "::error::---- stderr ----"
           if [ -s smoke_err.log ]; then
-            nl -ba smoke_err.log | head -40 | while IFS= read -r line; do echo "::error::${line}"; done
+            nl -ba smoke_err.log | tac | head -40 | while IFS= read -r line; do echo "::error::${line}"; done
           else
             echo "::error::(stderr 为空)"
           fi
