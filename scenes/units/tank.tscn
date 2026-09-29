@@ -1,0 +1,28 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/units/tank.gd" id="1_tank"]
+[ext_resource type="Script" path="res://scripts/units/weapon.gd" id="2_weapon"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_hull"]
+size = Vector2(26, 26)
+
+[node name="Tank" type="CharacterBody2D"]
+collision_layer = 1
+collision_mask = 2
+script = ExtResource("1_tank")
+
+[node name="Hull" type="CollisionShape2D" parent="."]
+shape = SubResource("RectangleShape2D_hull")
+
+[node name="Weapon" type="Node" parent="."]
+script = ExtResource("2_weapon")
+damage = 40
+fire_interval = 1.8
+max_range = 380.0
+spread_degrees = 2.0
+near_miss_radius = 50.0
+suppression_per_near_miss = 0.5
+magazine_size = 6
+reserve_ammo = 18
+max_reserve_ammo = 24
+reload_time = 4.0
