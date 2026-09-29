@@ -1,0 +1,72 @@
+name: Web 导出与部署
+
+on:
+  push:
+    branches: [main, "arena/**"]
+  workflow_dispatch:
+
+env:
+  GODOT_VERSION: "4.7.2"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  export:
+    name: 导出 Web 并发布到 Pages
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Godot 运行库
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgl1 libglu1-mesa libx11-6 libxcursor1 libxinerama1 libxrandr2 libxi6 libxss1
+
+      - name: 下载 Godot ${{ env.GODOT_VERSION }}
+        run: |
+          curl -sSL -o godot.zip \
+            "https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q godot.zip
+          sudo install -m 755 "Godot_v${GODOT_VERSION}-stable_linux.x86_64" /usr/local/bin/godot
+          godot --version
+
+      - name: 下载并安装导出模板（约 1.3 GB）
+        run: |
+          curl -sSL -o templates.tpz \
+            "https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          unzip -q templates.tpz
+          mkdir -p ~/.local/share/godot/export_templates
+          mv templates ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+          ls ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable | head
+
+      - name: 导入资源
+        run: godot --headless --path . --import
+
+      - name: 导出 Web（单线程预设）
+        run: |
+          mkdir -p web_build
+          godot --headless --path . --export-release "Web" web_build/index.html
+          ls -la web_build
+
+      - name: 上传构建产物
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: web_build
+
+      - name: 配置 Pages
+        uses: actions/configure-pages@v5
+
+      - name: 部署到 GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
