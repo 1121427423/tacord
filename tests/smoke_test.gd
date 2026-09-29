@@ -851,18 +851,33 @@ func _test_captives_and_intel() -> void:
 	escort.set("team", 1)
 	_map.add_child(escort)
 	escort.global_position = _map.world_pos(Vector2i(7, 20))
+	# 循环里每 60 帧留一条现场快照：这条轨迹会原样出现在 CI 的失败信息里，
+	# 沙箱读不到 CI 日志，只能靠它定位「超时」到底卡在哪一步。
 	var frames: int = 0
+	var trace := PackedStringArray()
 	while int(game.call("blackboard", 1).call("structure_count")) < 2 and frames < 400:
 		await get_tree().physics_frame
 		frames += 1
-	_check(
-		int(game.call("blackboard", 1).call("structure_count")) == 2,
-		"无人干预下押送 + 审讯跑通：情报从 1 条变成 2 条",
-	)
-	_check(
-		frames < 400, "整趟押送在 %.1f 秒模拟时间内完成（%d 帧）" % [frames / 60.0, frames]
-	)
-	_check(victim.get("is_captive") == false, "情报到手就放人")
+		if frames % 60 == 0:
+			var holder = game.call("escort_of", victim)
+			trace.append(
+				"%d帧 押送者@(%.0f,%.0f) 行为=%s 俘虏@(%.0f,%.0f) 距FOB=%.0f 权限=%s"
+				% [
+					frames,
+					escort.global_position.x,
+					escort.global_position.y,
+					String(escort.call("current_action")),
+					victim.global_position.x,
+					victim.global_position.y,
+					victim.global_position.distance_to(blue_fob.global_position),
+					"无" if holder == null else String(holder.name),
+				]
+			)
+	var scenario_ok: bool = int(game.call("blackboard", 1).call("structure_count")) == 2
+	var summary: String = "（%d 帧，现场：%s）" % [frames, " | ".join(trace)]
+	_check(scenario_ok, "无人干预下押送 + 审讯跑通：情报从 1 条变成 2 条" + summary)
+	_check(frames < 400, "整趟押送在 %.1f 秒模拟时间内完成" % (frames / 60.0) + summary)
+	_check(victim.get("is_captive") == false, "情报到手就放人" + summary)
 
 
 func _finish() -> void:
