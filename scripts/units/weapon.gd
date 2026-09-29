@@ -17,6 +17,12 @@ const LAYER_OBSTACLES := 2
 @export var max_range: float = 260.0
 @export var spread_degrees: float = 6.0
 
+## 弹道多大范围内算"擦身而过"（像素）。
+@export var near_miss_radius: float = 40.0
+
+## 一次贴脸近失带来的压制量（离弹道越近越接近这个值）。
+@export var suppression_per_near_miss: float = 0.3
+
 ## 所属士兵（父节点）。
 var owner_unit: CharacterBody2D = null
 
@@ -57,19 +63,46 @@ func try_fire(target_pos: Vector2) -> bool:
 	var spread: float = deg_to_rad(_rng.randf_range(-spread_degrees, spread_degrees) * 0.5)
 	var end: Vector2 = from + direction.rotated(spread) * max_range
 	var hit := _cast_ray(from, end)
+	var impact: Vector2 = end if hit.is_empty() else hit.get("position", end)
+	# 不管有没有打中，弹道附近的敌人都会被压制。
+	_apply_near_miss_suppression(from, impact)
 	if hit.is_empty():
 		shot_fired.emit(from, end, false)
 		return false
 	var body = hit.get("collider")
-	var hit_point: Vector2 = hit.get("position", end)
 	if body != null and body != owner_unit and body.has_method("take_damage"):
 		body.call("take_damage", damage)
 		target_hit.emit(body, damage)
-		shot_fired.emit(from, hit_point, true)
+		shot_fired.emit(from, impact, true)
 		return true
 	# 打中了墙/障碍：不造成伤害，但这一枪仍然发生了（M2 的压制事件会用到）。
-	shot_fired.emit(from, hit_point, false)
+	shot_fired.emit(from, impact, false)
 	return false
+
+
+## 弹道附近的敌方单位获得压制：按"点到弹道线段的最短距离"衰减。
+## 真正被命中的单位距离≈0，因此也会拿到接近满额的压制——中弹当然更压人。
+func _apply_near_miss_suppression(from: Vector2, to: Vector2) -> void:
+	if owner_unit == null or near_miss_radius <= 0.0:
+		return
+	var my_team: int = int(owner_unit.get("team"))
+	var segment: Vector2 = to - from
+	var segment_sq: float = segment.length_squared()
+	if segment_sq < 0.0001:
+		return
+	for unit in get_tree().get_nodes_in_group(&"soldiers"):
+		if unit == owner_unit or int(unit.get("team")) == my_team:
+			continue
+		if unit.get("is_dead") == true or not unit.has_method("apply_suppression"):
+			continue
+		var to_unit: Vector2 = unit.global_position - from
+		var t: float = clampf(to_unit.dot(segment) / segment_sq, 0.0, 1.0)
+		var closest: Vector2 = from + segment * t
+		var distance: float = closest.distance_to(unit.global_position)
+		if distance >= near_miss_radius:
+			continue
+		var strength: float = 1.0 - distance / near_miss_radius
+		unit.call("apply_suppression", suppression_per_near_miss * strength)
 
 
 func _cast_ray(from: Vector2, to: Vector2) -> Dictionary:
