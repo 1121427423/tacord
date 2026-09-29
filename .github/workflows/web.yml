@@ -60,16 +60,13 @@ jobs:
           godot --headless --path . --export-release "Web" web_build/index.html 2>&1 | tee export.log
           code=${PIPESTATUS[0]}
           set -e
-          {
-            echo "## Web 导出输出（exit=$code）"
-            echo '```'
-            cat export.log
-            echo '```'
-            echo "### 产物"
-            echo '```'
-            ls -la web_build
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          echo "exit code = $code"
+          ls -la web_build
+          # 发成 annotation，避开被拦截的日志 CDN
+          grep -nE "ERROR|error|Cannot|savepack|Wrote|export" export.log \
+            | head -60 | while IFS= read -r line; do
+              echo "::error::${line}"
+            done
           exit $code
 
       - name: 上传构建产物
