@@ -99,6 +99,7 @@ godot --path . --editor   # 打开编辑器
 | 按键 | 作用 |
 | --- | --- |
 | `1` / `2` / `3` / `4` | 对**蓝方**下达：进攻 / 防守 / 包抄 / 待命 |
+| `5` / `6` | 在蓝方首个存活士兵所在格放下 **FOB** / **沙袋** |
 | `F1` | 掩体热区可视化（绿 = 掩体好，红 = 暴露） |
 | `R` | 重开一局 |
 
@@ -183,8 +184,10 @@ tacord/
 │   ├── ai/utility.gd                # 通用 Utility AI（Consideration + 响应曲线）
 │   ├── ai/blackboard.gd             # 小队黑板：同队共享的目击与枪声记忆
 │   ├── ai/behavior_tree.gd          # 极简 BT：Action / Condition / Sequence / Selector
-│   ├── ai/soldier_ai.gd             # seek_cover / advance / flank / hold
-│   └── units/soldier.gd             # 移动 / HP / 命令 / 占位绘制
+│   ├── ai/soldier_ai.gd             # seek_cover / advance / flank / hold / rescue / build
+│   ├── units/soldier.gd             # 移动 / HP / 命令 / 压制 / 倒地 / 占位绘制
+│   ├── units/weapon.gd              # hitscan 武器：散布、冷却、近失压制、弹匣与换弹
+│   └── units/build_site.gd          # 工地：施工计时 / 建成转实体 / 被打掉拆地形
 ├── assets/                          # 美术资源占位目录
 └── PLAN.md                          # 技术栈决策 + M0~M7 里程碑
 ```
@@ -255,7 +258,7 @@ cd web_preview && python3 -m http.server 8080
 ## 七、当前验证状态
 
 **已在真实引擎里跑通**：GitHub Actions 上用 Godot 4.7.2 headless 执行 `tests/smoke_test.tscn`，
-**99/99 项断言通过**（含掩体几何评估、交火掉血、压制数值、倒地与救援、感知与记忆、弹药与后勤）。这套测试工作累计抓到 5 个真 bug：
+**125/125 项断言通过**（含掩体几何评估、交火掉血、压制数值、倒地与救援、感知与记忆、弹药与后勤、建造与 FOB）。这套测试工作累计抓到 5 个真 bug：
 `cover` 地形曾可走导致 A\* 规划穿墙路径；`find_path` 曾因 `allow_partial_path=true`
 在目标不可达时返回半截路径；`die()` 曾不清 `is_downed`（死人被当成可救援的伤员）；
 枪声曾只记在开枪者自己队的黑板上（听声转头永远不触发）；`clear_boards()` 曾丢掉整个字典
@@ -282,7 +285,14 @@ cd web_preview && python3 -m http.server 8080
 HUD 上有「弹药: 蓝方 216 发（0/3 人打光）」这样的汇总行。
 实测：两人各 3 发对射，3 秒后双双打光且各正好打了 3 发，再等 1.5 秒枪声数一动不动。
 
-静态验证：8 个脚本加 `tests/smoke_test.gd` 通过 `gdparse` 与 `gdlint`；M0/M1 期间做过一次引擎
+建造与 FOB（M6）把补给从尸体搬到了工事上：按 `5` 在蓝方士兵脚下放一座 FOB，附近的士兵会
+自己跑过去施工（6 人·秒一座，边打边建）。施工中的工地不算障碍、也打不坏——那还只是一堆建材；
+建成的那一刻才升到障碍层并改写地形（FOB → 不可走，沙袋 → 真掩体），A\* 立刻绕开它。
+FOB 建成后部队上限从 6 提到 9，站在它 48 px 内的士兵以 8 发/秒回备弹；打掉一座队里唯一的 FOB
+即判负。效用上工地没修完时，`attack` 命令下的推进欲望会被施工压下去（0.65 对 0.89）。
+实测：放下工地后不做任何干预，士兵自己走完最后 96 px 并把它建完。
+
+静态验证：10 个脚本加 `tests/smoke_test.gd` 通过 `gdparse` 与 `gdlint`；M0/M1 期间做过一次引擎
 API 逐个比对（脚本里的引擎/项目符号对 Godot **4.7.2** 与 **4.2** 源码自带的类文档，均 0 问题），
 M2 新增代码用到的 `is_equal_approx` / `is_zero_approx` 也在 `@GlobalScope.xml` 里确认过；
 `project.godot` 的每个设置项与 `.tscn` 的每个属性名都在引擎源码中确认存在。
@@ -292,5 +302,5 @@ M2 新增代码用到的 `is_equal_approx` / `is_zero_approx` 也在 `@GlobalSco
 **仍未验证**：① 浏览器里的实际画面（需要开启 Pages 或本地预览 artifact）；
 ② macOS 签名/公证（需真机）。
 
-技术选型理由、MVP 范围与后续里程碑（M1 交火 → M2 压制 → M3 倒地救援 → M4 感知记忆 → … → M7 俘虏审讯）
+技术选型理由、MVP 范围与后续里程碑（M1 交火 → M2 压制 → M3 倒地救援 → M4 感知记忆 → M5 弹药后勤 → M6 建造与 FOB → M7 俘虏审讯）
 见 **[PLAN.md](PLAN.md)**。

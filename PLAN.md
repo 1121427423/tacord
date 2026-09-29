@@ -57,7 +57,7 @@
 
 ---
 
-## 3. 当前进度（M0–M5 已完成，下一个是 M6 建造与 FOB）
+## 3. 当前进度（M0–M6 已完成，下一个是 M7 俘虏与审讯）
 
 ```
 tacord/
@@ -68,7 +68,7 @@ tacord/
 │   ├── main.tscn                    # Main(Node2D) + Camera2D + BattleMap 实例 + HUD
 │   ├── battle/battle_map.tscn       # Node2D + battle_map.gd
 │   └── units/soldier.tscn           # CharacterBody2D + ColorRect + CollisionShape2D + SoldierAI
-├── tests/smoke_test.tscn            # 引擎原生 headless 测试（99 项断言，退出码判定）
+├── tests/smoke_test.tscn            # 引擎原生 headless 测试（125 项断言，退出码判定）
 ├── .github/workflows/               # ci.yml（lint + 冒烟测试）、web.yml（导出 + Pages）
 ├── export_presets.cfg               # Web 导出预设（单线程），CI 复现用
 ├── scripts/
@@ -78,15 +78,17 @@ tacord/
 │   ├── ai/utility.gd                # 通用 Utility AI（Consideration + 响应曲线）
 │   ├── ai/blackboard.gd             # 小队黑板：同队共享的目击与枪声记忆
 │   ├── ai/behavior_tree.gd          # 极简 BT：Action / Condition / Sequence / Selector
-│   ├── ai/soldier_ai.gd             # 3+1 个考虑因素 + 每个行为一棵树
+│   ├── ai/soldier_ai.gd             # 6 个考虑因素 + 每个行为一棵树
 │   ├── units/soldier.gd             # 移动 / HP / 命令 / 压制 / 倒地 / 占位绘制 / 曳光
-│   └── units/weapon.gd              # hitscan 武器：散布、冷却、命中判定、近失压制、弹药换弹
+│   ├── units/weapon.gd              # hitscan 武器：散布、冷却、命中判定、近失压制、弹药换弹
+│   └── units/build_site.gd          # 工地：施工计时 / 建成转实体 / 被打掉拆地形
 ├── assets/.gitkeep
 └── PLAN.md
 ```
 
 **运行方式**：Godot 4.7.x 打开工程 → F5。
 - `1 / 2 / 3 / 4` = 进攻 / 防守 / 包抄 / 待命（作用于蓝方）
+- `5 / 6` = 在蓝方首个存活士兵所在格放 FOB / 沙袋
 - `F1` = 掩体热区可视化（绿=掩体好，红=暴露）
 - `R` = 重开一局
 
@@ -95,7 +97,9 @@ tacord/
 子弹擦身而过会累积压制（压慢脚步、压过推进欲望、压到 0.75 以上直接停火）；
 血量归零先倒地而不是死，每队第 3 人（名字带「医」）会一边还击一边跑去拖救；
 看不见敌人时朝 520 px 内的敌队枪声转头，并朝最后已知位置搜索；
-弹匣打空自动换弹，备弹也空了就得去尸体上摸弹——一局打久了阵地会自己安静下来。
+弹匣打空自动换弹，备弹也空了就得去尸体上摸弹——一局打久了阵地会自己安静下来；
+按 `5` 放一座 FOB，附近的士兵会自己跑过去把它建起来（3 人·秒一座，边打边建），
+建成后部队上限 +3、站在旁边就能回备弹，被打掉则本队判负。
 
 ---
 
@@ -260,10 +264,17 @@ HUD 两处可见：每个士兵 `弹=18/72`（换弹时标「换弹中」、空�
 端到端——两人各 3 发对射，3 秒后双方 `is_dry()` 且各**正好打了 3 发**，
 再等 1.5 秒枪声数一动不动。
 
-### M6 · 建造与 FOB
-- 建筑落点 → 士兵走过去施工（战斗不中断）；FOB 提供部队上限与弹药补给
-- 失去最后一座 FOB = 失败
-- 验收：放下一座 FOB，能看到士兵跑过去把它建起来。
+### M6 · 建造与 FOB ✅ 已完成
+- `scripts/units/build_site.gd`：工地 `kind` = `fob` / `sandbag`，`build_cost` = 6 人·秒，
+  `max_hp` = 200；施工中 `collision_layer = 0`（士兵要站上去干，子弹也不该被建材挡），
+  建成才升到障碍层并 `set_terrain()`（`fob` → `blocked`，`sandbag` → `cover`）让 A\* 绕开
+- `game.gd`：`place_build_site()`（不可走的格子直接拒绝）、`unit_cap = 6 + 3×FOB`、
+  `can_reinforce()`、`_check_fob_defeat()` 每帧判负
+- `soldier_ai.gd`：第 6 个考虑因素 `build`，工位取工地**旁边**一格，进度累加进 BT；
+  `_try_resupply()` 让站在已建成 FOB 48 px 内的士兵回备弹（8 发/秒）
+- `main.gd`：`5` / `6` 放建筑，`_spawn_unit` 在超出上限时拒绝增援，HUD 加工事行与战败行
+- 验收（CI 里 125/125，其中 26 条覆盖 M6）：放下工地后无人干预，士兵自己跑过去建完；
+  1 座 FOB 把上限从 6 提到 9；打掉唯一 FOB 后 `is_team_defeated` 为真。
 
 ### M7 · 俘虏与审讯（可选）
 - 被包围 + 被压制 + 无援 → 投降；押送、审讯、情报落到雷达上
@@ -292,7 +303,7 @@ HUD 两处可见：每个士兵 `弹=18/72`（换弹时标「换弹中」、空�
 
 已在沙箱内执行的检查：
 
-- `gdparse`（gdtoolkit 4.5.0，Godot 4 GDScript 语法）：**8 个脚本 + `tests/smoke_test.gd` 全部通过**
+- `gdparse`（gdtoolkit 4.5.0，Godot 4 GDScript 语法）：**10 个脚本 + `tests/smoke_test.gd` 全部通过**
 - `gdlint`：**no problems found**
 - 引擎 API 交叉核对：把脚本里 **112 处**引擎/项目符号逐个比对 Godot 源码自带的
   `doc/classes/*.xml`（方法名、参数、常量、继承链），**4.7.2-stable 与 4.2-stable 两个版本
@@ -306,7 +317,7 @@ HUD 两处可见：每个士兵 `弹=18/72`（换弹时标「换弹中」、空�
   均见于引擎类文档；`uid` 可省略由 `resource_format_text.cpp` 的 `next_tag.fields.has("uid")` 确认
 
 **已在真实引擎中验证**：GitHub Actions（`.github/workflows/ci.yml`）用 Godot 4.7.2 headless
-执行 `tests/smoke_test.tscn`，**99/99 断言通过**（M2 的 10 条、M3 的 23 条、M4 的 11 条、M5 的 23 条都在最新一次 CI 里逐条 PASS）；
+执行 `tests/smoke_test.tscn`，**125/125 断言通过**（M2 的 10 条、M3 的 23 条、M4 的 11 条、M5 的 23 条、M6 的 26 条都在最新一次 CI 里逐条 PASS）；
 `.github/workflows/web.yml` 的 Web 导出也已成功产出 10.3 MB 的 `github-pages` artifact。
 
 这套测试工作累计抓到 5 个真 bug（均已修）。前两个是 CI 跑出来的：
