@@ -75,19 +75,21 @@ jobs:
           if [ "$code" -ge 128 ]; then
             echo "::error::进程被信号 $((code - 128)) 终止（11=SIGSEGV 段错误）"
           fi
-          # annotation 有数量上限且保留最先发出的若干条，所以先发失败项，再发末尾。
-          if [ -f smoke_result.log ]; then
-            echo "::error::---- 失败项 ----"
-            grep -n "FAIL" smoke_result.log | while IFS= read -r line; do echo "::error::${line}"; done
-            echo "::error::---- 末尾 ----"
-            nl -ba smoke_result.log | tac | head -25 | while IFS= read -r line; do echo "::error::${line}"; done
-          else
-            echo "::error::没有生成 smoke_result.log —— 测试脚本没能开始执行"
-          fi
-          echo "::error::---- stderr ----"
+          # annotation 有数量上限（约 10 条）且保留**最先发出**的若干条，
+          # 所以诊断价值最高的 stderr 必须排在最前面——GDScript 的运行时错误
+          # 与回溯只在 stderr 里，而它恰恰是"某个测试段中途 abort"的唯一线索。
+          echo "::error::---- stderr（运行时错误在这里）----"
           if [ -s smoke_err.log ]; then
             nl -ba smoke_err.log | tac | head -40 | while IFS= read -r line; do echo "::error::${line}"; done
           else
             echo "::error::(stderr 为空)"
+          fi
+          if [ -f smoke_result.log ]; then
+            echo "::error::---- 失败项 ----"
+            grep -n "FAIL" smoke_result.log | while IFS= read -r line; do echo "::error::${line}"; done
+            echo "::error::---- 末尾 ----"
+            nl -ba smoke_result.log | tac | head -8 | while IFS= read -r line; do echo "::error::${line}"; done
+          else
+            echo "::error::没有生成 smoke_result.log —— 测试脚本没能开始执行"
           fi
           exit $code
