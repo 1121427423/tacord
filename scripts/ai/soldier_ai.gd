@@ -357,6 +357,13 @@ func _consider_seek_cover() -> float:
 	)
 
 
+## 测试入口：弹药压力读数。冒烟测试整个套件都在直呼私有助手
+## （_consider_advance、_try_loot_ammo 同样如此），感知搬走后留这一条转发，
+## 免得测试改去摸 _perc。私有方法不占 gdlint 的公开方法额度。
+func _ammo_pressure() -> float:
+	return _perc.ammo_pressure()
+
+
 ## 投降（M7）：被压制 + 被包围 + 无援，三者缺一即返回 0。
 ## 满足就给满分——这是个终局决定，不该和别的欲望讨价还价。
 func _consider_surrender() -> float:
