@@ -31,6 +31,7 @@ func _ready() -> void:
 	await get_tree().physics_frame
 	await _test_cover_geometry()
 	await _test_combat()
+	await _test_suppression()
 	_finish()
 
 
@@ -175,6 +176,9 @@ func _test_combat() -> void:
 	victim.set("team", 1)
 	_map.add_child(shooter)
 	_map.add_child(victim)
+	# 关掉受害者的还击：否则它的近失弹会把射手压制住（M2 新增机制），
+	# "开火次数" 就变成随机结果了。近失压制在 _test_suppression 里单独验证。
+	victim.get_node("Weapon").set("max_range", 0.0)
 	shooter.global_position = _map.world_pos(Vector2i(4, 4))
 	victim.global_position = _map.world_pos(Vector2i(10, 4))
 	shooter.call("set_order", "hold")
@@ -193,6 +197,67 @@ func _test_combat() -> void:
 
 	victim.call("take_damage", 9999)
 	_check(victim.get("is_dead") == true, "血量归零触发 die()")
+
+
+func _test_suppression() -> void:
+	_emit("[压制]")
+	var subject = SOLDIER_SCENE.instantiate()
+	_map.add_child(subject)
+	subject.global_position = _map.world_pos(Vector2i(24, 22))
+	_check(float(subject.get("suppression")) == 0.0, "初始压制为 0")
+
+	subject.call("apply_suppression", 0.5)
+	_check(is_equal_approx(float(subject.get("suppression")), 0.5), "apply_suppression 累积")
+	subject.call("apply_suppression", 5.0)
+	_check(float(subject.get("suppression")) == 1.0, "压制被夹在 1.0 上限")
+
+	var base_speed: float = float(subject.get("move_speed"))
+	var pinned_speed: float = float(subject.call("effective_speed"))
+	_check(is_equal_approx(pinned_speed, base_speed * 0.4), "满压制只剩 40% 速度")
+
+	for _frame in range(30):
+		await get_tree().physics_frame
+	var decayed: float = float(subject.get("suppression"))
+	_check(decayed < 1.0 and decayed > 0.5, "压制随时间衰减（30 帧后 %.2f）" % decayed)
+
+	# 效用：满压制时 seek_cover 必须压过 advance（不能硬穿火力区）
+	var ai = subject.get_node("SoldierAI")
+	subject.call("set_order", "attack")
+	subject.call("apply_suppression", 5.0)
+	var cover_pinned: float = float(ai.call("_consider_seek_cover"))
+	var advance_pinned: float = float(ai.call("_consider_advance"))
+	_check(advance_pinned == 0.0, "满压制时推进欲望归零")
+	_check(cover_pinned > advance_pinned, "满压制时 seek_cover 高于 advance")
+
+	subject.set("suppression", 0.0)
+	var advance_calm: float = float(ai.call("_consider_advance"))
+	_check(advance_calm > advance_pinned, "压制解除后推进欲望恢复")
+
+	# 近失判定：一枪同时验证两件事——弹道旁 20px 的人被压制（打不到 7px 半径的身体，
+	# 但落在 40px 近失半径内），200px 外的人不受影响。
+	# 关掉散布是为了让几何完全确定：strength = 1 - 20/40 = 0.5，压制 = 0.3 * 0.5。
+	# 注意 try_fire 的弹道会一直打到 max_range（260px），不是停在瞄准点上。
+	var shooter = SOLDIER_SCENE.instantiate()
+	var bystander = SOLDIER_SCENE.instantiate()
+	var faraway = SOLDIER_SCENE.instantiate()
+	shooter.set("team", 2)
+	bystander.set("team", 1)
+	faraway.set("team", 1)
+	_map.add_child(shooter)
+	_map.add_child(bystander)
+	_map.add_child(faraway)
+	shooter.get_node("Weapon").set("spread_degrees", 0.0)
+	var line_y: float = _map.world_pos(Vector2i(18, 18)).y
+	var aim := Vector2(_map.world_pos(Vector2i(10, 18)).x, line_y)
+	shooter.global_position = Vector2(_map.world_pos(Vector2i(4, 18)).x, line_y)
+	bystander.global_position = Vector2(aim.x, line_y + 20.0)
+	faraway.global_position = Vector2(aim.x, line_y + 200.0)
+	shooter.call("try_fire", aim)
+	_check(
+		is_equal_approx(float(bystander.get("suppression")), 0.15),
+		"擦身而过的子弹按距离产生压制（%.3f）" % float(bystander.get("suppression"))
+	)
+	_check(float(faraway.get("suppression")) == 0.0, "离弹道 200px 不受压制")
 
 
 func _finish() -> void:
