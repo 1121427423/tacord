@@ -171,6 +171,22 @@ func flank_alignment(enemy) -> float:
 	return clampf(-facing.normalized().dot(to_us.normalized()), 0.0, 1.0)
 
 
+## FPV 逼近度 [0,1]：半径内最近敌方 FPV，距离越近越接近 1；没有则 0。
+## 这是「听到」的专用读数（听到 = 未必看见）：nearby_enemies 把 FPV 当普通
+## 敌人收进开火链路（它就在 vehicles 组，士兵据此可以打它），这里只回答
+## 「有没有自杀无人机正冲我来」。识别约定（鸭子）：认 has_method("explode")
+## ——场上只有 FPV 自杀无人机提供自爆接口，侦察机与坦克都没有，不靠
+## class_name 也能认出它；nearby_enemies 的过滤顺带把坠毁的残骸筛掉——哑弹不吓人。
+func fpv_threat(radius: float) -> float:
+	var best: float = 0.0
+	for enemy in nearby_enemies(radius):
+		if not enemy.has_method("explode"):
+			continue
+		var distance: float = soldier.global_position.distance_to(enemy.global_position)
+		best = maxf(best, 1.0 - clampf(distance / radius, 0.0, 1.0))
+	return best
+
+
 ## 「站着能打的」与「倒地的」两种最近友军，只差一个过滤条件。
 func _nearest_ally(radius: float, downed_only: bool):
 	if soldier == null or tree == null:
