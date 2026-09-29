@@ -57,7 +57,7 @@
 
 ---
 
-## 3. 当前进度（M0 + M1 已完成）
+## 3. 当前进度（M0–M5 已完成，下一个是 M6 建造与 FOB）
 
 ```
 tacord/
@@ -68,7 +68,7 @@ tacord/
 │   ├── main.tscn                    # Main(Node2D) + Camera2D + BattleMap 实例 + HUD
 │   ├── battle/battle_map.tscn       # Node2D + battle_map.gd
 │   └── units/soldier.tscn           # CharacterBody2D + ColorRect + CollisionShape2D + SoldierAI
-├── tests/smoke_test.tscn            # 引擎原生 headless 测试（76 项断言，退出码判定）
+├── tests/smoke_test.tscn            # 引擎原生 headless 测试（99 项断言，退出码判定）
 ├── .github/workflows/               # ci.yml（lint + 冒烟测试）、web.yml（导出 + Pages）
 ├── export_presets.cfg               # Web 导出预设（单线程），CI 复现用
 ├── scripts/
@@ -79,8 +79,8 @@ tacord/
 │   ├── ai/blackboard.gd             # 小队黑板：同队共享的目击与枪声记忆
 │   ├── ai/behavior_tree.gd          # 极简 BT：Action / Condition / Sequence / Selector
 │   ├── ai/soldier_ai.gd             # 3+1 个考虑因素 + 每个行为一棵树
-│   ├── units/soldier.gd             # 移动 / HP / 命令 / 压制 / 占位绘制 / 曳光
-│   └── units/weapon.gd              # hitscan 武器：散布、冷却、命中判定、近失压制
+│   ├── units/soldier.gd             # 移动 / HP / 命令 / 压制 / 倒地 / 占位绘制 / 曳光
+│   └── units/weapon.gd              # hitscan 武器：散布、冷却、命中判定、近失压制、弹药换弹
 ├── assets/.gitkeep
 └── PLAN.md
 ```
@@ -92,6 +92,10 @@ tacord/
 
 **开局行为**：蓝方初始命令 `defend`，红方 `attack`；双方会自主向中线推进，进入感知半径后
 效用分数开始分化——被通视的一方转 `seek_cover`，看到对方侧面暴露的一方转 `flank`。
+子弹擦身而过会累积压制（压慢脚步、压过推进欲望、压到 0.75 以上直接停火）；
+血量归零先倒地而不是死，每队第 3 人（名字带「医」）会一边还击一边跑去拖救；
+看不见敌人时朝 520 px 内的敌队枪声转头，并朝最后已知位置搜索；
+弹匣打空自动换弹，备弹也空了就得去尸体上摸弹——一局打久了阵地会自己安静下来。
 
 ---
 
@@ -99,7 +103,8 @@ tacord/
 
 > 原则：**先让掩体有后果，再让掩体有代价，最后才加复杂度。**
 > M1 让子弹飞起来，M2 让「被打」产生行为后果，M3 让「打死」变成可挽回的状态，
-> M4 让士兵只知道自己该知道的（去掉透视）；下一步是让火力有尽头——M5 弹药与后勤。
+> M4 让士兵只知道自己该知道的（去掉透视），M5 让火力有尽头；
+> 下一步是让士兵能改变地形——M6 建造与 FOB。
 
 ### M1 · 交火与视线 ✅ 已完成
 - `scripts/units/weapon.gd`：射程、射速、散布、射线命中（第 1 层单位 + 第 2 层障碍）
@@ -218,9 +223,42 @@ HUD 新增一行「情报: 蓝方 sighting 3.2s 前 @(848,208)　红方 无」�
 敌队真的开火后 320 px 外的听者转向声源（这条专门验证分发路由）、
 毫无情报时 1 秒内走了 **73 px** 而不是发呆。
 
-### M5 · 弹药与后勤（轻量版）
+### M5 · 弹药与后勤（轻量版）✅ 已完成
 - 弹匣 / 换弹 / 弹药耗尽导致火力衰减；路过尸体可补弹
-- 验收：一场持续交火后能观察到"阵地渐渐沉寂"。
+- 验收：✅ 一场持续交火后能观察到"阵地渐渐沉寂"。
+
+| 参数 | 位置 | 值 | 作用 |
+| --- | --- | --- | --- |
+| `magazine_size` | `weapon.gd` | 24 | 一个弹匣的容量 |
+| `reserve_ammo` | `weapon.gd` | 72 | 开局备弹（不含弹匣里那一匣） |
+| `max_reserve_ammo` | `weapon.gd` | 144 | 备弹上限，摸尸体也不会超过 |
+| `reload_time` | `weapon.gd` | 2.2 s | 换弹耗时 |
+| `LOOT_RADIUS` | `soldier_ai.gd` | 26 px | 路过尸体多远以内能摸到弹匣 |
+| `AMMO_COVER_WEIGHT` | `soldier_ai.gd` | 0.35 | 弹药压力对 seek_cover 的加成 |
+| `DRY_ADVANCE_PENALTY` | `soldier_ai.gd` | 0.6 | 彻底打光时推进欲望的削弱 |
+
+「沉寂」是一条纯机制的因果链，没有脚本参与：
+
+```
+开火 -> 弹匣见底 -> 自动换弹（2.2s 打不了枪）-> 备弹见底 -> is_dry()
+                                                        │
+                                    can_fire() 永远 false，这把枪就此安静
+                                                        │
+                              唯一的补充途径：走到 26px 内的尸体旁摸走它的备弹
+```
+
+弹药同时接进效用打分：正在换弹 / 弹匣空 → `_ammo_pressure() = 1.0`，以 0.35 权重推高
+`seek_cover`（换弹当然要在掩体后换）；彻底打光 → `advance` 只剩 40%（端着空枪冲锋只是送死）。
+
+HUD 两处可见：每个士兵 `弹=18/72`（换弹时标「换弹中」、空了标「打光」），
+外加一行汇总 `弹药: 蓝方 216 发（0/3 人打光）　红方 96 发（1/3 人打光）`。
+
+验收（CI 里 99/99，其中 23 条覆盖 M5）：出生满弹匣、开一枪少一发、打空自动换弹、
+换弹期间 `can_fire()` 为假、换完弹匣装满且备弹等量减少（72 → 48）、
+彻底打光后 `is_dry()` / `start_reload()` / `try_fire()` 全部拒绝；
+打光后推进欲望实测降到满弹时的 **40%**；路过尸体摸走全部备弹且摸不出第二遍；
+端到端——两人各 3 发对射，3 秒后双方 `is_dry()` 且各**正好打了 3 发**，
+再等 1.5 秒枪声数一动不动。
 
 ### M6 · 建造与 FOB
 - 建筑落点 → 士兵走过去施工（战斗不中断）；FOB 提供部队上限与弹药补给
@@ -268,7 +306,7 @@ HUD 新增一行「情报: 蓝方 sighting 3.2s 前 @(848,208)　红方 无」�
   均见于引擎类文档；`uid` 可省略由 `resource_format_text.cpp` 的 `next_tag.fields.has("uid")` 确认
 
 **已在真实引擎中验证**：GitHub Actions（`.github/workflows/ci.yml`）用 Godot 4.7.2 headless
-执行 `tests/smoke_test.tscn`，**76/76 断言通过**（M2 的 10 条、M3 的 23 条、M4 的 11 条都在最新一次 CI 里逐条 PASS）；
+执行 `tests/smoke_test.tscn`，**99/99 断言通过**（M2 的 10 条、M3 的 23 条、M4 的 11 条、M5 的 23 条都在最新一次 CI 里逐条 PASS）；
 `.github/workflows/web.yml` 的 Web 导出也已成功产出 10.3 MB 的 `github-pages` artifact。
 
 这套测试工作累计抓到 5 个真 bug（均已修）。前两个是 CI 跑出来的：
