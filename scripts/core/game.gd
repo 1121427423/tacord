@@ -4,11 +4,21 @@ extends Node
 signal order_issued(team: int, order: StringName)
 signal battle_map_ready(map: Node2D)
 
+## 某队失去了它曾经拥有过的最后一座 FOB —— MVP 的失败条件。
+signal team_defeated(team: int)
+
+## 建筑落点（M6）。
+signal build_site_placed(site: BuildSite)
+
 ## 默认战斗场景；load_battle() 可换成别的地图。
 const BATTLE_SCENE_PATH := "res://scenes/battle/battle_map.tscn"
 
 ## 玩家阵营。
 const PLAYER_TEAM := 1
+
+## 部队上限：基础值 + 每座建成 FOB 的加成。
+const BASE_UNIT_CAP := 6
+const UNITS_PER_FOB := 3
 
 ## MVP 按键绑定（后续迁到 Input Map 以支持重绑定）。
 const ORDER_KEYS := {
@@ -27,6 +37,13 @@ var current_order: StringName = &"hold"
 # 每队一块黑板（team -> Blackboard）。同队士兵共享敌情，换局时清空。
 var _boards: Dictionary = {}
 
+# team -> 是否曾经拥有过建成的 FOB。判负的前提是"曾经有过"，
+# 否则开局谁都没建 FOB，双方会立刻同时判负。
+var _fob_had: Dictionary = {}
+
+# team -> 是否已经判负（避免每帧重复发信号）。
+var _defeated: Dictionary = {}
+
 
 func _ready() -> void:
 	# 主场景由 project.godot 的 run/main_scene 自动加载；
@@ -38,6 +55,7 @@ func _process(delta: float) -> void:
 	# 黑板的时钟统一由 Game 推进：一队一块，不会因为有 6 个士兵就走快 6 倍。
 	for board in _boards.values():
 		board.advance(delta)
+	_check_fob_defeat()
 
 
 func _boot() -> void:
@@ -84,11 +102,64 @@ func clear_boards() -> void:
 		board.clear()
 
 
+## 放下一个建筑工地（M6）。落点不可走或没有地图时返回 null。
+func place_build_site(kind: StringName, cell: Vector2i, team: int) -> BuildSite:
+	if battle_map == null or not battle_map.has_method("is_walkable"):
+		return null
+	if not bool(battle_map.call("is_walkable", cell)):
+		return null
+	var site := BuildSite.new()
+	site.kind = kind
+	site.team = team
+	site.cell = cell
+	battle_map.add_child(site)
+	site.global_position = battle_map.call("world_pos", cell)
+	if not _fob_had.has(team):
+		_fob_had[team] = false
+	build_site_placed.emit(site)
+	return site
+
+
+## 某队已建成的 FOB 数量。
+func fob_count(team: int) -> int:
+	var count: int = 0
+	for site in get_tree().get_nodes_in_group(&"build_sites"):
+		if int(site.get("team")) != team:
+			continue
+		if site.get("is_built") == true and site.get("kind") == &"fob":
+			count += 1
+	return count
+
+
+## 部队上限：基础值 + 每座建成 FOB 的加成。
+func unit_cap(team: int) -> int:
+	return BASE_UNIT_CAP + UNITS_PER_FOB * fob_count(team)
+
+
+## 该队是否还能补人（主场景的生成入口按它拦）。
+func can_reinforce(team: int) -> bool:
+	return alive_count(team) < unit_cap(team)
+
+
+## 失去曾经拥有过的最后一座 FOB 即判负。
+func _check_fob_defeat() -> void:
+	for team in _fob_had.keys():
+		if bool(_defeated.get(team, false)):
+			continue
+		if fob_count(int(team)) > 0:
+			_fob_had[team] = true
+		elif bool(_fob_had[team]):
+			_defeated[team] = true
+			team_defeated.emit(int(team))
+
+
 ## 加载 / 重开一局战斗场景。
 func load_battle(path: String = BATTLE_SCENE_PATH) -> void:
 	battle_map = null
 	# 上一局的敌情记忆不能带进新局。
 	clear_boards()
+	_fob_had.clear()
+	_defeated.clear()
 	var error := get_tree().change_scene_to_file(path)
 	if error != OK:
 		push_error("Game: 无法加载战斗场景 %s (error=%d)" % [path, error])
