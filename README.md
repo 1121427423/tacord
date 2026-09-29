@@ -185,12 +185,16 @@ tacord/
 │   ├── ai/blackboard.gd             # 小队黑板：目击/枪声记忆 + 审讯出的永久工事情报
 │   ├── ai/perception.gd             # 感知：把原始读数算成打分要用的 [0,1] 量（纯查询）
 │   ├── ai/behavior_tree.gd          # 极简 BT：Action / Condition / Sequence / Selector
-│   ├── ai/soldier_ai.gd             # seek_cover / advance / flank / hold / rescue / build / surrender / escort
-│   ├── units/soldier.gd             # 移动 / HP / 命令 / 压制 / 倒地 / 俘虏 / 占位绘制
-│   ├── units/weapon.gd              # hitscan 武器：散布、冷却、近失压制、弹匣与换弹
+│   ├── ai/soldier_ai.gd             # 8 个考虑因素 + 每个行为一棵树（987 行，顶着 1000 上限）
+│   ├── ai/tactics.gd                # M8：近战 / 伏地 / 滑铲 3 个考虑因素与对应行为
+│   ├── units/soldier.gd             # 移动 / HP / 命令 / 压制 / 倒地 / 俘虏 / 姿态与翻越
+│   ├── units/weapon.gd              # hitscan 武器：散布、冷却、近失压制、弹匣换弹、枪托
 │   └── units/build_site.gd          # 工地：施工计时 / 建成转实体 / 被打掉拆地形
+├── tests/
+│   ├── smoke_test.tscn              # M0–M7：154 项断言
+│   └── mobility_test.tscn           # M8：40 项断言（独立场景）
 ├── assets/                          # 美术资源占位目录
-└── PLAN.md                          # 技术栈决策 + M0~M7 里程碑
+└── PLAN.md                          # 技术栈决策 + M0~M8 里程碑
 ```
 
 物理层约定：**1 = 单位，2 = 静态障碍**（视线射线只打第 2 层）。
@@ -219,17 +223,26 @@ tacord/
 | Job | 内容 |
 | --- | --- |
 | `GDScript 静态检查` | pip 装 `gdtoolkit==4.5.0`，对 `scripts/` 与 `tests/` 跑 `gdparse` + `gdlint` |
-| `Headless 冒烟测试` | 下载 Godot 4.7.2 Linux 版 → `--headless --import` → 跑 `tests/smoke_test.tscn`，用退出码判定 |
+| `Headless 冒烟测试` | 下载 Godot 4.7.2 Linux 版 → `--headless --import` → **依次**跑 `tests/smoke_test.tscn` 与 `tests/mobility_test.tscn`，两个都必须退出码 0 |
 
-冒烟测试是**引擎原生**的（不依赖 GUT/gdUnit 等第三方插件），当前覆盖 **32 项**断言：
-坐标换算、地形读写、`add_obstacle` 不可走（穿墙路径回归）、AStar2D 封死/绕行、
-UtilityAI 择优/权重/粘性/曲线单调、掩体几何（墙后得分更高、被绕侧翼后失效）、
-交火（开枪 + 掉血 + `die()`）。
+冒烟测试是**引擎原生**的（不依赖 GUT/gdUnit 等第三方插件）。M8 起按里程碑拆成两个场景——
+`smoke_test.gd` 已经 911 行、顶着 gdlint 的 1000 行上限，再往里塞后面的里程碑就没有落脚的地方。
+每个场景各自把断言总数写死在 `EXPECTED_CHECKS` 里，`_finish()` 比对**实际跑到的**条数，
+某个测试段中途崩掉时不会谎报全绿。
+
+- `smoke_test.tscn`（**154 项**）：坐标换算、地形、AStar2D 封死/绕行、UtilityAI 择优/权重/粘性、
+  掩体几何、交火掉血、压制数值、倒地与救援、感知与记忆、弹药与后勤、建造与 FOB、俘虏与审讯
+- `mobility_test.tscn`（**40 项**）：翻越（跳矮墙 / 绕整墙两条互为反例）、三种姿态的命中轮廓
+  与速度、伏地能开枪而滑铲不能、肉搏冷却与敌我判定、三个新打分的触发条件、端到端趴下与起身
+
+CI 里 annotation 上限约 10 条且只保留最先发出的，所以**成功的场景一行不发**，
+失败的才把诊断摊开；三类日志另传成 `test-logs` artifact 兜底。
 
 本地跑同样的检查：
 
 ```bash
-godot --headless --path . tests/smoke_test.tscn   # 退出码 0 = 全通过
+godot --headless --path . tests/smoke_test.tscn    # 退出码 0 = 全通过
+godot --headless --path . tests/mobility_test.tscn # M8，同样退出码判定
 ```
 
 ### `.github/workflows/web.yml`
@@ -258,12 +271,19 @@ cd web_preview && python3 -m http.server 8080
 
 ## 七、当前验证状态
 
-**已在真实引擎里跑通**：GitHub Actions 上用 Godot 4.7.2 headless 执行 `tests/smoke_test.tscn`，
-**154/154 项断言通过**（含掩体几何评估、交火掉血、压制数值、倒地与救援、感知与记忆、弹药与后勤、建造与 FOB、俘虏与审讯）。这个总数本身也是一条断言——`EXPECTED_CHECKS` 写死在测试里，某个测试段中途崩掉时退出码仍是 0，沙箱又读不到 CI 日志，所以必须让引擎自己判定数没数够。这套测试工作累计抓到 9 个真 bug：
+**已在真实引擎里跑通**：GitHub Actions 上用 Godot 4.7.2 headless 依次执行两个测试场景，
+**合计 194/194 项断言通过**——`smoke_test.tscn` 154 项（掩体几何评估、交火掉血、压制数值、
+倒地与救援、感知与记忆、弹药与后勤、建造与 FOB、俘虏与审讯）+ `mobility_test.tscn` 40 项
+（翻越、三种姿态、肉搏、三个新打分、端到端趴下与起身）。每个总数本身也是一条断言——
+`EXPECTED_CHECKS` 写死在测试里，某个测试段中途崩掉时退出码仍是 0，沙箱又读不到 CI 日志，
+所以必须让引擎自己判定数没数够。这套测试工作累计抓到 **12 个真 bug**：
 `cover` 地形曾可走导致 A\* 规划穿墙路径；`find_path` 曾因 `allow_partial_path=true`
 在目标不可达时返回半截路径；`die()` 曾不清 `is_downed`（死人被当成可救援的伤员）；
 枪声曾只记在开枪者自己队的黑板上（听声转头永远不触发）；`clear_boards()` 曾丢掉整个字典
-（活着的士兵握着旧引用，重开后没人读新黑板）；感知拆分后测试还在调已被搬走的 `_ammo_pressure()`，中止了 9 条断言（正是 `EXPECTED_CHECKS` 抓到的）。另有两条押送死锁是写代码时推演出来的，动第一行测试之前就改掉了；第九条最隐蔽——`_process` 按墙钟时间攒思考账、攒够一次就清零，物理帧在慢机器上批量执行时超出的时间被丢掉，不只决策变慢，**FOB 补弹速率也会随机器负载下降**，表现为同一份代码在 CI 上「116 帧过 / 400 帧卡」五五开。完整清单见 PLAN.md §6。
+（活着的士兵握着旧引用，重开后没人读新黑板）；感知拆分后测试还在调已被搬走的 `_ammo_pressure()`，中止了 9 条断言（正是 `EXPECTED_CHECKS` 抓到的）。另有两条押送死锁是写代码时推演出来的，动第一行测试之前就改掉了；第九条最隐蔽——`_process` 按墙钟时间攒思考账、攒够一次就清零，物理帧在慢机器上批量执行时超出的时间被丢掉，不只决策变慢，**FOB 补弹速率也会随机器负载下降**，表现为同一份代码在 CI 上「116 帧过 / 400 帧卡」五五开。M8 又添三条：翻越时腾空状态没有
+同步碰撞掩码（人被顶在墙皮上，整条翻越链路是死的）、`try_melee()` 不校验阵营（枪托会打到自己人）、
+CI 的 annotation 配额被通过的场景先刷满（真正失败的那段整个被挤掉）。
+完整清单见 PLAN.md §6。
 
 压制（M2）的数值不是拍脑袋写的，是被断言钉住的：满压制时移动速度 `80 → 32`，
 30 物理帧后压制 `1.00 → 0.89`（衰减率 0.22/s），弹道旁 20 px 处压制 `0.150`
@@ -300,7 +320,7 @@ FOB 建成后部队上限从 6 提到 9，站在它 48 px 内的士兵以 8 发/
 对面审出来的暗红。押送是有风险的：押送者阵亡或倒地，俘虏当场跑掉。
 实测：完全不干预，俘虏自己投降、押送者 122 帧内完成认领与押送、审出第 2 条情报并放人。
 
-静态验证：11 个脚本加 `tests/smoke_test.gd` 通过 `gdparse` 与 `gdlint`；M0/M1 期间做过一次引擎
+静态验证：12 个脚本加 `tests/` 下两个测试脚本通过 `gdparse` 与 `gdlint`；M0/M1 期间做过一次引擎
 API 逐个比对（脚本里的引擎/项目符号对 Godot **4.7.2** 与 **4.2** 源码自带的类文档，均 0 问题），
 M2 新增代码用到的 `is_equal_approx` / `is_zero_approx` 也在 `@GlobalScope.xml` 里确认过；
 `project.godot` 的每个设置项与 `.tscn` 的每个属性名都在引擎源码中确认存在。
@@ -310,5 +330,6 @@ M2 新增代码用到的 `is_equal_approx` / `is_zero_approx` 也在 `@GlobalSco
 **仍未验证**：① 浏览器里的实际画面（需要开启 Pages 或本地预览 artifact）；
 ② macOS 签名/公证（需真机）。
 
-技术选型理由、MVP 范围与后续里程碑（M1 交火 → M2 压制 → M3 倒地救援 → M4 感知记忆 → M5 弹药后勤 → M6 建造与 FOB → M7 俘虏审讯）
+技术选型理由、MVP 范围与全部里程碑（M1 交火 → M2 压制 → M3 倒地救援 → M4 感知记忆 →
+M5 弹药后勤 → M6 建造与 FOB → M7 俘虏审讯 → M8 机动与近战）
 见 **[PLAN.md](PLAN.md)**。
