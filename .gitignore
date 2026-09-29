@@ -1,7 +1,9 @@
 # ---- Godot 4 ----
 .godot/
 *.import
-export_presets.cfg
+# 注意：export_presets.cfg 故意不忽略——CI 需要它才能复现同一份 Web 导出。
+# 本工程的预设只含导出选项，不含任何密钥；若将来加入 macOS/Android 签名配置，
+# 请把凭据放进 GitHub Secrets，不要写进这个文件。
 .mono/
 data_*/
 mono_crash.*.json
