@@ -99,14 +99,18 @@ var posture: StringName = POSTURE_STAND:
 	set(value):
 		if posture == value:
 			return
-		if value == POSTURE_SLIDE and _posture_cooldown > 0.0:
+		if value == POSTURE_SLIDE and slide_cooldown > 0.0:
 			return
 		posture = value
 		if value == POSTURE_SLIDE:
 			_slide_timer = SLIDE_DURATION
-			_posture_cooldown = SLIDE_DURATION + SLIDE_COOLDOWN
+			slide_cooldown = SLIDE_DURATION + SLIDE_COOLDOWN
 		_apply_hit_profile()
 		queue_redraw()
+
+## 滑铲冷却剩余秒数。公开可读（变量不占 gdlint 的方法额度）——
+## tactics.gd 要靠它判断"能不能再滑"，否则打分会空转在想滑却滑不出的状态上。
+var slide_cooldown: float = 0.0
 
 ## 是否正在翻越（腾空的这一段不开枪）。由 _follow_path 维护。
 var is_vaulting: bool = false
@@ -148,9 +152,8 @@ var _tracer: Array = []  # [起点, 终点]（世界坐标）
 var _tracer_ttl: float = 0.0
 var _hit_flash_ttl: float = 0.0
 
-# 姿态与翻越的内部计时（见 posture 的 setter 与 _update_posture）。
+# 翻越与滑铲剩余时长（见 posture 的 setter 与 _update_posture）。
 var _slide_timer: float = 0.0
-var _posture_cooldown: float = 0.0
 var _vault_segment: bool = false
 var _vault_cooldown: float = 0.0
 
@@ -219,8 +222,8 @@ func _bleed(delta: float) -> void:
 ## 另一条（也最关键的一条）是"移动即起立"——趴着的人一旦开始走，
 ## 说明他要换位置，自动站直。这样 AI 只需要决定"趴下"，起身不用它管。
 func _update_posture(delta: float) -> void:
-	if _posture_cooldown > 0.0:
-		_posture_cooldown = maxf(0.0, _posture_cooldown - delta)
+	if slide_cooldown > 0.0:
+		slide_cooldown = maxf(0.0, slide_cooldown - delta)
 	if posture == POSTURE_SLIDE:
 		_slide_timer = maxf(0.0, _slide_timer - delta)
 		if _slide_timer <= 0.0:

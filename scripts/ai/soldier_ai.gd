@@ -132,6 +132,10 @@ var board: Blackboard = null
 # 感知（scripts/ai/perception.gd）：所有"看看四周"的纯查询都在这里。
 var _perc: Perception = Perception.new()
 
+# 近战与姿态（M8）：肉搏 / 扑倒 / 滑铲。逻辑全在 scripts/ai/tactics.gd，
+# 这里只持有它——那个文件是从 978 行的本文件里腾出来的空间。
+var _tactics: Tactics = Tactics.new()
+
 var _trees: Dictionary = {}  # StringName -> 行为树根节点
 var _action: StringName = ACTION_HOLD
 var _move_started: bool = false
@@ -178,6 +182,11 @@ func _ready() -> void:
 	utility.stickiness = stickiness
 	_register_considerations()
 	_build_trees()
+	# 近战与姿态的打分与树同样由 tactics.gd 提供，必须排在本机注册之后，
+	# 否则平局会先归它们（UtilityAI 用严格大于，平分归先注册者）。
+	_tactics.setup(soldier, map, weapon, _perc)
+	_tactics.register_into(utility)
+	_trees.merge(_tactics.build_trees())
 	# 打散各单位的思考相位，避免所有 AI 挤在同一帧。
 	_think_accum = _rng.randf_range(0.0, think_interval)
 
