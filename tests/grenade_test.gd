@@ -359,6 +359,13 @@ func _test_grenade() -> void:
 	# 8) 投掷决策：有雷 + 目标 60~200px + 无通视 + 黑板有记忆，缺一不投
 	#    H(26,4) AI 开 --128px-- 墙(28,4) --128px-- R1(30,4) 红兵
 	# ================================================================
+	# 场地卫生之二（S7 清场的次生坑）：watcher8/watcher9 手里还各有一颗雷，
+	# 而 hidden10 一出生就是它们 flank 的高分目标（正对它的暴露侧翼）——
+	# watcher9 会被吸着走进投掷窗口、把雷扔进 grenades 组，污染"无雷不投"
+	# 反例的 30 帧空窗（上轮 CI 实测翻车）。S8 与三个反例只考 thrower10
+	# 一个考生，其余收枪。
+	watcher8.get_node("SoldierAI").set_process(false)
+	watcher9.get_node("SoldierAI").set_process(false)
 	if game != null:
 		game.call("clear_boards")
 	_map.call("add_obstacle", Vector2i(28, 4))
