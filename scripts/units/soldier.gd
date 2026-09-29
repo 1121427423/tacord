@@ -160,6 +160,9 @@ var _tracer: Array = []  # [起点, 终点]（世界坐标）
 var _tracer_ttl: float = 0.0
 var _hit_flash_ttl: float = 0.0
 
+## 呼救气泡的跳动相位。倒地期间每帧累加，让头顶那个"!"自己动起来。
+var _bubble_phase: float = 0.0
+
 # 翻越与滑铲剩余时长（见 posture 的 setter 与 _update_posture）。
 var _slide_timer: float = 0.0
 var _vault_segment: bool = false
@@ -255,9 +258,36 @@ func _apply_hit_profile() -> void:
 	hit_shape.shape.radius = radius
 
 
+## 头顶的呼救气泡：倒地的人喊"救我"，跳得越急说明血剩得越少。
+## 做成私有方法（不占 gdlint 的 20 个公开方法额度，这个文件已经 19 个）。
+## 注意：headless CI 不渲染，这个函数没有像素级断言——和本仓库所有 _draw
+## 代码一样，只能靠眼睛验；能断言的状态（失血、包扎进度）在 HUD 文本里。
+func _draw_call_for_help() -> void:
+	var urgency: float = 1.0 - bleed_ratio()
+	var pulse: float = 0.55 + 0.45 * absf(sin(_bubble_phase * TAU * (0.8 + 1.6 * urgency)))
+	var bubble := Rect2(-7.0, -32.0, 14.0, 13.0)
+	# 尾巴：一个指向头顶的小三角。
+	draw_colored_polygon(
+		PackedVector2Array(
+			[Vector2(-3.0, -19.0), Vector2(3.0, -19.0), Vector2(0.0, -24.0)]
+		),
+		Color(1.0, 1.0, 1.0, 0.45 * pulse),
+	)
+	draw_rect(bubble, Color(1.0, 1.0, 1.0, 0.30 * pulse), true)
+	draw_rect(bubble, Color(1.0, 1.0, 1.0, 0.85 * pulse), false, 1.0)
+	# "!" —— 用两块矩形画，不引入字体资源。
+	var mark: Color = Color(1.0, 0.42, 0.36, pulse)
+	draw_rect(Rect2(-1.0, -29.5, 2.0, 6.0), mark)
+	draw_rect(Rect2(-1.0, -22.0, 2.0, 2.0), mark)
+
+
 ## 曳光与受击闪白的衰减。放在 is_dead 判断之前，避免士兵阵亡后特效卡住不消失。
 func _decay_effects(delta: float) -> void:
 	var dirty: bool = false
+	if is_downed:
+		# 呼救气泡要一直跳，倒地期间每帧都得重绘（否则动画会冻在第一帧）。
+		_bubble_phase += delta
+		dirty = true
 	if suppression > 0.0:
 		suppression = maxf(0.0, suppression - SUPPRESSION_DECAY * delta)
 	if _tracer_ttl > 0.0:
@@ -617,6 +647,7 @@ func _draw() -> void:
 		draw_rect(Rect2(-8.0, -14.0, 16.0 * bleed_ratio(), 3.0), Color(0.93, 0.33, 0.27))
 		if rescue_progress > 0.0:
 			draw_rect(Rect2(-8.0, 11.0, 16.0 * rescue_ratio(), 2.0), Color(0.45, 0.95, 0.6))
+		_draw_call_for_help()
 		return
 	if is_captive:
 		# 俘虏：头顶一个白色投降标记 + 空心环，和还在打的人区分开。
