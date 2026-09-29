@@ -162,8 +162,13 @@ var grenades: int = 1
 
 ## 被爆炸掀飞后的踉跄读数（M12）：眩晕中开不了枪（try_fire 拦截）、
 ## 不能自主移动（位移由冲量接管）。由 _physics_process 按 _stagger_timer 维护，
-## apply_blast 写计时器——读数自己不存账。
+## apply_blast 写计时器并同步点亮读数——读数自己不存账。
 var staggered: bool = false
+
+## 「趴得住」窗口（M12 躲雷）：M8 的起身自动化只认压制（压制 < 0.35 就站起来），
+## 而躲雷的人没挨压制——没有这个窗口，evade 趴下去一帧内就被翻回站立。
+## 由 tactics 的 _do_evade 写入（最近那颗雷的剩余引信 + 余量），雷炸完自动到期。
+var prone_hold: float = 0.0
 
 # BattleMap（battle_map.gd），不标注类型以便鸭子调用其查询接口。
 var battle_map = null
@@ -275,6 +280,11 @@ func _update_posture(delta: float) -> void:
 			posture = POSTURE_STAND
 		return
 	if posture != POSTURE_PRONE:
+		return
+	# 躲雷的「趴」优先于压制起身线：趴下去是为了挨炸，不是为了躲子弹——
+	# 雷没给兵压制，靠 suppression 判定会把人一帧内翻回站立（CI 首跑实测翻车）。
+	if prone_hold > 0.0:
+		prone_hold = maxf(0.0, prone_hold - delta)
 		return
 	if suppression < PRONE_RELEASE_SUPPRESSION or not is_zero_approx(velocity.length()):
 		posture = POSTURE_STAND
@@ -563,6 +573,9 @@ func apply_blast(origin: Vector2) -> void:
 	_blast_push = push_dir.normalized() * (BLAST_PUSH_DISTANCE / BLAST_PUSH_TIME)
 	_blast_timer = BLAST_PUSH_TIME
 	_stagger_timer = STAGGER_TIME
+	# 读数当场可见：staggered 由 _physics_process 的维护行每帧回写，
+	# 若等那一帧，"爆炸后立刻断言"的调用方会读到旧值 false（CI 首跑实测翻车）。
+	staggered = true
 
 
 ## 压制会压慢脚步（满压制只剩 40%）；倒地的人只能爬。

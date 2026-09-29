@@ -166,7 +166,6 @@ func _draw() -> void:
 	var tail: Vector2 = -facing * 6.0
 	draw_polygon(
 		PackedVector2Array([nose, tail + side, tail - side]),
-		PackedVector2Array(),
 		PackedColorArray([Color(tint, 0.85)])
 	)
 	# 血条挂在头顶，和士兵/侦察机同一套画法。

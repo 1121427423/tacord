@@ -368,6 +368,11 @@ func _test_grenade() -> void:
 		"前提钉住：目标在 60~200px 的投掷窗口内（%.0fpx）" % throw_dist,
 	)
 	if game != null:
+		# 靶子压制先拉满：投出的雷落在记忆位置——就是他脚下。压制为 0 的活敌兵
+		# 满足"被扔回"的全部条件（距雷 ~0px、引信 1.8 ≥ 0.6），雷刚落地就会被
+		# 他捡起扔回投掷者，把"投出"与后续反例搅成一锅。先钉死他的胆子。
+		# 1.0 衰减 1.2s（可捡窗口）后仍有 0.74 > 0.7，整个窗口他都没胆子。
+		hidden10.set("suppression", 1.0)
 		game.call("blackboard", 1).call("report_sighting", hidden10, hidden10.global_position)
 		_check(
 			await _wait_until(
@@ -375,9 +380,6 @@ func _test_grenade() -> void:
 			),
 			"黑板有记忆且无通视 -> 雷被投出（grenades 组出现一颗）",
 		)
-		# 靶子压制拉满免得把这颗雷捡回去扔回投掷者——本段只验"投出"这件事。
-		# 1.0 衰减 1.2s（可捡窗口）后仍有 0.74 > 0.7，整个窗口他都没胆子。
-		hidden10.set("suppression", 1.0)
 		_check(int(thrower10.get("grenades")) == 0, "投掷者 grenades 减 1（1 -> 0）")
 		_check(
 			int(thrower10.get("weapon").get("ammo_in_mag"))

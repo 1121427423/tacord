@@ -236,12 +236,33 @@ func _do_slide(_ctx: Dictionary, _delta: float) -> int:
 	return BehaviorTree.Status.RUNNING
 
 
-## 躲雷（M12）：就地扑倒。起身不用这里管——雷炸完、压制散了，
-## soldier.gd 的 _update_posture 会自己把人扶起来（M8 的自动化照常接管）。
+## 躲雷（M12）：就地扑倒，并写入「趴得住」窗口。光趴是不够的——M8 的起身
+## 自动化只认压制（压制 < 0.35 即站起），而雷没给兵压制，不写 prone_hold 的话
+## 躲雷的人一帧内就被翻回站立（CI 首跑实测翻车）。窗口 = 最近那颗雷的剩余
+## 引信 + 0.3s：雷一炸完就允许起身，prone 不会粘住不放。
 func _do_evade(_ctx: Dictionary, _delta: float) -> int:
 	soldier.call("stop_moving")
 	soldier.set("posture", Soldier.POSTURE_PRONE)
+	soldier.set("prone_hold", _nearest_grenade_fuse() + 0.3)
 	return BehaviorTree.Status.SUCCESS
+
+
+## 够得着躲（EVADE 半径内、引信进窗）的雷里剩余引信最长的一颗；没有则 0。
+## prone_hold 按它算：窗口盖住最晚炸的那颗，多颗雷时人趴到最后一炸结束。
+func _nearest_grenade_fuse() -> float:
+	if soldier == null:
+		return 0.0
+	var best: float = 0.0
+	for grenade in soldier.get_tree().get_nodes_in_group(&"grenades"):
+		if not grenade.has_method("fuse_remaining"):
+			continue
+		if soldier.global_position.distance_to(grenade.global_position) > EVADE_RADIUS:
+			continue
+		var fuse: float = float(grenade.call("fuse_remaining"))
+		if fuse > EVADE_FUSE_WINDOW:
+			continue
+		best = maxf(best, fuse)
+	return best
 
 
 ## 投掷（M12）：把雷扔向黑板记忆里敌人最后出现的位置。
