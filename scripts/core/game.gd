@@ -174,6 +174,10 @@ func claim_escort(captive, escort) -> bool:
 	if captive == null or escort == null:
 		return false
 	var current = _escorts.get(captive)
+	if current == escort:
+		# 同一个人续押。行为树在 leash 被拉开时会 FAILURE 复位、下一 tick 重新认领，
+		# 这里若拒绝就会永久卡死：押送权挂在他身上，别人也接不走。
+		return true
 	if current != null and is_instance_valid(current) and current.get("is_dead") != true:
 		return false
 	_escorts[captive] = escort
