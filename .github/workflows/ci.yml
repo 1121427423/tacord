@@ -66,21 +66,25 @@ jobs:
       - name: 运行冒烟测试
         run: |
           set +e
-          # stdbuf 强制行缓冲：进程崩溃时才不会丢掉最后的输出
-          stdbuf -oL -eL godot --headless --path . tests/smoke_test.tscn 2>&1 | tee smoke.log
-          code=${PIPESTATUS[0]}
+          # stdout / stderr 分别落盘：stdout 会被块缓冲（崩溃即丢），stderr 不缓冲，
+          # Godot 的崩溃回溯只会出现在 stderr。
+          godot --headless --path . tests/smoke_test.tscn >smoke_out.log 2>smoke_err.log
+          code=$?
           set -e
           echo "exit code = $code"
           if [ "$code" -ge 128 ]; then
             echo "::error::进程被信号 $((code - 128)) 终止（11=SIGSEGV 段错误）"
           fi
-          # 读测试自己落盘的结果（不受 stdout 缓冲影响），发成 annotation 回传。
-          echo "::error::---- smoke_result.log ----"
+          echo "::error::---- smoke_result.log（测试自述，逐行 flush）----"
           if [ -f smoke_result.log ]; then
-            nl -ba smoke_result.log | tail -60 | while IFS= read -r line; do
-              echo "::error::${line}"
-            done
+            nl -ba smoke_result.log | tail -40 | while IFS= read -r line; do echo "::error::${line}"; done
           else
             echo "::error::没有生成 smoke_result.log —— 测试脚本没能开始执行"
+          fi
+          echo "::error::---- stderr ----"
+          if [ -s smoke_err.log ]; then
+            nl -ba smoke_err.log | head -40 | while IFS= read -r line; do echo "::error::${line}"; done
+          else
+            echo "::error::(stderr 为空)"
           fi
           exit $code
