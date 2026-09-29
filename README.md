@@ -189,11 +189,14 @@ tacord/
 │   ├── ai/tactics.gd                # M8：近战 / 伏地 / 滑铲 3 个考虑因素与对应行为
 │   ├── units/soldier.gd             # 移动 / HP / 命令 / 压制 / 倒地 / 俘虏 / 姿态与翻越
 │   ├── units/weapon.gd              # hitscan 武器：散布、冷却、近失压制、弹匣换弹、枪托
-│   └── units/build_site.gd          # 工地：施工计时 / 建成转实体 / 被打掉拆地形
+│   ├── units/build_site.gd          # 工地：施工计时 / 建成转实体 / 被打掉拆地形
+│   ├── units/tank.gd                # M10：装甲车本体（装甲减伤 / A* 机动 / 占位车体）
+│   └── ai/tank_ai.gd                # M10：载具 Utility AI（交战 / 推进 / 待命）
 ├── tests/
 │   ├── smoke_test.tscn              # M0–M7：154 项断言
 │   ├── mobility_test.tscn           # M8：40 项断言（独立场景）
-│   └── medic_test.tscn              # M9：26 项断言（独立场景）
+│   ├── medic_test.tscn              # M9：26 项断言（独立场景）
+│   └── tank_test.tscn               # M10：40 项断言（独立场景）
 ├── assets/                          # 美术资源占位目录
 └── PLAN.md                          # 技术栈决策 + M0~M8 里程碑
 ```
@@ -224,9 +227,9 @@ tacord/
 | Job | 内容 |
 | --- | --- |
 | `GDScript 静态检查` | pip 装 `gdtoolkit==4.5.0`，对 `scripts/` 与 `tests/` 跑 `gdparse` + `gdlint` |
-| `Headless 冒烟测试` | 下载 Godot 4.7.2 Linux 版 → `--headless --import` → **依次**跑 `tests/smoke_test.tscn`、`tests/mobility_test.tscn`、`tests/medic_test.tscn`，三个都必须退出码 0 |
+| `Headless 冒烟测试` | 下载 Godot 4.7.2 Linux 版 → `--headless --import` → **依次**跑 `tests/smoke_test.tscn`、`tests/mobility_test.tscn`、`tests/medic_test.tscn`、`tests/tank_test.tscn`，四个都必须退出码 0 |
 
-冒烟测试是**引擎原生**的（不依赖 GUT/gdUnit 等第三方插件）。M8 起按里程碑拆成三个场景——
+冒烟测试是**引擎原生**的（不依赖 GUT/gdUnit 等第三方插件）。M8 起按里程碑拆成四个场景——
 `smoke_test.gd` 已经 911 行、顶着 gdlint 的 1000 行上限，再往里塞后面的里程碑就没有落脚的地方。
 每个场景各自把断言总数写死在 `EXPECTED_CHECKS` 里，`_finish()` 比对**实际跑到的**条数，
 某个测试段中途崩掉时不会谎报全绿。
@@ -238,9 +241,13 @@ tacord/
 - `medic_test.tscn`（**26 项**）：医疗帐篷的落点与建成、建成后挡视线且 A\* 绕行、
   治疗的四个过滤条件各自单列一条、治到 `max_hp` 封顶、施工中不治、
   不碰胜负与编制、呼救气泡的相位在倒地时增长而起立后停跳
+- `tank_test.tscn`（**40 项**）：载具的组归属与边界（不进 `soldiers`、不吃压制）、
+  装甲减伤三档与溢出击毁、步枪与主炮的双向交火及中弹压制、同图 A\* 机动
+  （含"目标 7×7 全封死才规划失败"）、`hold→advance→engage` 三选一依次触发、
+  载具不被 `game.soldiers()` / 最近友军 / 医疗帐篷认领
 
 CI 里 annotation 上限约 10 条且只保留最先发出的，所以**成功的场景一行不发**，
-失败的才把诊断摊开；四类日志另传成 `test-logs` artifact 兜底。
+失败的才把诊断摊开；五类日志另传成 `test-logs` artifact 兜底。
 
 本地跑同样的检查：
 
@@ -248,6 +255,7 @@ CI 里 annotation 上限约 10 条且只保留最先发出的，所以**成功�
 godot --headless --path . tests/smoke_test.tscn    # 退出码 0 = 全通过
 godot --headless --path . tests/mobility_test.tscn # M8，同样退出码判定
 godot --headless --path . tests/medic_test.tscn    # M9，同样退出码判定
+godot --headless --path . tests/tank_test.tscn     # M10，同样退出码判定
 ```
 
 ### `.github/workflows/web.yml`
@@ -328,11 +336,13 @@ DNS 传播最长 24 小时，之后 `Enforce HTTPS` 才可勾选（站点强制 
 
 ## 七、当前验证状态
 
-**已在真实引擎里跑通**：GitHub Actions 上用 Godot 4.7.2 headless 依次执行三个测试场景，
-**合计 220/220 项断言通过**——`smoke_test.tscn` 154 项（掩体几何评估、交火掉血、压制数值、
+**已在真实引擎里跑通**：GitHub Actions 上用 Godot 4.7.2 headless 依次执行四个测试场景，
+**合计 260/260 项断言通过**——`smoke_test.tscn` 154 项（掩体几何评估、交火掉血、压制数值、
 倒地与救援、感知与记忆、弹药与后勤、建造与 FOB、俘虏与审讯）+ `mobility_test.tscn` 40 项
 （翻越、三种姿态、肉搏、三个新打分、端到端趴下与起身）+ `medic_test.tscn` 26 项
-（医疗帐篷的治疗四条件、视线与绕行、不碰胜负与编制、呼救气泡的相位）。
+（医疗帐篷的治疗四条件、视线与绕行、不碰胜负与编制、呼救气泡的相位）
++ `tank_test.tscn` 40 项（装甲减伤、双向交火与压制、同图 A\* 机动、
+Utility 三选一、载具不被步兵逻辑认领）。
 每个总数本身也是一条断言——
 `EXPECTED_CHECKS` 写死在测试里，某个测试段中途崩掉时退出码仍是 0，沙箱又读不到 CI 日志，
 所以必须让引擎自己判定数没数够。这套测试工作累计抓到 **13 个真 bug**：
@@ -345,6 +355,8 @@ CI 的 annotation 配额被通过的场景先刷满（真正失败的那段整�
 M9 又添一条：`Soldier.hp` 是整数而帐篷按 6 HP/s 治疗，折到每帧 0.1 被 `int()` 吞掉，
 **一滴血都加不上**——`is_medical_point()` 照样返回 true、零报错，
 只有"治疗前后血量相等"这一条断言看得出来（改法是在工地上攒 `_heal_bank` 攒够 1 点再发）。
+M10 没有新增产品 bug，但暴露了四条**测试写法**的坑（开枪前没等物理帧、
+取血量基线的时机、开火方与目标同队、`find_path` 会吸附目标格），见 PLAN.md §6 的 e–h。
 完整清单见 PLAN.md §6。
 
 压制（M2）的数值不是拍脑袋写的，是被断言钉住的：满压制时移动速度 `80 → 32`，
@@ -405,5 +417,6 @@ HTTP 层已通但需要人眼确认；
 ② macOS 签名/公证（需真机）。
 
 技术选型理由、MVP 范围与全部里程碑（M1 交火 → M2 压制 → M3 倒地救援 → M4 感知记忆 →
-M5 弹药后勤 → M6 建造与 FOB → M7 俘虏审讯 → M8 机动与近战 → M9 医疗帐篷与呼救气泡）
+M5 弹药后勤 → M6 建造与 FOB → M7 俘虏审讯 → M8 机动与近战 → M9 医疗帐篷与呼救气泡
+→ M10 装甲车）
 见 **[PLAN.md](PLAN.md)**。

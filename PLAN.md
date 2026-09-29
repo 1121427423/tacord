@@ -53,11 +53,13 @@
 - ✅ **医疗帐篷等固定救治设施、呼救语音气泡（M9 已完成）**
 - 弹药与后勤（打光弹药、从尸体摸弹匣、补给线）
 - 建造与 FOB（士兵亲手施工、FOB 归属即胜负）
-- 俘虏与审讯、翻越/滑铲/扑倒/肉搏、坦克与无人机、对话气泡本地化
+- 俘虏与审讯、翻越/滑铲/扑倒/肉搏 ✅（M7/M8）
+- ✅ **坦克（M10 已完成，装甲车本体 + 独立载具 AI；无人机仍未开工）**
+- 对话气泡本地化、无人机
 
 ---
 
-## 3. 当前进度（M0–M9 全部里程碑已完成）
+## 3. 当前进度（M0–M10 全部里程碑已完成）
 
 ```
 tacord/
@@ -67,10 +69,12 @@ tacord/
 ├── scenes/
 │   ├── main.tscn                    # Main(Node2D) + Camera2D + BattleMap 实例 + HUD
 │   ├── battle/battle_map.tscn       # Node2D + battle_map.gd
-│   └── units/soldier.tscn           # CharacterBody2D + ColorRect + CollisionShape2D + SoldierAI
+│   ├── units/soldier.tscn           # CharacterBody2D + ColorRect + CollisionShape2D + SoldierAI
+│   └── units/tank.tscn              # M10：CharacterBody2D + 矩形车体 + Weapon(主炮) + TankAI
 ├── tests/smoke_test.tscn            # M0–M7：154 项断言（退出码判定）
 ├── tests/mobility_test.tscn         # M8：40 项断言，独立场景（见 §4 M8）
 ├── tests/medic_test.tscn            # M9：26 项断言，独立场景（见 §4 M9）
+├── tests/tank_test.tscn             # M10：40 项断言，独立场景（见 §4 M10）
 ├── .github/workflows/               # ci.yml（lint + 冒烟测试）、web.yml（导出 + Pages）
 ├── export_presets.cfg               # Web 导出预设（单线程），CI 复现用
 ├── scripts/
@@ -83,9 +87,11 @@ tacord/
 │   ├── ai/behavior_tree.gd          # 极简 BT：Action / Condition / Sequence / Selector
 │   ├── ai/soldier_ai.gd             # 8 个考虑因素 + 每个行为一棵树（987 行，顶着 1000 上限）
 │   ├── ai/tactics.gd                # M8：近战/伏地/滑铲 3 个考虑因素与对应的行为
+│   ├── ai/tank_ai.gd                # M10：载具 Utility AI（交战 / 推进 / 待命）
 │   ├── units/soldier.gd             # 移动 / HP / 命令 / 压制 / 倒地 / 俘虏 / 姿态与翻越
 │   ├── units/weapon.gd              # hitscan 武器：散布、冷却、命中判定、近失压制、弹药、枪托
-│   └── units/build_site.gd          # 工地：施工计时 / 建成转实体 / 被打掉拆地形
+│   ├── units/build_site.gd          # 工地：施工计时 / 建成转实体 / 被打掉拆地形
+│   └── units/tank.gd                # M10：装甲车本体（装甲减伤 / A* 机动 / 占位车体）
 ├── assets/.gitkeep
 └── PLAN.md
 ```
@@ -116,7 +122,7 @@ tacord/
 
 ---
 
-## 4. 里程碑顺序与验收标准（M0–M9 全部完成）
+## 4. 里程碑顺序与验收标准（M0–M10 全部完成）
 
 > 原则：**先让掩体有后果，再让掩体有代价，最后才加复杂度。**
 > M1 让子弹飞起来，M2 让「被打」产生行为后果，M3 让「打死」变成可挽回的状态，
@@ -366,6 +372,36 @@ HUD 两处可见：每个士兵 `弹=18/72`（换弹时标「换弹中」、空�
   `_draw` 类代码（气泡、M8 的姿态标记）headless 不渲染、**没有像素级断言**，
   靠眼睛验；能断言的状态在 HUD 文本里。
 
+### M10 · 装甲车（坦克）✅ 已完成
+
+- `scripts/units/tank.gd` + `scenes/units/tank.tscn`：`CharacterBody2D` 载具本体。
+  **自成 `vehicles` 组、不进 `soldiers` 组**——救援、押送、帐篷治疗、FOB 补弹
+  全都扫 `soldiers`，坦克不进去就一个都不会被误伤到；感知层另开一条路看它。
+  `is_downed` / `is_captive` 恒为 `false`，是为了让 `perception.gd` 的敌人过滤
+  **原样可用**（它对每个候选都会读这两项），一行感知逻辑都不用改。
+- **装甲 0.25**：12 发步枪弹只掉 3 血（`maxi(1, round(amount×0.25))`），
+  载具 `hp=200`，等效 800 血的步兵。**故意不提供 `apply_suppression`**——
+  `weapon.gd` 的近失压制先 `has_method` 再调用，子弹擦过车体自然攒不起来，
+  载具不吃压制不用写一行特判。
+- `scripts/ai/tank_ai.gd`：`UtilityAI` 三选一，**不引入行为树**——士兵要编排
+  「接近→瞄准→开火→换弹」的多步序列才需要 BT，坦克是「看见就停炮、看不见就开过去」，
+  Utility 选完直接执行就是全部逻辑。注册顺序即平局优先级：
+  `engage` 1.0 > `advance` 0.6×命令权重 > `hold` 0.25 保底。
+  所以防守（0.6×0.35=0.21）与待命（0.09）都输给保底分，坦克钉在原地；
+  进攻（0.6）才动。装配用 `call_deferred` 推一帧——子节点 `_ready` 先于父节点跑，
+  此刻坦克的 `weapon` 还没接线。
+- `perception.nearby_enemies` 与 `battle_map.issue_order` 各多扫一个 `vehicles` 组。
+  **对既有断言零扰动**：四个测试场景里都没有载具（除了本场景自己），
+  第二个组恒返回 `[]`。
+- `main.gd`：演示局双方各出一辆，落位 `(6,15)/(25,15)`、目标对插 `(29,12)/(3,12)`；
+  装甲单列 `tanks` 数组，**不占 `unit_cap` 编制、不影响判负**——与 FOB 判负
+  只认「曾经有过的 FOB」是同一条边界思路。
+- 验收（**独立场景 `tests/tank_test.gd`，40/40**）：组归属与边界、装甲减伤三档、
+  双向交火与中弹压制、同图 A* 机动（含「目标周围 7×7 全封死才规划失败」）、
+  `hold→advance→engage` 依次触发并自主开炮、载具不被步兵逻辑认领
+  （`game.soldiers()` / 最近友军 / 医疗帐篷三处）。
+- 头两轮 CI 暴露的**全是测试写法问题，产品代码零改动**（§6 末尾 e–h）。
+
 ### 贯穿始终的两件事
 - **平台冒烟**：M1 结束就跑一次 Web 导出 + 一次 macOS 导出，别把兼容问题留到最后。
 - **性能预算**：AI tick 已按 `think_interval = 0.25s` 打散相位；射线查询按"每 tick 每单位
@@ -389,7 +425,7 @@ HUD 两处可见：每个士兵 `弹=18/72`（换弹时标「换弹中」、空�
 
 已在沙箱内执行的检查：
 
-- `gdparse`（gdtoolkit 4.5.0，Godot 4 GDScript 语法）：**12 个脚本 + `tests/` 下三个测试脚本全部通过**
+- `gdparse`（gdtoolkit 4.5.0，Godot 4 GDScript 语法）：**12 个脚本 + `tests/` 下四个测试脚本全部通过**
 - `gdlint`：**no problems found**
 - 引擎 API 交叉核对：把脚本里 **112 处**引擎/项目符号逐个比对 Godot 源码自带的
   `doc/classes/*.xml`（方法名、参数、常量、继承链），**4.7.2-stable 与 4.2-stable 两个版本
@@ -403,15 +439,16 @@ HUD 两处可见：每个士兵 `弹=18/72`（换弹时标「换弹中」、空�
   均见于引擎类文档；`uid` 可省略由 `resource_format_text.cpp` 的 `next_tag.fields.has("uid")` 确认
 
 **已在真实引擎中验证**：GitHub Actions（`.github/workflows/ci.yml`）用 Godot 4.7.2 headless
-依次执行**三个**测试场景，**合计 220/220 断言通过**：
+依次执行**四个**测试场景，**合计 260/260 断言通过**：
 
 | 场景 | 断言 | 覆盖 |
 | --- | --- | --- |
 | `tests/smoke_test.tscn` | 154 | 坐标/地形/寻路/效用、掩体几何、交火掉血（M2 10 条）、压制、倒地与救援（M3 23 条）、感知与记忆（M4 11 条）、弹药与后勤（M5 23 条）、建造与 FOB（M6 26 条）、俘虏与审讯（M7 29 条） |
 | `tests/mobility_test.tscn` | 40 | M8：翻越 / 三种姿态 / 肉搏 / 三个新打分 / 端到端趴下与起身 |
 | `tests/medic_test.tscn` | 26 | M9：医疗帐篷的落点/建成/视线/治疗四条件/不碰胜负、呼救气泡相位 |
+| `tests/tank_test.tscn` | 40 | M10：组归属与边界、装甲三档、双向交火与压制、同图 A*、Utility 三选一、不被步兵逻辑认领 |
 
-三个场景都必须退出码 0，CI 才算绿；一个失败也不跳过后面的。
+四个场景都必须退出码 0，CI 才算绿；一个失败也不跳过后面的。
 这个数字本身也是一条断言：`EXPECTED_CHECKS` 写死在测试里，`_finish()` 打印的
 「`_checks/_checks`」是*实际跑到的*条数——某个测试段中途崩掉时后面的断言不会执行，
 退出码却仍是 0；沙箱又读不到 CI 日志，所以总数必须由引擎自己判定。M7 期间它立刻见效：
@@ -490,6 +527,26 @@ c. 拆出去的独立场景里没有 `smoke_test` 搭好的那列掩体，
    "旁边有掩体就不趴"会拿到 0.85 而不是 0 → 必须自己 `add_obstacle()`。
 d. 趴下那一刻压制本来就是 0（低于 0.35 的释放线），"一走就自动站起来"会不管走不走
    都在下一帧起立，是假阳性 → 必须先把压制抬到 0.9 才测得出"移动即起立"。
+
+M10 又添四条，**全部在测试侧**（装甲车本身一个产品 bug 都没暴露）：
+
+e. **开枪前没等物理帧**：刚 `set` 完 `global_position`，变换要到下一次
+   `physics_frame` 才 flush 到 Physics2D，此刻 `intersect_ray` 打的是旧位置。
+   现象极具迷惑性——弹药照扣（6→5 是对的）、近失压制照给（那条按**节点**
+   坐标算），唯独命中没有（要按**物理体**位置算）。`smoke_test` 那条
+   「命中掉血」之所以稳，是它本来就先等了 180 帧。
+f. **等待条件返回的那一帧，就是动作发生的那一帧**：`_wait_until(行为==engage)`
+   返回时同一帧的 `_act()` 已经把第一炮打完，此刻才取血量基线，记下的是
+   中弹后的值；而下一炮要等 `fire_interval=1.8s=108 帧` > 等待窗口 90。
+   **基线必须在触发条件之前取。**
+g. **开火方与目标必须不同队**：`try_fire` 不查阵营，物理射线照样命中、照样掉血，
+   所以「坦克打中士兵」是绿的；而 `_apply_near_miss_suppression` 第一件事就是
+   `team` 相同就 `continue`，压制恒为 0，偏偏断言正是 `> 0.2`。
+   写在提交信息里的教训，代码里没落实，照样栽第二次。
+h. **`find_path` 的目标格会被吸附**：它先走 `nearest_walkable(cell, max_radius=3)`，
+   封一个格子只会改终点、**不会**让规划失败。原来那条「目标被封死就返回 false」
+   的前提本身就是错的；真正该钉的是「终点绝不等于墙本身」，
+   以及「目标半径 3 的 7×7 全封死 → `nearest_walkable` 返回 `(-1,-1)` 才失败」。
 
 **Web 部署与 HTTP 层已验证**：`部署到 GitHub Pages: success`（该步骤已去掉
 `continue-on-error`，为真绿），deployment `6737748200` 状态 `success`。
