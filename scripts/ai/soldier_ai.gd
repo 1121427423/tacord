@@ -11,15 +11,7 @@ const ACTION_HOLD := &"hold"
 const ACTION_RESCUE := &"rescue"
 const ACTION_BUILD := &"build"
 const ACTION_SURRENDER := &"surrender"
-
-## 命令优先级：宏观命令通过它影响效用打分，士兵仍然自己决定怎么执行。
-const ORDER_PRIORITY := {
-	"attack": 1.0,
-	"flank": 0.8,
-	"defend": 0.35,
-	"hold": 0.15,
-	"retreat": 0.0,
-}
+const ACTION_ESCORT := &"escort"
 
 ## 压制值达到这个阈值时停火（缩在掩体后）。
 const PINNED_FIRE_THRESHOLD := 0.75
@@ -98,6 +90,18 @@ const ESCORT_SCAN_RADIUS := 1200.0
 ## 押送时与俘虏保持的距离（像素）。太近会互相顶，太远他跟不上。
 const ESCORT_LEASH := 46.0
 
+## 押送欲望的基础分。
+const ESCORT_SCORE_BASE := 0.8
+
+## 有俘虏没人押时，推进/包抄欲望乘 (1 - 这个值)。
+## 和 DOWNED_ALLY_ORDER_PENALTY / BUILD_BACKLOG_ORDER_PENALTY 同一个道理：
+## 不打折的话 attack 命令下 advance 恒为 1.0，没人会去押人。
+const ESCORT_BACKLOG_ORDER_PENALTY := 0.35
+
+## 把俘虏押到离 FOB 多近才开口审。刻意小于 game.gd 的 INTERROGATE_RADIUS(64)，
+## 留出余量，免得押到了却因为差几像素而问不出话。
+const DELIVER_RANGE := 48.0
+
 ## AI 思考间隔（秒）。单位数量上去后可调大以省 CPU（Web 导出尤其明显）。
 @export var think_interval: float = 0.25
 
@@ -121,6 +125,9 @@ var utility: UtilityAI = UtilityAI.new()
 # 小队黑板（同队共享敌情）。由 Game 提供；没有 Game 时退化成私有黑板。
 var board: Blackboard = null
 
+# 感知（scripts/ai/perception.gd）：所有"看看四周"的纯查询都在这里。
+var _perc: Perception = Perception.new()
+
 var _trees: Dictionary = {}  # StringName -> 行为树根节点
 var _action: StringName = ACTION_HOLD
 var _move_started: bool = false
@@ -135,6 +142,9 @@ var _drag_started: bool = false
 
 # 当前正在施工的工地。
 var _build_target = null
+
+# 当前正在押送的俘虏（M7）。
+var _escort_target = null
 
 # 私有黑板才由自己推进时钟（Game 提供的由 Game 统一推进）。
 var _owns_board: bool = false
@@ -160,6 +170,7 @@ func _ready() -> void:
 		weapon.connect("shot_fired", _on_own_shot_fired)
 	board = _resolve_board()
 	_rng.seed = hash(soldier.name)
+	_perc.setup(soldier, map, weapon, get_tree())
 	utility.stickiness = stickiness
 	_register_considerations()
 	_build_trees()
@@ -194,7 +205,7 @@ func _combat_step() -> void:
 	if weapon == null:
 		return
 	# 被压到抬不起头时就停火——压制衰减后会自己恢复，交火因此呈脉冲式。
-	if _suppression() >= PINNED_FIRE_THRESHOLD:
+	if _perc.suppression() >= PINNED_FIRE_THRESHOLD:
 		return
 	var target = _acquire_target()
 	if target == null:
@@ -250,26 +261,10 @@ func _acquire_target():
 	var reach: float = float(soldier.call("weapon_range"))
 	if reach <= 0.0:
 		return null
-	var best = _visible_enemy(reach)
+	var best = _perc.visible_enemy(reach)
 	# 看见就是看见：报给全队，这样别人看不见也能来搜。
 	if best != null and board != null:
 		board.report_sighting(best, best.global_position)
-	return best
-
-
-## 有通视的最近敌人（不限射程，用于决定往哪推进）；没有则 null。
-func _visible_enemy(radius: float):
-	if soldier == null or map == null:
-		return null
-	var best = null
-	var best_dist: float = radius
-	for enemy in _nearby_enemies(radius):
-		if not map.has_line_of_sight(soldier.global_position, enemy.global_position):
-			continue
-		var distance: float = soldier.global_position.distance_to(enemy.global_position)
-		if distance <= best_dist:
-			best_dist = distance
-			best = enemy
 	return best
 
 
@@ -304,6 +299,8 @@ func _reset_trees() -> void:
 	_move_started = false
 	_drag_started = false
 	_build_target = null
+	# 先放押送权再清引用：反过来会让押送权悬在死目标上，没人再接得走。
+	_forget_escort()
 	for tree in _trees.values():
 		BehaviorTree.reset_node(tree)
 
@@ -344,13 +341,17 @@ func _register_considerations() -> void:
 	utility.register_consideration(
 		ACTION_BUILD, _consider_build, 0.0, 1.0, 1.0, UtilityAI.CurveType.LINEAR
 	)
+	# 7) 有俘虏没人押就押回 FOB 审。同样是 LINEAR。
+	utility.register_consideration(
+		ACTION_ESCORT, _consider_escort, 0.0, 1.0, 1.0, UtilityAI.CurveType.LINEAR
+	)
 
 
 func _consider_seek_cover() -> float:
-	var danger: float = _danger_pressure()
-	var wounded: float = 1.0 - _health_ratio()
-	var pinned: float = _suppression()
-	var ammo: float = _ammo_pressure()
+	var danger: float = _perc.danger_pressure(SCAN_RADIUS)
+	var wounded: float = 1.0 - _perc.health_ratio()
+	var pinned: float = _perc.suppression()
+	var ammo: float = _perc.ammo_pressure()
 	return clampf(
 		danger * 0.6 + wounded * 0.4 + pinned * 0.65 + ammo * AMMO_COVER_WEIGHT, 0.0, 1.0
 	)
@@ -361,11 +362,11 @@ func _consider_seek_cover() -> float:
 func _consider_surrender() -> float:
 	if soldier == null or soldier.get("is_captive") == true:
 		return 0.0
-	if _suppression() < SURRENDER_SUPPRESSION:
+	if _perc.suppression() < SURRENDER_SUPPRESSION:
 		return 0.0
 	# 被包围：看得见的敌人不止一个（光有枪声不算，得真看见人）。
 	var visible: Array = []
-	for enemy in _nearby_enemies(SCAN_RADIUS):
+	for enemy in _perc.nearby_enemies(SCAN_RADIUS):
 		if map != null and map.has_method("has_line_of_sight") and map.has_line_of_sight(
 			soldier.global_position, enemy.global_position
 		):
@@ -373,7 +374,7 @@ func _consider_surrender() -> float:
 	if visible.size() < SURRENDER_ENEMIES_NEEDED:
 		return 0.0
 	# 无援：附近没有还站着能打的战友。有人能来救，就没人会举白旗。
-	if _nearest_standing_ally(SURRENDER_SUPPORT_RADIUS) != null:
+	if _perc.nearest_standing_ally(SURRENDER_SUPPORT_RADIUS) != null:
 		return 0.0
 	return 1.0
 
@@ -381,14 +382,19 @@ func _consider_surrender() -> float:
 func _consider_advance() -> float:
 	# 被压制时推进欲望直接归零：没人会大摇大摆穿过火力杀伤区。
 	# 彻底打光时也要打折：端着空枪冲锋只是送死。
-	var dry: float = 1.0 - _dry_factor() * DRY_ADVANCE_PENALTY
-	var raw: float = _order_priority() * _health_ratio() * _mobility_factor() * dry
+	var dry: float = 1.0 - _perc.dry_factor() * DRY_ADVANCE_PENALTY
+	var raw: float = _perc.order_priority() * _perc.health_ratio() * _mobility_factor() * dry
 	return clampf(raw, 0.0, 1.0)
 
 
 func _consider_flank() -> float:
 	return clampf(
-		_flank_opportunity() * _health_ratio() * 1.15 * _mobility_factor(0.8), 0.0, 1.0
+		_perc.flank_opportunity(SCAN_RADIUS * 1.2)
+		* _perc.health_ratio()
+		* 1.15
+		* _mobility_factor(0.8),
+		0.0,
+		1.0
 	)
 
 
@@ -396,15 +402,16 @@ func _consider_flank() -> float:
 ## suppression_scale 让包抄比推进更怕压制（绕后途中被打侧翼最致命）。
 func _mobility_factor(suppression_scale: float = 1.0) -> float:
 	return (
-		(1.0 - _suppression() * suppression_scale)
+		(1.0 - _perc.suppression() * suppression_scale)
 		* (1.0 - _downed_ally_factor())
 		* (1.0 - _build_backlog_factor())
+		* (1.0 - _escort_backlog_factor())
 	)
 
 
 ## 有倒地的友军在附近时返回折扣量，否则 0。
 func _downed_ally_factor() -> float:
-	if _nearest_downed_ally(RESCUE_SCAN_RADIUS) == null:
+	if _perc.nearest_downed_ally(RESCUE_SCAN_RADIUS) == null:
 		return 0.0
 	return DOWNED_ALLY_ORDER_PENALTY
 
@@ -416,6 +423,19 @@ func _build_backlog_factor() -> float:
 	return BUILD_BACKLOG_ORDER_PENALTY
 
 
+## 押送俘虏（M7）。没地方审（本队没有建成的 FOB）就不算——那只是白跑一趟。
+func _consider_escort() -> float:
+	var captive = _nearest_escortable_captive()
+	if captive == null:
+		return 0.0
+	var distance: float = soldier.global_position.distance_to(captive.global_position)
+	var proximity: float = 1.0 - clampf(distance / ESCORT_SCAN_RADIUS, 0.0, 1.0)
+	# 和救援一样对被压制打折而不是归零：押送可以冒点险，但不该压过求生。
+	return clampf(
+		(ESCORT_SCORE_BASE + 0.2 * proximity) * (1.0 - _perc.suppression() * 0.5), 0.0, 1.0
+	)
+
+
 func _consider_build() -> float:
 	var site = _nearest_open_site()
 	if site == null:
@@ -425,7 +445,7 @@ func _consider_build() -> float:
 	var distance: float = soldier.global_position.distance_to(site.global_position)
 	var proximity: float = 1.0 - clampf(distance / BUILD_SCAN_RADIUS, 0.0, 1.0)
 	var raw: float = BUILD_SCORE_BASE + 0.35 * (1.0 - ratio) + 0.1 * proximity
-	return clampf(raw * (1.0 - _suppression()), 0.0, 1.0)
+	return clampf(raw * (1.0 - _perc.suppression()), 0.0, 1.0)
 
 
 ## 最近的、还没建成的己方工地；没有则 null。
@@ -461,13 +481,75 @@ func _try_resupply() -> void:
 		return
 
 
+## 有俘虏没人押时返回折扣量，否则 0。
+func _escort_backlog_factor() -> float:
+	if _nearest_escortable_captive() == null:
+		return 0.0
+	return ESCORT_BACKLOG_ORDER_PENALTY
+
+
+## 最近一个「该我押」的俘虏：属于本队、还没人接手（或接手的人就是我），
+## 且本队确实有一座建成的 FOB 能审。条件不满足一律返回 null。
+func _nearest_escortable_captive():
+	if soldier == null:
+		return null
+	var game := get_node_or_null("/root/Game")
+	if game == null or not game.has_method("captives"):
+		return null
+	if _nearest_own_fob() == null:
+		return null
+	var best = null
+	var best_dist: float = ESCORT_SCAN_RADIUS
+	for captive in game.call("captives", int(soldier.get("team"))):
+		var holder = _current_escort(captive)
+		if holder != null and holder != soldier:
+			continue
+		var d: float = soldier.global_position.distance_to(captive.global_position)
+		if d <= best_dist:
+			best_dist = d
+			best = captive
+	return best
+
+
+## 这个俘虏现在归谁押（null = 没人）。
+func _current_escort(captive):
+	var game := get_node_or_null("/root/Game")
+	if game == null or not game.has_method("escort_of"):
+		return null
+	var holder = game.call("escort_of", captive)
+	if holder == null or not is_instance_valid(holder):
+		return null
+	if holder.get("is_dead") == true or holder.get("is_downed") == true:
+		return null
+	return holder
+
+
+## 本队最近的、已建成的 FOB；没有则 null。
+func _nearest_own_fob():
+	if soldier == null:
+		return null
+	var best = null
+	var best_dist: float = INF
+	var my_team: int = int(soldier.get("team"))
+	for site in get_tree().get_nodes_in_group(&"build_sites"):
+		if int(site.get("team")) != my_team:
+			continue
+		if not site.has_method("is_supply_point") or not bool(site.call("is_supply_point")):
+			continue
+		var d: float = soldier.global_position.distance_to(site.global_position)
+		if d < best_dist:
+			best_dist = d
+			best = site
+	return best
+
+
 func _consider_hold() -> float:
 	# 命令越明确，待命越没有吸引力。
-	return clampf(0.6 - 0.4 * _order_priority(), 0.0, 1.0)
+	return clampf(0.6 - 0.4 * _perc.order_priority(), 0.0, 1.0)
 
 
 func _consider_rescue() -> float:
-	var casualty = _nearest_downed_ally(RESCUE_SCAN_RADIUS)
+	var casualty = _perc.nearest_downed_ally(RESCUE_SCAN_RADIUS)
 	if casualty == null:
 		return 0.0
 	# 失血越多越急、人越近越该我去。被压制时打对折而不是归零：
@@ -478,42 +560,7 @@ func _consider_rescue() -> float:
 	var score: float = 0.45 + 0.4 * urgency + 0.15 * proximity
 	if is_medic:
 		score *= MEDIC_SCORE_BONUS
-	return clampf(score * (1.0 - _suppression() * 0.5), 0.0, 1.0)
-
-
-# ---------------------------------------------------------------- 感知
-
-
-func _suppression() -> float:
-	if soldier == null:
-		return 0.0
-	return clampf(float(soldier.get("suppression")), 0.0, 1.0)
-
-
-func _health_ratio() -> float:
-	if soldier == null:
-		return 0.0
-	var max_hp: float = maxf(1.0, float(soldier.get("max_hp")))
-	return clampf(float(soldier.get("hp")) / max_hp, 0.0, 1.0)
-
-
-## 弹药压力 [0,1]：正在换弹或弹匣已空最急，其余按弹匣余量线性。
-func _ammo_pressure() -> float:
-	if weapon == null:
-		return 0.0
-	if weapon.get("is_reloading") == true:
-		return 1.0
-	var mag: int = int(weapon.get("magazine_size"))
-	if mag <= 0:
-		return 0.0
-	return 1.0 - clampf(float(int(weapon.get("ammo_in_mag"))) / float(mag), 0.0, 1.0)
-
-
-## 彻底打光（弹匣与备弹都空）时返回 1，否则 0。
-func _dry_factor() -> float:
-	if weapon == null or not weapon.has_method("is_dry"):
-		return 0.0
-	return 1.0 if weapon.call("is_dry") else 0.0
+	return clampf(score * (1.0 - _perc.suppression() * 0.5), 0.0, 1.0)
 
 
 ## 路过尸体就摸弹匣（M5 唯一的补弹途径）。每个思考周期查一次就够了。
@@ -528,108 +575,6 @@ func _try_loot_ammo() -> void:
 		var corpse_weapon = unit.get_node_or_null("Weapon")
 		if corpse_weapon != null:
 			weapon.call("take_ammo_from", corpse_weapon)
-
-
-func _order_priority() -> float:
-	if soldier == null:
-		return 0.0
-	return float(ORDER_PRIORITY.get(String(soldier.get("current_order")), 0.15))
-
-
-## 半径内的敌方单位（排除自己、友军与已阵亡者）。
-func _nearby_enemies(radius: float) -> Array:
-	var out: Array = []
-	if soldier == null:
-		return out
-	var my_team: int = int(soldier.get("team"))
-	for unit in get_tree().get_nodes_in_group(&"soldiers"):
-		if unit == soldier or int(unit.get("team")) == my_team:
-			continue
-		# 倒地的人不算有效目标：不鞭尸，也不为已经趴下的敌人计算危险压力。
-		# 俘虏同理——他已经退出战斗，围着他不会让人更想投降。
-		if unit.get("is_dead") == true or unit.get("is_downed") == true:
-			continue
-		if unit.get("is_captive") == true:
-			continue
-		if soldier.global_position.distance_to(unit.global_position) <= radius:
-			out.append(unit)
-	return out
-
-
-## 最近的、还站着能打的友军（排除倒地与已被俘的）；没有则返回 null。
-func _nearest_standing_ally(radius: float):
-	if soldier == null:
-		return null
-	var best = null
-	var best_dist: float = radius
-	var my_team: int = int(soldier.get("team"))
-	for unit in get_tree().get_nodes_in_group(&"soldiers"):
-		if unit == soldier or int(unit.get("team")) != my_team:
-			continue
-		if unit.get("is_dead") == true or unit.get("is_downed") == true:
-			continue
-		if unit.get("is_captive") == true:
-			continue
-		var d: float = soldier.global_position.distance_to(unit.global_position)
-		if d <= best_dist:
-			best_dist = d
-			best = unit
-	return best
-
-
-## 最近的倒地友军；没有则返回 null。
-func _nearest_downed_ally(radius: float):
-	if soldier == null:
-		return null
-	var best = null
-	var best_dist: float = radius
-	var my_team: int = int(soldier.get("team"))
-	for unit in get_tree().get_nodes_in_group(&"soldiers"):
-		if unit == soldier or int(unit.get("team")) != my_team:
-			continue
-		if unit.get("is_downed") != true or unit.get("is_dead") == true:
-			continue
-		var d: float = soldier.global_position.distance_to(unit.global_position)
-		if d <= best_dist:
-			best_dist = d
-			best = unit
-	return best
-
-
-
-
-
-## 危险压力 [0,1]：距离越近、越被通视，压力越大。
-func _danger_pressure() -> float:
-	var enemies := _nearby_enemies(SCAN_RADIUS)
-	if enemies.is_empty():
-		return 0.0
-	var pressure: float = 0.0
-	for enemy in enemies:
-		var distance: float = soldier.global_position.distance_to(enemy.global_position)
-		var proximity: float = 1.0 - clampf(distance / SCAN_RADIUS, 0.0, 1.0)
-		var visible: float = 1.0
-		if map != null and map.has_method("has_line_of_sight"):
-			visible = 1.0 if map.has_line_of_sight(soldier.global_position, enemy.global_position) else 0.0
-		pressure += proximity * (0.35 + 0.65 * visible)
-	return clampf(pressure / 2.0, 0.0, 1.0)
-
-
-## 侧翼机会 [0,1]：我们处在敌人朝向的侧后方时接近 1（它的侧面/背面对我们敞开）。
-func _flank_opportunity() -> float:
-	var best: float = 0.0
-	for enemy in _nearby_enemies(SCAN_RADIUS * 1.2):
-		best = maxf(best, _flank_alignment(enemy))
-	return best
-
-
-func _flank_alignment(enemy) -> float:
-	var facing: Vector2 = enemy.get("facing")
-	var to_us: Vector2 = soldier.global_position - enemy.global_position
-	if facing.length_squared() < 0.0001 or to_us.length_squared() < 1.0:
-		return 0.0
-	# dot = 1 表示我们正对它（无机会）；dot = -1 表示我们在它正后方（机会最大）。
-	return clampf(-facing.normalized().dot(to_us.normalized()), 0.0, 1.0)
 
 
 # ---------------------------------------------------------------- 行为树
@@ -664,6 +609,15 @@ func _build_trees() -> void:
 	)
 	# 施工：走到工地旁 -> 干活。
 	# 和救援一样，掩护火力复用每帧的 _combat_step —— 所以是边打边建，战斗不中断。
+	# 押送：认领俘虏 -> 走到他身边 -> 押回 FOB 审讯。
+	_trees[ACTION_ESCORT] = BehaviorTree.sequence(
+		ACTION_ESCORT,
+		[
+			BehaviorTree.action(&"pick_captive", _pick_escort_target),
+			BehaviorTree.action(&"walk", _walk),
+			BehaviorTree.action(&"march_and_deliver", _march_and_deliver),
+		]
+	)
 	_trees[ACTION_BUILD] = BehaviorTree.sequence(
 		ACTION_BUILD,
 		[
@@ -678,7 +632,7 @@ func _pick_cover_target(_ctx: Dictionary, _delta: float) -> int:
 	if map == null:
 		return BehaviorTree.Status.FAILURE
 	var threats: Array = []
-	for enemy in _nearby_enemies(900.0):
+	for enemy in _perc.nearby_enemies(900.0):
 		threats.append(enemy.global_position)
 	var cell: Vector2i = map.find_cover_cell(
 		map.cell_at(soldier.global_position), threats, COVER_SCAN_CELLS
@@ -694,7 +648,7 @@ func _pick_cover_target(_ctx: Dictionary, _delta: float) -> int:
 func _pick_advance_target(_ctx: Dictionary, _delta: float) -> int:
 	if map == null:
 		return BehaviorTree.Status.FAILURE
-	var enemy = _visible_enemy(AWARENESS_RADIUS)
+	var enemy = _perc.visible_enemy(AWARENESS_RADIUS)
 	if enemy != null:
 		# 贴近敌人但保留 2 格开火距离，并在落点周围挑掩体质量最好的格子。
 		return _advance_on_position(enemy.global_position, 2)
@@ -738,8 +692,8 @@ func _pick_flank_target(_ctx: Dictionary, _delta: float) -> int:
 		return BehaviorTree.Status.FAILURE
 	var victim = null
 	var best_alignment: float = 0.25
-	for enemy in _nearby_enemies(SCAN_RADIUS * 1.2):
-		var alignment: float = _flank_alignment(enemy)
+	for enemy in _perc.nearby_enemies(SCAN_RADIUS * 1.2):
+		var alignment: float = _perc.flank_alignment(enemy)
 		if alignment > best_alignment:
 			best_alignment = alignment
 			victim = enemy
@@ -773,18 +727,20 @@ func _do_hold(_ctx: Dictionary, _delta: float) -> int:
 func _do_surrender(_ctx: Dictionary, _delta: float) -> int:
 	if soldier == null or soldier.get("is_captive") == true:
 		return BehaviorTree.Status.SUCCESS
-	var enemy = _visible_enemy(SCAN_RADIUS)
+	var enemy = _perc.visible_enemy(SCAN_RADIUS)
 	if enemy == null:
 		return BehaviorTree.Status.FAILURE
 	if not bool(soldier.call("surrender", int(enemy.get("team")))):
 		return BehaviorTree.Status.FAILURE
+	# 自己都举手了，手上押的人得放掉，否则押送权挂在俘虏身上没人接。
+	_forget_escort()
 	return BehaviorTree.Status.SUCCESS
 
 
 func _pick_rescue_target(_ctx: Dictionary, _delta: float) -> int:
 	if map == null:
 		return BehaviorTree.Status.FAILURE
-	var casualty = _nearest_downed_ally(RESCUE_SCAN_RADIUS)
+	var casualty = _perc.nearest_downed_ally(RESCUE_SCAN_RADIUS)
 	if casualty == null:
 		_rescue_target = null
 		return BehaviorTree.Status.FAILURE
@@ -828,7 +784,7 @@ func _drag_casualty_to_cover(casualty) -> void:
 	if map == null or not map.has_method("find_cover_cell"):
 		return
 	var threats: Array = []
-	for enemy in _nearby_enemies(900.0):
+	for enemy in _perc.nearby_enemies(900.0):
 		threats.append(enemy.global_position)
 	var cell: Vector2i = map.find_cover_cell(
 		map.cell_at(casualty.global_position), threats, DRAG_COVER_CELLS
@@ -876,6 +832,83 @@ func _work_on_site(_ctx: Dictionary, _delta: float) -> int:
 	return BehaviorTree.Status.RUNNING
 
 
+func _pick_escort_target(_ctx: Dictionary, _delta: float) -> int:
+	if map == null:
+		return BehaviorTree.Status.FAILURE
+	var captive = _nearest_escortable_captive()
+	if captive == null:
+		_forget_escort()
+		return BehaviorTree.Status.FAILURE
+	var game := get_node_or_null("/root/Game")
+	if game == null or not game.has_method("claim_escort"):
+		return BehaviorTree.Status.FAILURE
+	# 押送权要抢：抢不到说明别人已经在押了，换一个目标。
+	if not bool(game.call("claim_escort", captive, soldier)):
+		return BehaviorTree.Status.FAILURE
+	_escort_target = captive
+	if not _start_move(map.cell_at(captive.global_position)):
+		_forget_escort()
+		return BehaviorTree.Status.FAILURE
+	return BehaviorTree.Status.SUCCESS
+
+
+func _march_and_deliver(_ctx: Dictionary, _delta: float) -> int:
+	var captive = _escort_target
+	if captive == null or not is_instance_valid(captive):
+		_forget_escort()
+		return BehaviorTree.Status.FAILURE
+	if captive.get("is_captive") != true or captive.get("is_dead") == true:
+		# 已经跑掉或被打死了：这一趟白跑，但不是失败。
+		_forget_escort()
+		return BehaviorTree.Status.SUCCESS
+	if soldier.global_position.distance_to(captive.global_position) > ESCORT_LEASH:
+		# 距离被拉开了：让序列回到开头重新接近。
+		return BehaviorTree.Status.FAILURE
+	var fob = _nearest_own_fob()
+	if fob == null:
+		_forget_escort()
+		return BehaviorTree.Status.FAILURE
+	_march_captive_to(fob)
+	if captive.global_position.distance_to(fob.global_position) > DELIVER_RANGE:
+		return BehaviorTree.Status.RUNNING
+	var game := get_node_or_null("/root/Game")
+	if game != null and game.has_method("interrogate"):
+		game.call("interrogate", captive)
+	# 情报到手就放人（MVP 简化：不做长期关押，也不做俘获后编入本队）。
+	captive.call("release")
+	_forget_escort()
+	return BehaviorTree.Status.SUCCESS
+
+
+## 押着俘虏往 FOB 走：自己去 FOB 旁一格，俘虏跟在身后（背向 FOB 那一侧）。
+func _march_captive_to(fob) -> void:
+	if map == null:
+		return
+	var spot: Vector2i = _work_spot_around(map.cell_at(fob.global_position))
+	if spot.x >= 0:
+		soldier.call("move_to_cell", spot)
+	var escort_cell: Vector2i = map.cell_at(soldier.global_position)
+	var follow_cell: Vector2i = escort_cell
+	var away: Vector2 = soldier.global_position - fob.global_position
+	if away.length_squared() > 1.0:
+		var behind := escort_cell + Vector2i(int(signf(away.x)), int(signf(away.y)))
+		if map.is_walkable(behind):
+			follow_cell = behind
+	_escort_target.call("move_to_cell", follow_cell)
+
+
+## 放下押送权。必须在换行为时也调用——否则押送权一直占着，
+## 别的兵 claim 不到，这个俘虏就永远没人管。
+func _forget_escort() -> void:
+	var captive = _escort_target
+	_escort_target = null
+	if captive == null or not is_instance_valid(captive):
+		return
+	var game := get_node_or_null("/root/Game")
+	if game != null and game.has_method("drop_escort"):
+		game.call("drop_escort", captive, soldier)
+
+
 ## 工地周边一格内挑一个可走的落脚点（排除工地本身）。
 func _work_spot_around(center: Vector2i) -> Vector2i:
 	var best := Vector2i(-1, -1)
@@ -903,7 +936,7 @@ func _start_move(cell: Vector2i) -> bool:
 ## 在 center 周边 radius 格内，挑一个可走且掩体得分最高的格子。
 func _best_cell_around(center: Vector2i, radius: int) -> Vector2i:
 	var threats: Array = []
-	for enemy in _nearby_enemies(900.0):
+	for enemy in _perc.nearby_enemies(900.0):
 		threats.append(enemy.global_position)
 	var best := Vector2i(-1, -1)
 	var best_score: float = -INF

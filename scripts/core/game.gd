@@ -181,6 +181,18 @@ func claim_escort(captive, escort) -> bool:
 	return true
 
 
+## 这个俘虏现在归谁押（null = 没人）。押送者已经倒地/阵亡也算没人。
+func escort_of(captive):
+	if captive == null:
+		return null
+	var escort = _escorts.get(captive)
+	if escort == null or not is_instance_valid(escort):
+		return null
+	if escort.get("is_dead") == true or escort.get("is_downed") == true:
+		return null
+	return escort
+
+
 ## 放弃押送权（行为被打断、目标换了）。押送者本人没了由 _check_captives 兜。
 func drop_escort(captive, escort) -> void:
 	if captive == null:
