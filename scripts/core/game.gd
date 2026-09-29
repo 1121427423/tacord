@@ -24,11 +24,20 @@ var battle_map: Node2D = null
 ## 玩家阵营当前的宏观命令。
 var current_order: StringName = &"hold"
 
+# 每队一块黑板（team -> Blackboard）。同队士兵共享敌情，换局时清空。
+var _boards: Dictionary = {}
+
 
 func _ready() -> void:
 	# 主场景由 project.godot 的 run/main_scene 自动加载；
 	# 这里延迟到第一帧末尾做引导校验，此时 BattleMap 已经 _ready 并完成自注册。
 	call_deferred("_boot")
+
+
+func _process(delta: float) -> void:
+	# 黑板的时钟统一由 Game 推进：一队一块，不会因为有 6 个士兵就走快 6 倍。
+	for board in _boards.values():
+		board.advance(delta)
 
 
 func _boot() -> void:
@@ -52,9 +61,23 @@ func map() -> Node2D:
 	return battle_map
 
 
+## 取某队的小队黑板（没有就新建）。士兵 AI 在 _ready 里从这里拿到自己的黑板。
+func blackboard(team: int) -> Blackboard:
+	if not _boards.has(team):
+		_boards[team] = Blackboard.new()
+	return _boards[team]
+
+
+## 清空所有敌情记忆（重开一局时调用）。
+func clear_boards() -> void:
+	_boards.clear()
+
+
 ## 加载 / 重开一局战斗场景。
 func load_battle(path: String = BATTLE_SCENE_PATH) -> void:
 	battle_map = null
+	# 上一局的敌情记忆不能带进新局。
+	clear_boards()
 	var error := get_tree().change_scene_to_file(path)
 	if error != OK:
 		push_error("Game: 无法加载战斗场景 %s (error=%d)" % [path, error])
