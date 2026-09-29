@@ -35,6 +35,7 @@ func _ready() -> void:
 	await _test_downed_and_rescue()
 	await _test_perception_and_memory()
 	await _test_ammo_and_logistics()
+	await _test_building_and_fob()
 	_finish()
 
 
@@ -615,6 +616,101 @@ func _test_ammo_and_logistics() -> void:
 		and int(beta.get_node("Weapon").get("shots_fired")) == beta_shots,
 		"打光之后再没有枪声（阵地沉寂）"
 	)
+
+
+func _test_building_and_fob() -> void:
+	_emit("[建造与 FOB]")
+	var game = get_node_or_null("/root/Game")
+	# 清场：上一节只留了 alpha/beta，这一节要一块干净的场地。
+	for unit in get_tree().get_nodes_in_group(&"soldiers"):
+		unit.call("die")
+
+	# 1) 落点：可走的格子能放，不可走的拒绝。
+	var site = game.call("place_build_site", &"fob", Vector2i(10, 4), 1)
+	_check(site != null, "可走的格子上能放下工地")
+	_check(site.get("is_built") == false, "刚放下时还没建成")
+	_check(is_zero_approx(float(site.call("build_ratio"))), "施工进度从 0 开始")
+	_map.add_obstacle(Vector2i(11, 4))
+	_check(
+		game.call("place_build_site", &"fob", Vector2i(11, 4), 1) == null, "不可走的格子拒绝落点"
+	)
+
+	# 2) 施工中只是一堆建材，打不出效果。
+	site.call("take_damage", 9999)
+	_check(int(site.get("hp")) == int(site.get("max_hp")), "施工中的工地打不出效果")
+
+	# 3) 工时累积与建成：6 人·秒。
+	site.call("apply_labor", 3.0, 1.0)
+	_check(is_equal_approx(float(site.call("build_ratio")), 0.5), "3 人·秒后进度过半")
+	var just_built: bool = site.call("apply_labor", 3.0, 1.0)
+	_check(just_built == true, "满 6 人·秒即建成")
+	_check(site.get("is_built") == true, "建成后 is_built 为真")
+	_check(int(site.get("collision_layer")) == 2, "建成后进入障碍层（能挡子弹）")
+	_check(_map.get_terrain(Vector2i(10, 4)) == "blocked", "建成后 A* 会绕开这一格")
+	_check(not _map.is_walkable(Vector2i(10, 4)), "建成的一格不可走")
+	_check(bool(site.call("is_supply_point")), "建成的 FOB 是弹药补给点")
+
+	# 4) FOB 提高部队上限。
+	_check(game.call("fob_count", 1) == 1, "蓝方有 1 座 FOB")
+	_check(int(game.call("unit_cap", 1)) == 9, "1 座 FOB 把部队上限从 6 提到 9")
+
+	# 5) 沙袋建成是 cover（真掩体），但不是补给点。
+	var bags = game.call("place_build_site", &"sandbag", Vector2i(14, 4), 1)
+	bags.call("apply_labor", 99.0, 1.0)
+	_check(_map.get_terrain(Vector2i(14, 4)) == "cover", "沙袋建成变成 cover 地形（真掩体）")
+	_check(not bool(bags.call("is_supply_point")), "沙袋不是补给点")
+
+	# 6) 补弹：站在建成 FOB 旁边、备弹为空的士兵会慢慢补上。
+	var resupplied = SOLDIER_SCENE.instantiate()
+	_map.add_child(resupplied)
+	resupplied.global_position = _map.world_pos(Vector2i(10, 4)) + Vector2(20.0, 0.0)
+	resupplied.get_node("Weapon").set("reserve_ammo", 0)
+	for _frame in range(40):
+		await get_tree().physics_frame
+	_check(
+		int(resupplied.get_node("Weapon").get("reserve_ammo")) > 0,
+		"站在 FOB 旁边能补到备弹（%d 发）"
+		% int(resupplied.get_node("Weapon").get("reserve_ammo"))
+	)
+
+	# 7) 打掉这座 FOB：曾经有过、现在全没了 -> 判负。
+	site.call("take_damage", 9999)
+	_check(int(site.get("hp")) == 0, "建筑血量归零")
+	for _frame in range(4):
+		await get_tree().process_frame
+	_check(game.call("is_team_defeated", 1) == true, "失去最后一座 FOB 即判负")
+	_check(_map.get_terrain(Vector2i(10, 4)) == "open", "拆掉后地形恢复可走")
+	_check(game.call("fob_count", 1) == 0, "FOB 计数归零")
+
+	# 8) 效用：有工地没修完时施工压过进攻，修完后推进欲望回到满值。
+	var builder = SOLDIER_SCENE.instantiate()
+	_map.add_child(builder)
+	builder.global_position = _map.world_pos(Vector2i(20, 18))
+	builder.call("set_order", "attack")
+	var builder_ai = builder.get_node("SoldierAI")
+	var site2 = game.call("place_build_site", &"sandbag", Vector2i(22, 18), 1)
+	var build_want: float = float(builder_ai.call("_consider_build"))
+	_check(build_want > 0.0, "有工地没修完时施工欲望大于 0")
+	_check(
+		build_want > float(builder_ai.call("_consider_advance")),
+		"施工欲望压过进攻命令下的推进（%.2f > %.2f）"
+		% [build_want, float(builder_ai.call("_consider_advance"))]
+	)
+	site2.call("apply_labor", 99.0, 1.0)
+	_check(
+		is_equal_approx(float(builder_ai.call("_consider_advance")), 1.0),
+		"工事修完、积压折扣消失后推进欲望回到满值"
+	)
+
+	# 9) 端到端：放下工地，士兵自己跑过去把它建起来（M6 的验收标准）。
+	var site3 = game.call("place_build_site", &"sandbag", Vector2i(23, 18), 1)
+	site3.set("build_cost", 2.0)
+	var frames: int = 0
+	while site3.get("is_built") == false and frames < 300:
+		await get_tree().physics_frame
+		frames += 1
+	_check(site3.get("is_built") == true, "无人干预下士兵自己跑过去把工地建起来")
+	_check(frames < 300, "施工在 5 秒模拟时间内完成（用了 %d 帧）" % frames)
 
 
 func _finish() -> void:
