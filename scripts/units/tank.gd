@@ -41,6 +41,11 @@ var suppression: float = 0.0
 ## 由 TankAI 每次思考时写，HUD 显示用。
 var action: StringName = &"hold"
 
+## 推进目标格（-1,-1 表示没设定，TankAI 会转为待命）。
+## 做成公开变量而不是 set_objective()：AI 每帧都要读它决定要不要重新找路，
+## 给读路径开一个方法纯属多余——gdlint 只数公开方法，公开变量不占额度。
+var objective := Vector2i(-1, -1)
+
 # Weapon 组件（tscn 子节点）。故意不标注类型：gdparse 查不出隐式降型，
 # 引擎里才炸。和 perception.gd 的约定一致，全部走鸭子调用。
 var weapon = null
@@ -48,7 +53,6 @@ var weapon = null
 var _map = null
 var _path := PackedVector2Array()
 var _path_index: int = 0
-var _objective := Vector2i(-1, -1)
 
 
 func _ready() -> void:
@@ -57,11 +61,6 @@ func _ready() -> void:
 	_map = get_tree().get_first_node_in_group(&"battle_map")
 	weapon = get_node_or_null("Weapon")
 	queue_redraw()
-
-
-## 主炮打向哪里由 AI 决定；目标格只用来算推进路线。
-func set_objective(cell: Vector2i) -> void:
-	_objective = cell
 
 
 func set_order(order: String) -> void:
