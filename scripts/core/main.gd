@@ -142,9 +142,10 @@ func _update_hud() -> void:
 		if unit.get("is_dead") == true:
 			text += "%s  已阵亡\n" % _unit_tag(unit)
 			continue
-		text += "%s  hp=%d  命令=%s  行为=%s\n" % [
+		text += "%s  hp=%d  压制=%.2f  命令=%s  行为=%s\n" % [
 			_unit_tag(unit),
 			int(unit.get("hp")),
+			float(unit.get("suppression")),
 			String(unit.get("current_order")),
 			String(unit.call("current_action")),
 		]
