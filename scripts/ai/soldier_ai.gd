@@ -9,6 +9,7 @@ const ACTION_ADVANCE := &"advance"
 const ACTION_FLANK := &"flank"
 const ACTION_HOLD := &"hold"
 const ACTION_RESCUE := &"rescue"
+const ACTION_BUILD := &"build"
 
 ## 命令优先级：宏观命令通过它影响效用打分，士兵仍然自己决定怎么执行。
 const ORDER_PRIORITY := {
@@ -63,6 +64,24 @@ const AMMO_COVER_WEIGHT := 0.35
 ## 彻底打光时对推进欲望的削弱。
 const DRY_ADVANCE_PENALTY := 0.6
 
+## 愿意为施工跑多远（像素）。
+const BUILD_SCAN_RADIUS := 900.0
+
+## 离工地多近才算够得着（开始干活）。
+const WORK_RANGE := 40.0
+
+## 施工欲望的基础分。
+const BUILD_SCORE_BASE := 0.45
+
+## 有工事没修完时，推进/包抄欲望乘 (1 - 这个值)。
+## 和 M3 的 DOWNED_ALLY_ORDER_PENALTY 同一个道理：不打折的话
+## attack 命令下 advance 恒为 1.0，永远压过施工，没人会去建。
+const BUILD_BACKLOG_ORDER_PENALTY := 0.35
+
+## 站在建成的己方 FOB 旁边的补弹半径与速率（发/秒）。
+const RESUPPLY_RADIUS := 48.0
+const RESUPPLY_PER_SECOND := 8.0
+
 ## AI 思考间隔（秒）。单位数量上去后可调大以省 CPU（Web 导出尤其明显）。
 @export var think_interval: float = 0.25
 
@@ -97,6 +116,9 @@ var _rescue_target = null
 
 # 是否已经把这个伤员往掩体拖过了（每个目标只拖一次）。
 var _drag_started: bool = false
+
+# 当前正在施工的工地。
+var _build_target = null
 
 # 私有黑板才由自己推进时钟（Game 提供的由 Game 统一推进）。
 var _owns_board: bool = false
@@ -143,6 +165,7 @@ func _process(delta: float) -> void:
 	_think_accum = 0.0
 	# 摸弹是"路过顺手"的动作，跟着思考周期做，不必每帧扫全场。
 	_try_loot_ammo()
+	_try_resupply()
 	_think()
 
 
@@ -261,6 +284,7 @@ func _think() -> void:
 func _reset_trees() -> void:
 	_move_started = false
 	_drag_started = false
+	_build_target = null
 	for tree in _trees.values():
 		BehaviorTree.reset_node(tree)
 
@@ -288,6 +312,10 @@ func _register_considerations() -> void:
 	# 5) 有队友倒地时去救。用 LINEAR：分数已经在 _consider_rescue 里算好了。
 	utility.register_consideration(
 		ACTION_RESCUE, _consider_rescue, 0.0, 1.0, 1.0, UtilityAI.CurveType.LINEAR
+	)
+	# 6) 有工地没修完就去施工。同样是 LINEAR。
+	utility.register_consideration(
+		ACTION_BUILD, _consider_build, 0.0, 1.0, 1.0, UtilityAI.CurveType.LINEAR
 	)
 
 
@@ -318,7 +346,11 @@ func _consider_flank() -> float:
 ## 机动类行为的共同折扣：压制削一半上限，战友倒地再打对折。
 ## suppression_scale 让包抄比推进更怕压制（绕后途中被打侧翼最致命）。
 func _mobility_factor(suppression_scale: float = 1.0) -> float:
-	return (1.0 - _suppression() * suppression_scale) * (1.0 - _downed_ally_factor())
+	return (
+		(1.0 - _suppression() * suppression_scale)
+		* (1.0 - _downed_ally_factor())
+		* (1.0 - _build_backlog_factor())
+	)
 
 
 ## 有倒地的友军在附近时返回折扣量，否则 0。
@@ -326,6 +358,58 @@ func _downed_ally_factor() -> float:
 	if _nearest_downed_ally(RESCUE_SCAN_RADIUS) == null:
 		return 0.0
 	return DOWNED_ALLY_ORDER_PENALTY
+
+
+## 有没修完的工事时返回折扣量，否则 0。
+func _build_backlog_factor() -> float:
+	if _nearest_open_site() == null:
+		return 0.0
+	return BUILD_BACKLOG_ORDER_PENALTY
+
+
+func _consider_build() -> float:
+	var site = _nearest_open_site()
+	if site == null:
+		return 0.0
+	# 越接近完工越没必要再派人；被压制时先去躲（施工可以随时中断）。
+	var ratio: float = float(site.call("build_ratio"))
+	var distance: float = soldier.global_position.distance_to(site.global_position)
+	var proximity: float = 1.0 - clampf(distance / BUILD_SCAN_RADIUS, 0.0, 1.0)
+	var raw: float = BUILD_SCORE_BASE + 0.35 * (1.0 - ratio) + 0.1 * proximity
+	return clampf(raw * (1.0 - _suppression()), 0.0, 1.0)
+
+
+## 最近的、还没建成的己方工地；没有则 null。
+func _nearest_open_site():
+	if soldier == null:
+		return null
+	var best = null
+	var best_dist: float = BUILD_SCAN_RADIUS
+	var my_team: int = int(soldier.get("team"))
+	for site in get_tree().get_nodes_in_group(&"build_sites"):
+		if int(site.get("team")) != my_team or site.get("is_built") == true:
+			continue
+		var d: float = soldier.global_position.distance_to(site.global_position)
+		if d <= best_dist:
+			best_dist = d
+			best = site
+	return best
+
+
+## 站在建成的己方 FOB 旁边就能补备弹（M5 的"阵地沉寂"由此可逆）。
+func _try_resupply() -> void:
+	if weapon == null or soldier == null or not weapon.has_method("add_reserve"):
+		return
+	var my_team: int = int(soldier.get("team"))
+	for site in get_tree().get_nodes_in_group(&"build_sites"):
+		if int(site.get("team")) != my_team:
+			continue
+		if not site.has_method("is_supply_point") or not bool(site.call("is_supply_point")):
+			continue
+		if soldier.global_position.distance_to(site.global_position) > RESUPPLY_RADIUS:
+			continue
+		weapon.call("add_reserve", int(RESUPPLY_PER_SECOND * think_interval))
+		return
 
 
 func _consider_hold() -> float:
@@ -503,6 +587,16 @@ func _build_trees() -> void:
 			BehaviorTree.action(&"drag_and_bandage", _drag_and_bandage),
 		]
 	)
+	# 施工：走到工地旁 -> 干活。
+	# 和救援一样，掩护火力复用每帧的 _combat_step —— 所以是边打边建，战斗不中断。
+	_trees[ACTION_BUILD] = BehaviorTree.sequence(
+		ACTION_BUILD,
+		[
+			BehaviorTree.action(&"pick_site", _pick_build_target),
+			BehaviorTree.action(&"walk", _walk),
+			BehaviorTree.action(&"work", _work_on_site),
+		]
+	)
 
 
 func _pick_cover_target(_ctx: Dictionary, _delta: float) -> int:
@@ -659,6 +753,54 @@ func _drag_casualty_to_cover(casualty) -> void:
 ## 包扎速度倍率：医疗兵 x2。
 func _rescue_speed() -> float:
 	return RESCUE_SPEED_MEDIC if is_medic else RESCUE_SPEED_NORMAL
+
+
+func _pick_build_target(_ctx: Dictionary, _delta: float) -> int:
+	if map == null:
+		return BehaviorTree.Status.FAILURE
+	var site = _nearest_open_site()
+	if site == null:
+		_build_target = null
+		return BehaviorTree.Status.FAILURE
+	_build_target = site
+	# 站在工地**旁边**干活，不站上去：建成后那一格会变成实体障碍，
+	# 站在上面的人会被卡进碰撞体里。
+	var spot: Vector2i = _work_spot_around(map.cell_at(site.global_position))
+	if spot.x < 0 or not _start_move(spot):
+		return BehaviorTree.Status.FAILURE
+	return BehaviorTree.Status.SUCCESS
+
+
+func _work_on_site(_ctx: Dictionary, _delta: float) -> int:
+	var site = _build_target
+	if site == null or not is_instance_valid(site):
+		_build_target = null
+		return BehaviorTree.Status.FAILURE
+	if site.get("is_built") == true:
+		_build_target = null
+		return BehaviorTree.Status.SUCCESS
+	if soldier.global_position.distance_to(site.global_position) > WORK_RANGE:
+		return BehaviorTree.Status.FAILURE
+	# 和包扎同理：树每隔 think_interval 才 tick 一次，所以按 think_interval 记工时，
+	# build_cost 因此是真实的"人·秒"，不受思考频率影响。
+	if site.call("apply_labor", think_interval, 1.0):
+		_build_target = null
+		return BehaviorTree.Status.SUCCESS
+	return BehaviorTree.Status.RUNNING
+
+
+## 工地周边一格内挑一个可走的落脚点（排除工地本身）。
+func _work_spot_around(center: Vector2i) -> Vector2i:
+	var best := Vector2i(-1, -1)
+	var best_dist: float = INF
+	for cell in map.cells_in_radius(center, 1):
+		if cell == center or not map.is_walkable(cell):
+			continue
+		var d: float = float((cell - center).length())
+		if d < best_dist:
+			best_dist = d
+			best = cell
+	return best
 
 
 # ---------------------------------------------------------------- 移动辅助

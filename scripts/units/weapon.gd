@@ -125,6 +125,16 @@ func take_ammo_from(other) -> int:
 	return take
 
 
+## 直接补备弹（FOB 补给用），按 max_reserve_ammo 封顶。返回实际补进去的数量。
+func add_reserve(amount: int) -> int:
+	var take: int = mini(amount, maxi(max_reserve_ammo - reserve_ammo, 0))
+	if take <= 0:
+		return 0
+	reserve_ammo += take
+	ammo_changed.emit(ammo_in_mag, reserve_ammo)
+	return take
+
+
 ## 朝 target_pos 开一枪。返回是否命中了一个能承伤的单位。
 func try_fire(target_pos: Vector2) -> bool:
 	if not can_fire():
