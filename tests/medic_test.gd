@@ -103,6 +103,11 @@ func _test_medic_tent() -> void:
 		"施工中的帐篷不治人（它还不是治疗点）",
 	)
 
+	# 施工中的工地只是一堆建材（_ready 里 collision_layer = 0），不挡视线。
+	_check(
+		_map.has_line_of_sight(_map.world_pos(Vector2i(18, 12)), _map.world_pos(Vector2i(22, 12))),
+		"施工中的工地不挡视线——两点通视",
+	)
 	_check(
 		bool(site.call("apply_labor", 999.0)), "工时给足，一次调用即建成"
 	)
@@ -116,11 +121,7 @@ func _test_medic_tent() -> void:
 		not bool(site.call("is_supply_point")), "帐篷不是弹药补给点（那是 FOB 的事）"
 	)
 
-	# ---- 2) 视线与寻路：它和 FOB 一样是实体工事 ----
-	_check(
-		_map.has_line_of_sight(_map.world_pos(Vector2i(18, 12)), _map.world_pos(Vector2i(22, 12))),
-		"建成前两点通视",
-	)
+	# ---- 2) 视线与寻路：建成后它和 FOB 一样是实体工事 ----
 	_check(
 		not _map.has_line_of_sight(
 			_map.world_pos(Vector2i(18, 12)), _map.world_pos(Vector2i(22, 12))

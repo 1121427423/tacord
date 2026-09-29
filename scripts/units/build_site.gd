@@ -49,6 +49,10 @@ var battle_map = null
 
 var _shape: CollisionShape2D = null
 
+## 治疗零头的积压（hp 是整数，见 _physics_process）。攒够 1 点才发一次，
+## 否则 6 HP/s 折到每帧 0.1 会被 int() 吞掉——这是 medic_test 抓到的真 bug。
+var _heal_bank: float = 0.0
+
 
 func _ready() -> void:
 	hp = max_hp
@@ -131,6 +135,11 @@ func label() -> String:
 func _physics_process(delta: float) -> void:
 	if not is_built or kind != &"tent":
 		return
+	# hp 是 int，6 HP/s 折到每帧只有 0.1，直接 int(50.1) 还是 50——治疗一滴都加不上。
+	# 先把零头攒成整数额度再发，攒着的额度封顶 1，没人来时不会无限堆。
+	_heal_bank = minf(_heal_bank + TENT_HEAL_PER_SECOND * delta, 1.0)
+	if _heal_bank < 1.0:
+		return
 	var my_team: int = team
 	for unit in get_tree().get_nodes_in_group(&"soldiers"):
 		if int(unit.get("team")) != my_team:
@@ -146,7 +155,10 @@ func _physics_process(delta: float) -> void:
 		if hp_now >= hp_max:
 			continue
 		# 直接写 hp：治疗不是伤害，不走 take_damage，也不产生失血账。
-		unit.set("hp", int(minf(hp_max, hp_now + TENT_HEAL_PER_SECOND * delta)))
+		# 一帧一个名额，发掉就把额度清零；没找到可治的人就留着，下一帧继续找。
+		unit.set("hp", int(minf(hp_max, hp_now + 1.0)))
+		_heal_bank = 0.0
+		break
 
 
 func _draw() -> void:
