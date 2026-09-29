@@ -183,9 +183,14 @@ func _test_drone() -> void:
 	#    所有同队机体互相都看不见——正好用来测纯巡逻。
 	# ================================================================
 	var scout = _spawn_drone(Vector2i(4, 4), 1, true)
-	scout.get_node("DroneAI").set(
-		"waypoints", [_map.world_pos(Vector2i(12, 4)), _map.world_pos(Vector2i(12, 8))]
-	)
+	# 4.7.2 实测：set() 收到无类型数组字面量时，对 Array[Vector2] 脚本属性**静默失败**
+	# （stderr 一行不吐，赋值等于没发生）——必须先装进类型化局部变量再传，
+	# 与 main.gd _spawn_drone 的 route 同款。CI 首跑的两条失败（巡逻纹丝不动、
+	# 盯梢贴脸 59px）都与"waypoints 为空、原地悬停"的几何推演精确吻合，根因即此。
+	var route: Array[Vector2] = [
+		_map.world_pos(Vector2i(12, 4)), _map.world_pos(Vector2i(12, 8))
+	]
+	scout.get_node("DroneAI").set("waypoints", route)
 	# 先等过至少一个思考节拍（0.4s = 24 帧），否则断言的只是初始值。
 	await _wait(30)
 	_check(
