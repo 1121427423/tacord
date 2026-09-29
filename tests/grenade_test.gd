@@ -325,10 +325,23 @@ func _test_grenade() -> void:
 	var watcher8 = _spawn_soldier(Vector2i(16, 10), 1, 100, true)
 	var thrower8 = _spawn_soldier(Vector2i(11, 10), 1)
 	var g8 = _throw_grenade(thrower8.global_position, _map.world_pos(Vector2i(14, 10)), thrower8)
-	_check(
-		await _wait_until(_posture_is(watcher8, Soldier.POSTURE_PRONE), 150),
-		"AI 兵在 96px 内出现快炸的雷时扑倒（posture = prone）",
-	)
+	# evade 的正例连续两轮 CI 不触发而反例全过，静态推演无懈可击——
+	# 只剩引擎里的实际分数能一击定位。轮询中每 15 帧（一个思考节拍）
+	# 抓一份效用表快照（_emit 不占断言数），失败时摊开看谁赢了。
+	var evade_seen: bool = false
+	var evade_snapshots: Array = []
+	for i in range(150):
+		if watcher8.get("posture") == Soldier.POSTURE_PRONE:
+			evade_seen = true
+			break
+		if i % 15 == 0:
+			evade_snapshots.append(
+				"[第%d帧] %s" % [i, watcher8.get_node("SoldierAI").call("scores_text")]
+			)
+		await get_tree().physics_frame
+	_check(evade_seen, "AI 兵在 96px 内出现快炸的雷时扑倒（posture = prone）")
+	for line in evade_snapshots:
+		_emit("  [观测] %s" % line)
 	_check(
 		await _wait_until(_posture_is(watcher8, Soldier.POSTURE_STAND), 90),
 		"雷炸完后起身恢复——prone 不会粘住不放（M8 的起身自动化接管）",
@@ -374,12 +387,21 @@ func _test_grenade() -> void:
 		# 1.0 衰减 1.2s（可捡窗口）后仍有 0.74 > 0.7，整个窗口他都没胆子。
 		hidden10.set("suppression", 1.0)
 		game.call("blackboard", 1).call("report_sighting", hidden10, hidden10.global_position)
-		_check(
-			await _wait_until(
-				func (): return not get_tree().get_nodes_in_group(&"grenades").is_empty(), 60
-			),
-			"黑板有记忆且无通视 -> 雷被投出（grenades 组出现一颗）",
-		)
+		# 投掷正例同样连挂两轮——同款观测：每 15 帧抓一份效用表快照。
+		var thrown: bool = false
+		var throw_snapshots: Array = []
+		for i in range(60):
+			if not get_tree().get_nodes_in_group(&"grenades").is_empty():
+				thrown = true
+				break
+			if i % 15 == 0:
+				throw_snapshots.append(
+					"[第%d帧] %s" % [i, thrower10.get_node("SoldierAI").call("scores_text")]
+				)
+			await get_tree().physics_frame
+		_check(thrown, "黑板有记忆且无通视 -> 雷被投出（grenades 组出现一颗）")
+		for line in throw_snapshots:
+			_emit("  [观测] %s" % line)
 		_check(int(thrower10.get("grenades")) == 0, "投掷者 grenades 减 1（1 -> 0）")
 		_check(
 			int(thrower10.get("weapon").get("ammo_in_mag"))
