@@ -9,13 +9,20 @@ signal destroyed(site: BuildSite)
 ## 这样建成后 weapon 的射线（mask 含第 2 层）会自动打到它并调用 take_damage。
 const LAYER_OBSTACLES := 2
 
-## 建成后占据的地形：沙袋是 cover（挡视线、可当掩体），FOB 是 blocked。
+## 建成后占据的地形：沙袋是 cover（挡视线、可当掩体），FOB 与医疗帐篷是 blocked
+## ——帐篷是撑起来的帆布包，人进不去、子弹和视线也过不去，和实体工事一个道理。
 const KIND_TERRAIN := {
 	&"fob": &"blocked",
 	&"sandbag": &"cover",
+	&"tent": &"blocked",
 }
 
-const KIND_LABELS := {&"fob": "FOB", &"sandbag": "沙袋"}
+const KIND_LABELS := {&"fob": "FOB", &"sandbag": "沙袋", &"tent": "医疗帐篷"}
+
+## 医疗帐篷（M9）：建成后的治疗光环。只治己方还站着的人——
+## 倒地的必须由队友拖救，帐篷不代劳，否则 M3 那条"拖救"链就成了摆设。
+const TENT_HEAL_RADIUS := 96.0
+const TENT_HEAL_PER_SECOND := 6.0
 
 ## 未知种类退化成完全阻挡。
 const TERRAIN_FALLBACK := &"blocked"
@@ -99,6 +106,11 @@ func _demolish() -> void:
 	queue_free()
 
 
+## 建成的医疗帐篷是否是治疗点（与 is_supply_point 对仗，供测试与 AI 查询）。
+func is_medical_point() -> bool:
+	return is_built and kind == &"tent"
+
+
 func build_ratio() -> float:
 	if build_cost <= 0.0:
 		return 1.0
@@ -112,6 +124,29 @@ func is_supply_point() -> bool:
 
 func label() -> String:
 	return String(KIND_LABELS.get(kind, String(kind)))
+
+
+## 帐篷的光环是它自己的事：每帧由它去认领附近的伤员，而不是让每个士兵
+## 都去扫一遍全图的工地（士兵这边的扫描留给 M5 的 _try_resupply，互不干扰）。
+func _physics_process(delta: float) -> void:
+	if not is_built or kind != &"tent":
+		return
+	var my_team: int = team
+	for unit in get_tree().get_nodes_in_group(&"soldiers"):
+		if int(unit.get("team")) != my_team:
+			continue
+		if unit.get("is_dead") == true or unit.get("is_downed") == true:
+			continue
+		if unit.get("is_captive") == true:
+			continue
+		if unit.global_position.distance_to(global_position) > TENT_HEAL_RADIUS:
+			continue
+		var hp_now: float = float(unit.get("hp"))
+		var hp_max: float = float(unit.get("max_hp"))
+		if hp_now >= hp_max:
+			continue
+		# 直接写 hp：治疗不是伤害，不走 take_damage，也不产生失血账。
+		unit.set("hp", int(minf(hp_max, hp_now + TENT_HEAL_PER_SECOND * delta)))
 
 
 func _draw() -> void:
@@ -128,6 +163,12 @@ func _draw() -> void:
 		# 旗杆 + 旗面，一眼能认出这是 FOB。
 		draw_line(Vector2(0.0, 8.0), Vector2(0.0, -12.0), Color.WHITE, 1.5)
 		draw_rect(Rect2(0.0, -12.0, 10.0, 6.0), Color(tint, 1.0))
+	elif kind == &"tent":
+		# 医疗帐篷：白底红十字 + 圆顶轮廓，和 FOB 的旗子一眼分得开。
+		draw_circle(Vector2(0.0, 0.0), 10.0, Color(0.96, 0.96, 0.96, 0.9))
+		draw_arc(Vector2(0.0, 0.0), 10.0, 0.0, TAU, 24, Color(tint, 1.0), 2.0)
+		draw_rect(Rect2(-5.0, -1.5, 10.0, 3.0), Color(0.9, 0.25, 0.25))
+		draw_rect(Rect2(-1.5, -5.0, 3.0, 10.0), Color(0.9, 0.25, 0.25))
 	var ratio: float = clampf(float(hp) / maxf(1.0, float(max_hp)), 0.0, 1.0)
 	draw_rect(Rect2(-14.0, -20.0, 28.0, 3.0), Color(0.0, 0.0, 0.0, 0.65))
 	draw_rect(Rect2(-14.0, -20.0, 28.0 * ratio, 3.0), Color(0.32, 0.88, 0.45))
