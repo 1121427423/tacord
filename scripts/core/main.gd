@@ -3,6 +3,7 @@ extends Node2D
 
 const SOLDIER_SCENE := preload("res://scenes/units/soldier.tscn")
 const TANK_SCENE := preload("res://scenes/units/tank.tscn")
+const DRONE_SCENE := preload("res://scenes/units/drone.tscn")
 
 const PLAYER_TEAM := 1
 const ENEMY_TEAM := 2
@@ -17,6 +18,9 @@ var units: Array = []
 ## 装甲车单列一个数组：部队上限（unit_cap）与战损统计都只算步兵，
 ## 坦克打掉一辆少一辆，不占编制、也不影响判负。
 var tanks: Array = []
+
+## 侦察无人机同坦克的思路单列：不占编制、不影响判负，掉一架少一架。
+var drones: Array = []
 
 @onready var camera: Camera2D = $Camera2D
 
@@ -143,6 +147,7 @@ func _spawn_demo_units() -> void:
 		_spawn_unit(PLAYER_TEAM, blue_cells[i % blue_cells.size()], as_medic)
 		_spawn_unit(ENEMY_TEAM, red_cells[i % red_cells.size()], as_medic)
 	_spawn_tanks()
+	_spawn_drones()
 	# 蓝方守、红方攻：这样一开局就能看到 Utility AI 分化出不同行为。
 	_issue_initial_orders()
 
@@ -187,6 +192,32 @@ func _spawn_tank(team: int, cell: Vector2i, objective: Vector2i) -> void:
 	map.add_child(tank)
 	tank.global_position = map.world_pos(cell)
 	tanks.append(tank)
+
+
+## 每队一架侦察无人机。它的目击直接进本队黑板——步兵的「最后已知位置」
+## 从此可以由天上来喂，这是它对防守方的全部意义。航点绕上半场一圈：
+## 无人机不做通视判定（从上往下看），先于步兵看到墙后的一切。
+func _spawn_drones() -> void:
+	if map == null:
+		return
+	_spawn_drone(PLAYER_TEAM, Vector2i(3, 3), [Vector2i(12, 3), Vector2i(12, 9), Vector2i(3, 9)])
+	_spawn_drone(
+		ENEMY_TEAM, Vector2i(28, 20), [Vector2i(19, 20), Vector2i(19, 14), Vector2i(28, 14)]
+	)
+
+
+func _spawn_drone(team: int, cell: Vector2i, waypoint_cells: Array) -> void:
+	var drone := DRONE_SCENE.instantiate()
+	drone.set("team", team)
+	map.add_child(drone)
+	drone.global_position = map.world_pos(cell)
+	var drone_ai = drone.get_node_or_null("DroneAI")
+	if drone_ai != null:
+		var route: Array[Vector2] = []
+		for waypoint_cell in waypoint_cells:
+			route.append(map.world_pos(waypoint_cell))
+		drone_ai.set("waypoints", route)
+	drones.append(drone)
 
 
 func _next_unit_name(team: int) -> String:
@@ -243,6 +274,7 @@ func _update_hud() -> void:
 		blue_alive, blue_down, red_alive, red_down
 	]
 	text += "装甲: %s\n" % _tank_text()
+	text += "空中: %s\n" % _drone_text()
 	text += "情报: %s\n" % _intel_text(game)
 	text += "俘虏: %s\n" % _captive_text(game)
 	text += "弹药: %s\n" % _ammo_text()
@@ -299,6 +331,27 @@ func _tank_text() -> String:
 					String(tank.get("current_order")),
 					String(tank.call("current_action")),
 				]
+			)
+		)
+	return "   ".join(parts)
+
+
+## 侦察无人机状态一行。它的价值不在这行字里——目击直接进本队黑板
+## （「情报」那行因此会动），这里只给 hp 与当前行为。
+## 无人机的 is_downed / is_captive 与坦克一样恒为 false，不需要步兵那套分支。
+func _drone_text() -> String:
+	if drones.is_empty():
+		return "无"
+	var parts: Array = []
+	for drone in drones:
+		var side: String = "蓝" if int(drone.get("team")) == PLAYER_TEAM else "红"
+		if drone.get("is_dead") == true:
+			parts.append("%s方 已坠毁" % side)
+			continue
+		parts.append(
+			(
+				"%s方 hp=%d 行为=%s"
+				% [side, int(drone.get("hp")), String(drone.call("current_action"))]
 			)
 		)
 	return "   ".join(parts)
