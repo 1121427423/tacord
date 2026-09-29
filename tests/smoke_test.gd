@@ -8,6 +8,10 @@ const SOLDIER_SCENE := preload("res://scenes/units/soldier.tscn")
 
 const WALL_X := 8
 
+# 期望的断言总数。测试函数中途报错时 _finish() 可能少跑几条，
+# 光看「0 失败」会误判为全绿，所以把总数本身也做成一条断言。
+const EXPECTED_CHECKS := 125
+
 # BattleMap 实例，不标注类型以便鸭子调用其查询接口。
 var _map = null
 
@@ -715,6 +719,12 @@ func _test_building_and_fob() -> void:
 
 func _finish() -> void:
 	_emit("")
+	if _checks != EXPECTED_CHECKS:
+		_failures += 1
+		_emit("  FAIL  断言总数应为 %d，实际只跑到 %d（有测试段没执行完）"
+				% [EXPECTED_CHECKS, _checks])
+	else:
+		_emit("  PASS  断言总数 = %d" % _checks)
 	if _failures == 0:
 		_emit("SMOKE TEST PASSED: %d/%d" % [_checks, _checks])
 		_close_log()
