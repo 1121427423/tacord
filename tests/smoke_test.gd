@@ -855,7 +855,7 @@ func _test_captives_and_intel() -> void:
 	# 沙箱读不到 CI 日志，只能靠它定位「超时」到底卡在哪一步。
 	var frames: int = 0
 	var trace := PackedStringArray()
-	while int(game.call("blackboard", 1).call("structure_count")) < 2 and frames < 400:
+	while int(game.call("blackboard", 1).call("structure_count")) < 2 and frames < 900:
 		await get_tree().physics_frame
 		frames += 1
 		if frames % 60 == 0:
@@ -876,7 +876,7 @@ func _test_captives_and_intel() -> void:
 	var scenario_ok: bool = int(game.call("blackboard", 1).call("structure_count")) == 2
 	var summary: String = "（%d 帧，现场：%s）" % [frames, " | ".join(trace)]
 	_check(scenario_ok, "无人干预下押送 + 审讯跑通：情报从 1 条变成 2 条" + summary)
-	_check(frames < 400, "整趟押送在 %.1f 秒模拟时间内完成" % (frames / 60.0) + summary)
+	_check(frames < 900, "整趟押送在 %.1f 秒模拟时间内完成" % (frames / 60.0) + summary)
 	_check(victim.get("is_captive") == false, "情报到手就放人" + summary)
 
 

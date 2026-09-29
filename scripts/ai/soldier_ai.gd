@@ -84,6 +84,10 @@ const SURRENDER_SUPPORT_RADIUS := 300.0
 ## 投降的权重。必须高于 1.0 + stickiness，否则会被带粘性的推进压住（见注册处）。
 const SURRENDER_WEIGHT := 1.5
 
+## 单次 _process 里最多补做几次思考。
+## 上限是为了防止 Web 导出切走标签页、回来时一次把几秒的欠账全补完。
+const MAX_THINKS_PER_FRAME := 8
+
 ## 愿意为押送俘虏跑多远（像素）。
 const ESCORT_SCAN_RADIUS := 1200.0
 
@@ -189,14 +193,21 @@ func _process(delta: float) -> void:
 		board.advance(delta)
 	# 交战是"反射"，每帧处理；战术决策按 think_interval 处理。
 	_combat_step()
+	# 按**累积时间**把思考账花掉，而不是攒够一次就清零。
+	# 原来写的 `_think_accum = 0.0` 会把超出的时间丢掉：delta=0.5s 而 think_interval=0.25s
+	# 时本该想 2 次却只想 1 次。后果不只是决策变慢——_try_resupply 按 think_interval 计发，
+	# 账丢了 M5 的 FOB 补弹速率也会随负载下降；而押送这条链需要十来次思考，
+	# 在 CI 批量执行物理帧时会卡在帧数上限边上（实测同一份代码五五开）。
+	# 超过上限还没还完的欠账留在 _think_accum 里，下一帧继续还。
 	_think_accum += delta
-	if _think_accum < think_interval:
-		return
-	_think_accum = 0.0
-	# 摸弹是"路过顺手"的动作，跟着思考周期做，不必每帧扫全场。
-	_try_loot_ammo()
-	_try_resupply()
-	_think()
+	var thinks: int = 0
+	while _think_accum >= think_interval and thinks < MAX_THINKS_PER_FRAME:
+		_think_accum -= think_interval
+		thinks += 1
+		# 摸弹是"路过顺手"的动作，跟着思考周期做，不必每帧扫全场。
+		_try_loot_ammo()
+		_try_resupply()
+		_think()
 
 
 ## 自动索敌开火：有通视、在射程内的最近敌人即为目标。
