@@ -34,6 +34,7 @@ func _ready() -> void:
 	await _test_suppression()
 	await _test_downed_and_rescue()
 	await _test_perception_and_memory()
+	await _test_ammo_and_logistics()
 	_finish()
 
 
@@ -475,6 +476,145 @@ func _test_perception_and_memory() -> void:
 		await get_tree().physics_frame
 	var walked: float = searcher.global_position.distance_to(start_pos)
 	_check(walked > 8.0, "进攻命令下会朝情报/巡逻点移动而不是发呆（走了 %.0f px）" % walked)
+
+
+func _test_ammo_and_logistics() -> void:
+	_emit("[弹药与后勤]")
+	var gunner = SOLDIER_SCENE.instantiate()
+	_map.add_child(gunner)
+	gunner.global_position = _map.world_pos(Vector2i(2, 2))
+	# 关掉它自己的 AI：这一段要手动控制每一次开火，
+	# 否则换弹一完成 AI 就会自己打出去，"弹匣重新装满"这条断言就废了。
+	gunner.get_node("SoldierAI").set_process(false)
+	var gun = gunner.get_node("Weapon")
+	var mag_size: int = int(gun.get("magazine_size"))
+	_check(int(gun.get("ammo_in_mag")) == mag_size, "出生时弹匣是满的")
+	_check(
+		int(gun.call("total_ammo")) == mag_size + int(gun.get("reserve_ammo")),
+		"total_ammo = 弹匣 + 备弹"
+	)
+
+	gunner.call("try_fire", gunner.global_position + Vector2(100.0, 0.0))
+	_check(int(gun.get("ammo_in_mag")) == mag_size - 1, "开一枪少一发")
+
+	# 打空弹匣 -> 自动开始换弹，换弹期间开不了枪。
+	gun.set("ammo_in_mag", 1)
+	gun.set("_cooldown", 0.0)
+	gunner.call("try_fire", gunner.global_position + Vector2(100.0, 0.0))
+	_check(int(gun.get("ammo_in_mag")) == 0, "最后一发打完弹匣归零")
+	_check(gun.get("is_reloading") == true, "弹匣打空自动开始换弹")
+	_check(gun.call("can_fire") == false, "换弹期间开不了枪")
+
+	# 把换弹时间调到 0.3s，30 个物理帧（0.5s）后应当换完。
+	gun.set("is_reloading", false)
+	gun.set("reload_time", 0.3)
+	gun.set("ammo_in_mag", 0)
+	var reserve_before: int = int(gun.get("reserve_ammo"))
+	gun.call("start_reload")
+	for _frame in range(30):
+		await get_tree().physics_frame
+	_check(gun.get("is_reloading") == false, "换弹计时结束后换弹完成")
+	_check(int(gun.get("ammo_in_mag")) == mag_size, "换弹后弹匣重新装满")
+	_check(
+		int(gun.get("reserve_ammo")) == reserve_before - mag_size,
+		"换弹消耗等量备弹（%d -> %d）" % [reserve_before, int(gun.get("reserve_ammo"))]
+	)
+
+	# 彻底打光：换不了弹，也开不了枪。
+	gun.set("ammo_in_mag", 0)
+	gun.set("reserve_ammo", 0)
+	_check(gun.call("is_dry") == true, "弹匣与备弹都空 = 彻底打光")
+	_check(gun.call("start_reload") == false, "没有备弹就换不了弹")
+	_check(
+		gunner.call("try_fire", gunner.global_position + Vector2(100.0, 0.0)) == false,
+		"打光之后开不了枪"
+	)
+
+	# 效用：没弹的人更想找掩体，也更不想推进。
+	gunner.call("set_order", "attack")
+	var gun_ai = gunner.get_node("SoldierAI")
+	gun.set("ammo_in_mag", mag_size)
+	gun.set("reserve_ammo", 72)
+	var cover_full: float = float(gun_ai.call("_consider_seek_cover"))
+	var advance_full: float = float(gun_ai.call("_consider_advance"))
+	gun.set("ammo_in_mag", 0)
+	gun.set("reserve_ammo", 0)
+	_check(
+		float(gun_ai.call("_consider_seek_cover")) > cover_full,
+		"打光之后更想找掩体（换弹要在掩体后换）"
+	)
+	_check(
+		is_equal_approx(float(gun_ai.call("_consider_advance")), advance_full * 0.4),
+		"彻底打光时推进欲望降到 40%"
+	)
+	gun.set("is_reloading", true)
+	_check(
+		is_equal_approx(float(gun_ai.call("_ammo_pressure")), 1.0), "正在换弹时弹药压力拉满"
+	)
+	gun.set("is_reloading", false)
+
+	# 补弹：路过尸体把它的备弹摸走，摸过的尸体摸不出第二遍。
+	var corpse = SOLDIER_SCENE.instantiate()
+	var looter = SOLDIER_SCENE.instantiate()
+	_map.add_child(corpse)
+	_map.add_child(looter)
+	corpse.global_position = _map.world_pos(Vector2i(6, 2))
+	looter.global_position = corpse.global_position + Vector2(20.0, 0.0)
+	corpse.call("die")
+	var corpse_reserve: int = int(corpse.get_node("Weapon").get("reserve_ammo"))
+	var looter_reserve: int = int(looter.get_node("Weapon").get("reserve_ammo"))
+	looter.get_node("SoldierAI").call("_try_loot_ammo")
+	_check(
+		int(looter.get_node("Weapon").get("reserve_ammo")) > looter_reserve,
+		"路过尸体能摸到备弹（%d -> %d）"
+		% [looter_reserve, int(looter.get_node("Weapon").get("reserve_ammo"))]
+	)
+	_check(int(corpse.get_node("Weapon").get("reserve_ammo")) == 0, "尸体的备弹被摸空")
+	_check(corpse_reserve > 0, "尸体身上原本带着备弹")
+	var after_first_loot: int = int(looter.get_node("Weapon").get("reserve_ammo"))
+	looter.get_node("SoldierAI").call("_try_loot_ammo")
+	_check(
+		int(looter.get_node("Weapon").get("reserve_ammo")) == after_first_loot,
+		"摸空的尸体摸不出第二遍"
+	)
+
+	# 端到端：一场持续交火之后，阵地真的会沉寂下来。
+	# 关掉近失压制以隔离弹药机制（否则互相压制会先让双方停火，看不出是打光了）。
+	var alpha = SOLDIER_SCENE.instantiate()
+	var beta = SOLDIER_SCENE.instantiate()
+	_map.add_child(alpha)
+	_map.add_child(beta)
+	# 清场：前面几节留下的士兵还在游走，随便谁朝这两位开一枪就会把他们压制住，
+	# "各自正好打光一个弹匣"就不成立了。这一段只留他们两个。
+	for unit in get_tree().get_nodes_in_group(&"soldiers"):
+		if unit != alpha and unit != beta:
+			unit.call("die")
+	alpha.global_position = _map.world_pos(Vector2i(20, 12))
+	beta.global_position = _map.world_pos(Vector2i(23, 12))
+	alpha.set("team", 2)
+	for shooter in [alpha, beta]:
+		var w = shooter.get_node("Weapon")
+		w.set("magazine_size", 3)
+		w.set("ammo_in_mag", 3)
+		w.set("reserve_ammo", 0)
+		w.set("suppression_per_near_miss", 0.0)
+		shooter.call("set_order", "hold")
+	for _frame in range(180):
+		await get_tree().physics_frame
+	var alpha_shots: int = int(alpha.get_node("Weapon").get("shots_fired"))
+	var beta_shots: int = int(beta.get_node("Weapon").get("shots_fired"))
+	_check(alpha.get_node("Weapon").call("is_dry") == true, "持续交火后甲方打光")
+	_check(beta.get_node("Weapon").call("is_dry") == true, "持续交火后乙方打光")
+	_check(alpha_shots == 3 and beta_shots == 3, "各自正好打光一个弹匣（%d / %d 发）" % [
+		alpha_shots, beta_shots
+	])
+	for _frame in range(90):
+		await get_tree().physics_frame
+	_check(
+		int(alpha.get_node("Weapon").get("shots_fired")) == alpha_shots
+		and int(beta.get_node("Weapon").get("shots_fired")) == beta_shots,
+		"打光之后再没有枪声（阵地沉寂）"
+	)
 
 
 func _finish() -> void:
