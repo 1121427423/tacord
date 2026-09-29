@@ -30,7 +30,10 @@ const ARRIVAL_EPSILON := 3.0
 const RESCUE_SCAN_RADIUS := 900.0
 
 ## 医疗兵的救援意愿加成（分数乘算，最终仍夹在 1.0）。
-const MEDIC_SCORE_BONUS := 1.4
+const MEDIC_SCORE_BONUS := 1.6
+
+## 有战友倒地时，推进/包抄欲望乘 (1 - 这个值)：救人的优先级要能压过命令。
+const DOWNED_ALLY_ORDER_PENALTY := 0.5
 
 ## 包扎速度倍率：医疗兵 x2。
 const RESCUE_SPEED_NORMAL := 1.0
@@ -212,13 +215,26 @@ func _consider_seek_cover() -> float:
 
 func _consider_advance() -> float:
 	# 被压制时推进欲望直接归零：没人会大摇大摆穿过火力杀伤区。
-	return clampf(_order_priority() * _health_ratio() * (1.0 - _suppression()), 0.0, 1.0)
+	return clampf(_order_priority() * _health_ratio() * _mobility_factor(), 0.0, 1.0)
 
 
 func _consider_flank() -> float:
 	return clampf(
-		_flank_opportunity() * _health_ratio() * 1.15 * (1.0 - _suppression() * 0.8), 0.0, 1.0
+		_flank_opportunity() * _health_ratio() * 1.15 * _mobility_factor(0.8), 0.0, 1.0
 	)
+
+
+## 机动类行为的共同折扣：压制削一半上限，战友倒地再打对折。
+## suppression_scale 让包抄比推进更怕压制（绕后途中被打侧翼最致命）。
+func _mobility_factor(suppression_scale: float = 1.0) -> float:
+	return (1.0 - _suppression() * suppression_scale) * (1.0 - _downed_ally_factor())
+
+
+## 有倒地的友军在附近时返回折扣量，否则 0。
+func _downed_ally_factor() -> float:
+	if _nearest_downed_ally(RESCUE_SCAN_RADIUS) == null:
+		return 0.0
+	return DOWNED_ALLY_ORDER_PENALTY
 
 
 func _consider_hold() -> float:
