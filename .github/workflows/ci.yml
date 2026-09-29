@@ -114,6 +114,7 @@ jobs:
           run_scene tests/mobility_test.tscn mobility || rc=1
           run_scene tests/medic_test.tscn medic || rc=1
           run_scene tests/tank_test.tscn tank || rc=1
+          run_scene tests/drone_test.tscn drone || rc=1
           exit $rc
       - name: 上传测试日志（annotation 被截断时的兜底）
         if: always()
