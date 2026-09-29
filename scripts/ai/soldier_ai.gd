@@ -34,6 +34,9 @@ var soldier: CharacterBody2D = null
 # 自定义方法，这里需要鸭子调用 cell_at / find_cover_cell / has_line_of_sight 等接口。
 var map = null
 
+# Weapon 组件（soldier 的子节点），同样不标注类型。
+var weapon = null
+
 var utility: UtilityAI = UtilityAI.new()
 
 var _trees: Dictionary = {}  # StringName -> 行为树根节点
@@ -52,6 +55,9 @@ func _ready() -> void:
 	map = get_tree().get_first_node_in_group(&"battle_map")
 	if map == null:
 		push_warning("SoldierAI: 场景中没有 BattleMap（group: battle_map），掩体评估将不可用。")
+	weapon = soldier.get_node_or_null("Weapon")
+	if weapon == null:
+		push_warning("SoldierAI: 所属士兵没有 Weapon 子节点，无法开火。")
 	_rng.seed = hash(soldier.name)
 	utility.stickiness = stickiness
 	_register_considerations()
@@ -63,11 +69,45 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if soldier == null or soldier.get("is_dead") == true:
 		return
+	# 交战是"反射"，每帧处理；战术决策按 think_interval 处理。
+	_combat_step()
 	_think_accum += delta
 	if _think_accum < think_interval:
 		return
 	_think_accum = 0.0
 	_think()
+
+
+## 自动索敌开火：有通视、在射程内的最近敌人即为目标。
+## 放在 AI 层而不是 soldier 里，是为了让 M2 的压制能够直接卡住这一步。
+func _combat_step() -> void:
+	if weapon == null:
+		return
+	var target = _acquire_target()
+	if target == null:
+		return
+	var target_pos: Vector2 = target.global_position
+	soldier.call("aim_at", target_pos)
+	soldier.call("try_fire", target_pos)
+
+
+## 射程内、且有通视的最近敌人；没有则返回 null。
+func _acquire_target():
+	if soldier == null or map == null:
+		return null
+	var reach: float = float(soldier.call("weapon_range"))
+	if reach <= 0.0:
+		return null
+	var best = null
+	var best_dist: float = reach
+	for enemy in _nearby_enemies(reach):
+		if not map.has_line_of_sight(soldier.global_position, enemy.global_position):
+			continue
+		var distance: float = soldier.global_position.distance_to(enemy.global_position)
+		if distance <= best_dist:
+			best_dist = distance
+			best = enemy
+	return best
 
 
 ## 当前正在执行的行为名（HUD / 调试用）。

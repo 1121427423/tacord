@@ -40,6 +40,9 @@ var _target_cell := Vector2i(-1, -1)
 # 占位外观（后续替换为 Kenney 精灵）。
 @onready var body_rect: ColorRect = $Body
 
+# Weapon 组件（scripts/units/weapon.gd）。不标注类型以便鸭子调用。
+@onready var weapon = $Weapon
+
 
 func _ready() -> void:
 	collision_layer = LAYER_UNITS
@@ -54,9 +57,11 @@ func _ready() -> void:
 	queue_redraw()
 
 
-func _physics_process(_delta: float) -> void:
+func _physics_process(delta: float) -> void:
 	if is_dead:
 		return
+	if weapon != null:
+		weapon.call("tick", delta)
 	_follow_path()
 
 
@@ -147,6 +152,29 @@ func current_action() -> StringName:
 	if ai != null and ai.has_method("current_action"):
 		return ai.call("current_action")
 	return &"none"
+
+
+## 转向某个世界坐标（交战时朝向目标，AI 的侧翼判断依赖这个朝向）。
+func aim_at(world_target: Vector2) -> void:
+	var direction: Vector2 = world_target - global_position
+	if direction == Vector2.ZERO:
+		return
+	facing = direction.normalized()
+	queue_redraw()
+
+
+## 朝某个世界坐标开一枪（冷却由 Weapon 组件内部处理）。
+func try_fire(target_pos: Vector2) -> bool:
+	if weapon == null:
+		return false
+	return bool(weapon.call("try_fire", target_pos))
+
+
+## 当前武器射程；没挂武器时返回 0。
+func weapon_range() -> float:
+	if weapon == null:
+		return 0.0
+	return float(weapon.get("max_range"))
 
 
 # ---------------------------------------------------------------- 内部
