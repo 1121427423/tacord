@@ -118,6 +118,7 @@ jobs:
           run_scene tests/grenade_test.tscn grenade || rc=1
           run_scene tests/fpv_test.tscn fpv || rc=1
           run_scene tests/ammo_test.tscn ammo || rc=1
+          run_scene tests/truck_test.tscn truck || rc=1
           exit $rc
       - name: 上传测试日志（annotation 被截断时的兜底）
         if: always()
