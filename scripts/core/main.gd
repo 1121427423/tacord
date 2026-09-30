@@ -5,6 +5,7 @@ const SOLDIER_SCENE := preload("res://scenes/units/soldier.tscn")
 const TANK_SCENE := preload("res://scenes/units/tank.tscn")
 const DRONE_SCENE := preload("res://scenes/units/drone.tscn")
 const FPV_SCENE := preload("res://scenes/units/fpv_drone.tscn")
+const TRUCK_SCENE := preload("res://scenes/units/truck.tscn")
 
 const PLAYER_TEAM := 1
 const ENEMY_TEAM := 2
@@ -25,6 +26,10 @@ var drones: Array = []
 ## FPV 自杀无人机（M13）。单列数组，同 drones 的边界思路：
 ## 不占编制、不影响判负，撞完即兑现使命。
 var fpvs: Array = []
+
+## 补给卡车（M15）。每队一辆常驻：开局停在边缘车库待命，玩家建起 FOB 后
+# 自主往返运弹。同 tanks/drones/fpvs 的边界：不占编制、不影响判负。
+var trucks: Array = []
 
 @onready var camera: Camera2D = $Camera2D
 
@@ -153,6 +158,7 @@ func _spawn_demo_units() -> void:
 	_spawn_tanks()
 	_spawn_drones()
 	_spawn_fpvs()
+	_spawn_trucks()
 	# 蓝方守、红方攻：这样一开局就能看到 Utility AI 分化出不同行为。
 	_issue_initial_orders()
 
@@ -242,6 +248,24 @@ func _spawn_fpv(team: int, cell: Vector2i) -> void:
 	fpvs.append(fpv)
 
 
+## 补给卡车（M15）：双方各一辆，车库在各自防线一侧的地图边缘。
+## 开局没有 FOB，两辆车都停在车库待命——按 5 建起 FOB 后 6 秒内首班出发。
+func _spawn_trucks() -> void:
+	if map == null:
+		return
+	_spawn_truck(PLAYER_TEAM, Vector2i(0, 12))
+	_spawn_truck(ENEMY_TEAM, Vector2i(31, 12))
+
+
+func _spawn_truck(team: int, home: Vector2i) -> void:
+	var truck := TRUCK_SCENE.instantiate()
+	truck.set("team", team)
+	truck.set("home_cell", home)
+	map.add_child(truck)
+	truck.global_position = map.world_pos(home)
+	trucks.append(truck)
+
+
 func _next_unit_name(team: int) -> String:
 	var prefix := "蓝" if team == PLAYER_TEAM else "红"
 	var count: int = 0
@@ -298,6 +322,7 @@ func _update_hud() -> void:
 	text += "装甲: %s\n" % _tank_text()
 	text += "空中: %s\n" % _drone_text()
 	text += "FPV: %s\n" % _fpv_text()
+	text += "补给: %s\n" % _truck_text()
 	text += "情报: %s\n" % _intel_text(game)
 	text += "俘虏: %s\n" % _captive_text(game)
 	text += "弹药: %s\n" % _ammo_text()
@@ -398,6 +423,29 @@ func _fpv_text() -> String:
 			(
 				"%s方 hp=%d %s"
 				% [side, int(fpv.get("hp")), locked]
+			)
+		)
+	return "   ".join(parts)
+
+
+## 补给卡车状态一行：docked（车库）/ outbound / returning 照实写，
+## 趴窝加「断链」标注——断链是 M15 的核心可观测事件。
+func _truck_text() -> String:
+	if trucks.is_empty():
+		return "无"
+	var parts: Array = []
+	for truck in trucks:
+		var side: String = "蓝" if int(truck.get("team")) == PLAYER_TEAM else "红"
+		if truck.get("is_dead") == true:
+			parts.append("%s方 已断供" % side)
+			continue
+		var state: String = String(truck.get("action"))
+		if truck.get("is_stalled") == true:
+			state += "·断链"
+		parts.append(
+			(
+				"%s方 hp=%d %s"
+				% [side, int(truck.get("hp")), state]
 			)
 		)
 	return "   ".join(parts)
