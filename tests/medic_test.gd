@@ -245,6 +245,10 @@ func _test_medic_tent() -> void:
 		"静止倒地的照旧开不了枪（M3 的断言原地复钉）",
 	)
 	var foe = _spawn(Vector2i(14, 10), 2, 100)
+	# 靶子的碰撞体要等物理步进才 flush 进空间索引：刚 spawn 就开枪，
+	# 射线会从它身上穿过去（M10 踩过的坑——"开枪前没等物理帧"）。
+	for _frame in range(2):
+		await get_tree().physics_frame
 	drifter.call("move_to_cell", Vector2i(16, 12))
 	var foe_hp_before: int = int(foe.get("hp"))
 	var hit: bool = bool(drifter.call("try_fire", foe.global_position))
