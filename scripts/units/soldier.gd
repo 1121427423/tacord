@@ -90,6 +90,14 @@ const TEAM_COLORS := {
 	2: Color(1.0, 0.427, 0.345),  # 红方
 }
 
+## 外观：素材包里的单位贴图（assets/units/，朝向 -Y，1:1 游戏尺度）。
+## 医疗兵换 medic.png —— 名字带「医」之外，头盔上的红十字也应该一眼看得见。
+const BODY_TEXTURE := preload("res://assets/units/soldier.png")
+const BODY_TEXTURE_MEDIC := preload("res://assets/units/medic.png")
+
+## 贴图是中性色（灰白冬装）：阵营色只压上去一部分，保留衣物本身的明暗细节。
+const TEAM_TINT := 0.55
+
 @export var hp: int = 100
 @export var max_hp: int = 100
 @export var move_speed: float = 80.0
@@ -194,11 +202,15 @@ var _slide_timer: float = 0.0
 var _vault_segment: bool = false
 var _vault_cooldown: float = 0.0
 
+# 当前该用的阵营色（不含临时状态）。受击闪白和倒地淡化都在它基础上叠。
+var _body_tint: Color = Color.WHITE
+var _medic_look: bool = false
+
 # SoldierAI 子节点。不标注类型，避免与 scripts/ai/soldier_ai.gd 形成脚本循环依赖。
 @onready var ai = $SoldierAI
 
-# 占位外观（后续替换为 Kenney 精灵）。
-@onready var body_rect: ColorRect = $Body
+# sprite 而不是 ColorRect：受击闪白/倒地半透明仍然走 modulate 这一套。
+@onready var body: Sprite2D = $Body
 
 # Weapon 组件（scripts/units/weapon.gd）。不标注类型以便鸭子调用。
 @onready var weapon = $Weapon
@@ -226,6 +238,8 @@ func _ready() -> void:
 
 func _physics_process(delta: float) -> void:
 	_decay_effects(delta)
+	_sync_medic_texture()
+	_update_body_transform()
 	if is_dead:
 		return
 	_update_posture(delta)
@@ -341,8 +355,8 @@ func _decay_effects(delta: float) -> void:
 		_vault_cooldown = maxf(0.0, _vault_cooldown - delta)
 	if _hit_flash_ttl > 0.0:
 		_hit_flash_ttl = maxf(0.0, _hit_flash_ttl - delta)
-		if body_rect != null and _hit_flash_ttl <= 0.0 and not is_dead:
-			body_rect.modulate = Color.WHITE
+		if _hit_flash_ttl <= 0.0 and not is_dead:
+			_set_body_tint()
 		dirty = true
 	if dirty:
 		queue_redraw()
@@ -443,9 +457,8 @@ func take_damage(amount: int) -> void:
 	if is_dead:
 		return
 	_hit_flash_ttl = HIT_FLASH_DURATION
-	if body_rect != null:
-		# modulate 是乘法，>1 才能"提亮"，实现受击闪白。
-		body_rect.modulate = Color(2.2, 2.2, 2.2)
+	# modulate 是乘法，>1 才能"提亮"，实现受击闪白（在阵营色基础上乘）。
+	_set_body_tint(2.2)
 	if is_downed:
 		# 已经倒地了：不会再倒一次，但每发子弹都在加速失血。
 		bleed_timer = maxf(0.0, bleed_timer - float(amount) * BLEED_PER_DAMAGE)
@@ -476,8 +489,7 @@ func go_down() -> void:
 	posture = POSTURE_STAND
 	velocity = Vector2.ZERO
 	stop_moving()
-	if body_rect != null:
-		body_rect.modulate = Color(1.0, 1.0, 1.0, 0.75)
+	_set_body_tint(1.0, 0.75)
 	went_down.emit(self)
 	queue_redraw()
 
@@ -506,8 +518,7 @@ func revive(rescuer: CharacterBody2D = null) -> void:
 	hp = mini(REVIVE_HP, max_hp)
 	max_hp = maxi(max_hp - WEAKNESS_PER_DOWN, REVIVE_HP + 1)
 	health_changed.emit(hp, max_hp)
-	if body_rect != null:
-		body_rect.modulate = Color.WHITE
+	_set_body_tint()
 	revived.emit(self, rescuer)
 	queue_redraw()
 
@@ -610,8 +621,7 @@ func die() -> void:
 	# 尸体不再参与碰撞，也不再挡视线（MVP 简化，后续做“倒地/救援”时改成 Area2D）。
 	collision_layer = 0
 	collision_mask = 0
-	if body_rect != null:
-		body_rect.modulate = Color(1.0, 1.0, 1.0, 0.4)
+	_set_body_tint(1.0, 0.4)
 	died.emit(self)
 	queue_redraw()
 
@@ -685,10 +695,43 @@ func _follow_path() -> void:
 	move_and_slide()
 
 
+## 阵营色不是「涂满」而是「压上一部分」：贴图是中性灰白冬装，
+## lerp 到阵营色 55% 既分得清蓝红，又留得住衣物本身的明暗细节。
 func _apply_team_color() -> void:
-	if body_rect == null:
+	var tint: Color = TEAM_COLORS.get(team, Color.GRAY)
+	_body_tint = Color.WHITE.lerp(tint, TEAM_TINT)
+	_set_body_tint()
+
+
+## 外观相关的三件事都收在这里，逻辑层（AI/战斗）不用知道贴图怎么画。
+## brightness 是乘法系数（>1 = 受击闪白），alpha 用于倒地/阵亡的淡化。
+func _set_body_tint(brightness: float = 1.0, alpha: float = 1.0) -> void:
+	if body == null:
 		return
-	body_rect.color = TEAM_COLORS.get(team, Color.GRAY)
+	var c: Color = _body_tint
+	body.modulate = Color(c.r * brightness, c.g * brightness, c.b * brightness, alpha)
+
+
+## 医疗兵换贴图。is_medic 挂在 AI 节点上（main.gd 在 add_child 之后才 set），
+## 所以这里每帧对一次账，而不是在 _ready 里读一次了事。
+func _sync_medic_texture() -> void:
+	if body == null:
+		return
+	var medic: bool = ai != null and bool(ai.get("is_medic"))
+	if medic == _medic_look and body.texture != null:
+		return
+	_medic_look = medic
+	body.texture = BODY_TEXTURE_MEDIC if medic else BODY_TEXTURE
+
+
+## 贴图朝上（-Y）画的，facing 是数学角，+90° 才对齐；趴下时压扁成横向轮廓，
+## 和 _draw() 里那条「趴下比站姿矮一大截」的命中轮廓是同一件事的两种表达。
+func _update_body_transform() -> void:
+	if body == null:
+		return
+	body.rotation = facing.angle() + PI * 0.5
+	# 趴下的剪影：横向收窄、沿朝向拉长（贴图是朝 -Y 画的，Y 就是朝向）。
+	body.scale = Vector2.ONE if posture == POSTURE_STAND else Vector2(0.82, 1.12)
 
 
 func _draw() -> void:
@@ -714,20 +757,20 @@ func _draw() -> void:
 		# 倒地：红十字 + 失血条（剩余时间），包扎进度画在下方。
 		draw_line(Vector2(-4.0, 0.0), Vector2(4.0, 0.0), Color(0.95, 0.25, 0.25, 0.95), 2.0)
 		draw_line(Vector2(0.0, -4.0), Vector2(0.0, 4.0), Color(0.95, 0.25, 0.25, 0.95), 2.0)
-		draw_rect(Rect2(-8.0, -14.0, 16.0, 3.0), Color(0.0, 0.0, 0.0, 0.65))
-		draw_rect(Rect2(-8.0, -14.0, 16.0 * bleed_ratio(), 3.0), Color(0.93, 0.33, 0.27))
+		draw_rect(Rect2(-8.0, -20.0, 16.0, 3.0), Color(0.0, 0.0, 0.0, 0.65))
+		draw_rect(Rect2(-8.0, -20.0, 16.0 * bleed_ratio(), 3.0), Color(0.93, 0.33, 0.27))
 		if rescue_progress > 0.0:
-			draw_rect(Rect2(-8.0, 11.0, 16.0 * rescue_ratio(), 2.0), Color(0.45, 0.95, 0.6))
+			draw_rect(Rect2(-8.0, 15.0, 16.0 * rescue_ratio(), 2.0), Color(0.45, 0.95, 0.6))
 		_draw_call_for_help()
 		return
 	if is_captive:
 		# 俘虏：头顶一个白色投降标记 + 空心环，和还在打的人区分开。
 		draw_arc(Vector2.ZERO, 11.0, 0.0, TAU, 24, Color(1.0, 1.0, 1.0, 0.75), 1.5)
-		draw_line(Vector2(-5.0, -13.0), Vector2(5.0, -13.0), Color.WHITE, 2.0)
-		draw_line(Vector2(-5.0, -16.0), Vector2(-5.0, -13.0), Color.WHITE, 1.5)
-		draw_line(Vector2(5.0, -16.0), Vector2(5.0, -13.0), Color.WHITE, 1.5)
+		draw_line(Vector2(-5.0, -18.0), Vector2(5.0, -18.0), Color.WHITE, 2.0)
+		draw_line(Vector2(-5.0, -22.0), Vector2(-5.0, -18.0), Color.WHITE, 1.5)
+		draw_line(Vector2(5.0, -22.0), Vector2(5.0, -18.0), Color.WHITE, 1.5)
 		return
 	var ratio: float = clampf(float(hp) / maxf(1.0, float(max_hp)), 0.0, 1.0)
-	draw_rect(Rect2(-8.0, -14.0, 16.0, 3.0), Color(0.0, 0.0, 0.0, 0.65))
+	draw_rect(Rect2(-8.0, -20.0, 16.0, 3.0), Color(0.0, 0.0, 0.0, 0.65))
 	var bar_color := Color(0.32, 0.88, 0.45) if ratio > 0.4 else Color(0.93, 0.33, 0.27)
-	draw_rect(Rect2(-8.0, -14.0, 16.0 * ratio, 3.0), bar_color)
+	draw_rect(Rect2(-8.0, -20.0, 16.0 * ratio, 3.0), bar_color)
