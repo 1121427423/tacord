@@ -38,6 +38,15 @@ const THROW_SCORE := 0.85
 const THROW_MIN_DIST := 60.0
 const THROW_MAX_DIST := 200.0
 
+## 倒地自救（M16）：倒地满这个秒数还没人来救，就开始自己爬向掩体。
+## 取 5s 是给救援链让路——smoke 的端到端救援实测 135 帧（2.25s）救活，
+## 伤员在前 5s 内一动不动，M3 的整条验证链零扰动。
+const CRAWL_DELAY := 5.0
+
+## 自救找掩体的搜索半径（格）与重新评估节拍（秒）。
+const CRAWL_SEARCH_CELLS := 6
+const CRAWL_RETHINK_INTERVAL := 2.0
+
 ## 权重。这三个都注册在最后，而 UtilityAI 用严格大于、平分归先注册者，
 ## 所以要在"该赢的时候"赢过先注册的 seek_cover（权重 1.05）就得靠权重。
 ## 数值关系：扑倒 0.85x1.4=1.19 > seek_cover 1.05，但 < 投降 1.5（投降是更大的决定）。
@@ -69,6 +78,9 @@ var soldier: CharacterBody2D = null
 var map = null
 var weapon = null
 var perc: Perception = null
+
+# 倒地自救（M16）的重新评估节拍。
+var _crawl_tick: float = 0.0
 
 
 ## 一次性接线。所有引用在 _ready 之后都不再变化。
@@ -284,6 +296,59 @@ func _do_throw(_ctx: Dictionary, _delta: float) -> int:
 	soldier.get_parent().add_child(grenade)
 	grenade.call("throw_grenade", soldier.global_position, memory["pos"], soldier)
 	return BehaviorTree.Status.SUCCESS
+
+
+# ---------------------------------------------------------------- 倒地自救（M16）
+
+
+## 倒地反射的入口（由 soldier_ai._process 的 is_downed 早退前调用）：
+## 没人来救就"拖着身子爬向掩体"，爬行中"一直用手枪还击"。
+## 三条护栏把扰动关进笼子：
+## ① 倒地未满 CRAWL_DELAY（5s）一动不动——先喊救兵，M3 救援链零扰动；
+## ② 只在伤员没有现成路径时才装新路径——救援者已装好的拖拽方向优先，
+##   自救不抢方向盘；③ 还击只发生在爬行中——静止倒地的照旧开不了枪
+##   （M3 的既有断言不动，try_fire 也按这条放行）。
+func crawl_to_cover(delta: float) -> void:
+	if soldier == null or perc == null or map == null:
+		return
+	# 已倒地秒数 = 失血总额度 - 剩余额度。前 5s 给救援链让路。
+	var down_for: float = float(soldier.get("bleed_out_time")) - float(soldier.get("bleed_timer"))
+	if down_for < CRAWL_DELAY:
+		return
+	if not soldier.has_arrived():
+		_return_fire_while_crawling()
+	if _crawl_tick > 0.0:
+		_crawl_tick = maxf(0.0, _crawl_tick - delta)
+		return
+	_crawl_tick = CRAWL_RETHINK_INTERVAL
+	if not soldier.has_arrived():
+		return
+	if not map.has_method("find_cover_cell"):
+		return
+	var threats: Array = []
+	for enemy in perc.nearby_enemies(900.0):
+		threats.append(enemy.global_position)
+	var cell: Vector2i = map.find_cover_cell(
+		map.cell_at(soldier.global_position), threats, CRAWL_SEARCH_CELLS
+	)
+	if cell.x < 0:
+		return
+	_move_to(cell)
+
+
+## 爬行中的还击：看得见的最近敌人（有通视、在射程内）就打一枪。
+## 射速由 weapon 自己的冷却节流——这里每帧问，打得着就打。
+## 倒地的人压制攒不起来（apply_suppression 拒绝倒地者，恒 0），
+## 所以没有"被压趴"的折扣：能看见就是最后的尊严。
+func _return_fire_while_crawling() -> void:
+	if weapon == null:
+		return
+	var reach: float = float(weapon.get("max_range"))
+	var enemy = perc.visible_enemy(reach)
+	if enemy == null:
+		return
+	soldier.call("aim_at", enemy.global_position)
+	soldier.call("try_fire", enemy.global_position)
 
 
 # ---------------------------------------------------------------- 查询

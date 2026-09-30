@@ -192,8 +192,13 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	# 倒地的人什么都不做（不开火、不决策），只能等队友来拖。
-	if soldier == null or soldier.get("is_dead") == true or soldier.get("is_downed") == true:
+	if soldier == null or soldier.get("is_dead") == true:
+		return
+	if soldier.get("is_downed") == true:
+		# 倒地自救（M16）：还爬得动就拖着身子爬向掩体、爬行中用手枪还击。
+		# 反射不走效用表（倒地没有"想去哪儿"的选择），逻辑在 tactics.gd——
+		# 本文件顶着 1000 行上限装不下。前 5s 一动不动给救援链让路。
+		_tactics.crawl_to_cover(delta)
 		return
 	# 俘虏既不开火也不决策：枪已经交出去了，路线由押送者给。
 	if soldier.get("is_captive") == true:

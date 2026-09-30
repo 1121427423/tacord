@@ -639,7 +639,11 @@ func try_fire(target_pos: Vector2) -> bool:
 		return false
 	# 俘虏当然不开枪：他手上那把枪已经是别人的战利品了。
 	# 滑铲和翻越时人是腾空/贴地滑的，同样举不起枪；趴着的倒是一样能打。
-	if weapon == null or is_downed or is_captive or is_vaulting:
+	if weapon == null or is_captive or is_vaulting:
+		return false
+	# 倒地分两种（M16）：静止的照旧开不了枪（失血挣扎，M3 的断言不动）；
+	# 正在爬的——不管是自救还是被队友拖——照原简介"一直用手枪还击"。
+	if is_downed and has_arrived():
 		return false
 	if posture == POSTURE_SLIDE:
 		return false

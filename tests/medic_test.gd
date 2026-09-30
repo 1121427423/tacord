@@ -8,7 +8,8 @@ const MAP_SCENE := preload("res://scenes/battle/battle_map.tscn")
 const SOLDIER_SCENE := preload("res://scenes/units/soldier.tscn")
 
 # 本场景的断言总数。与另外两个场景同样的理由：只看"0 失败"会漏掉中途 abort。
-const EXPECTED_CHECKS := 26
+# M16（倒地自救 + 爬行中还击）扩到 34：救援主题的延伸归这个场景管。
+const EXPECTED_CHECKS := 34
 
 var _map = null
 var _checks: int = 0
@@ -202,6 +203,65 @@ func _test_medic_tent() -> void:
 	_check(
 		is_equal_approx(float(caller.get("_bubble_phase")), phase_at_stand),
 		"站起来后气泡停跳",
+	)
+
+	# ---- 6) 倒地自救（M16）：还爬得动就爬向掩体，爬行中用手枪还击 ----
+	# 伤员 A(10,4) AI 开、倒地；左边一格木箱 (7,4) 是唯一的掩体，
+	# 威胁 (4,4) 的红兵把它逼向箱子背后——爬行方向必须是向左。
+	# 这个兵必须 AI 开（反射挂在 SoldierAI._process 上）。
+	var crawler = _spawn(Vector2i(10, 4), 1, 100)
+	crawler.get_node("SoldierAI").set_process(true)
+	crawler.call("take_damage", 9999)
+	_check(crawler.get("is_downed") == true, "自救段前提：伤员 A 倒地了")
+	_map.call("add_obstacle", Vector2i(7, 4))
+	var threat = _spawn(Vector2i(4, 4), 2, 100)
+	var crawl_start: Vector2 = crawler.global_position
+	for _frame in range(240):
+		await get_tree().physics_frame
+	_check(
+		crawler.global_position.distance_to(crawl_start) < 2.0,
+		"倒地后前 5s 一动不动（先喊救兵，给 M3 救援链让路）",
+	)
+	var crawl_moved: bool = false
+	for _frame in range(600):
+		if crawler.global_position.distance_to(crawl_start) > 20.0:
+			crawl_moved = true
+			break
+		await get_tree().physics_frame
+	_check(crawl_moved, "满 5s 没人来救 -> 拖着身子开始爬（位移 > 20px）")
+	_check(
+		crawler.global_position.x < crawl_start.x,
+		"爬向掩体：向木箱背后挪（x 在减小），不是乱爬",
+	)
+	# 爬行中的还击：伤员 B 倒地但装上了爬行路径（模拟"在爬"，无论自救
+	# 还是被队友拖），对 64px 内有通视的敌人开枪——这条走廊的散布偏移
+	# 64×sin3°≈3.4px < 命中半径 7px，命中是确定性的（drone_test 同款算术）。
+	# AI 关掉：这里直测 try_fire 的放宽条件，别让反射抢戏。
+	var drifter = _spawn(Vector2i(16, 10), 1, 100)
+	drifter.call("take_damage", 9999)
+	_check(drifter.get("is_downed") == true, "自救段前提：伤员 B 倒地了")
+	_check(
+		not bool(drifter.call("try_fire", _map.world_pos(Vector2i(14, 10)))),
+		"静止倒地的照旧开不了枪（M3 的断言原地复钉）",
+	)
+	var foe = _spawn(Vector2i(14, 10), 2, 100)
+	drifter.call("move_to_cell", Vector2i(16, 12))
+	var foe_hp_before: int = int(foe.get("hp"))
+	var hit: bool = bool(drifter.call("try_fire", foe.global_position))
+	_check(
+		hit and int(foe.get("hp")) == foe_hp_before - 12,
+		"爬行中（无论自救还是被拖）用手枪还击——命中且全额伤害（64px 确定性走廊）",
+	)
+	# 倒地爬着爬着失血阵亡的人，从阵亡那刻起彻底停住——
+	# soldier 的 die() 会 stop_moving，AI 的 is_dead 早退也在反射之前。
+	var stop_pos: Vector2 = crawler.global_position
+	crawler.set("bleed_timer", 0.05)
+	for _frame in range(30):
+		await get_tree().physics_frame
+	_check(
+		crawler.get("is_dead") == true
+			and crawler.global_position.distance_to(stop_pos) < 2.0,
+		"失血阵亡后不再挪动——尸体不会自己爬（容差 2px 盖住 die 前的尾帧）",
 	)
 	if game != null:
 		game.call("clear_boards")
