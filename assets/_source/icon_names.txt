@@ -1,0 +1,21 @@
+# 图标拆图顺序（4x4 排版，行优先）-> 游戏内名字
+# 第一行
+icons_v1_01.png attack       # 交叉步枪 —— 「进攻」
+icons_v1_02.png defend       # 盾牌 —— 「防守」
+icons_v1_03.png flank        # 环绕箭头 —— 「包抄」
+icons_v1_04.png hold         # 举手止步 —— 「待命」
+# 第二行
+icons_v1_05.png fob          # 带旗帐篷 —— 前进作战基地
+icons_v1_06.png sandbag      # 沙袋工事
+icons_v1_07.png medic_tent   # 红十字帐篷 —— 医疗点
+icons_v1_08.png ammo         # 步枪弹 —— 弹药
+# 第三行
+icons_v1_09.png intel        # 电台天线 —— 情报
+icons_v1_10.png suppressed   # 头盔与擦身而过的子弹 —— 被压制
+icons_v1_11.png heal         # 十字与绷带 —— 治疗
+icons_v1_12.png wounded      # 倒地伤员 —— 失血
+# 第四行
+icons_v1_13.png tank         # 装甲车（M10）
+icons_v1_14.png drone        # 侦察无人机（M11）
+icons_v1_15.png fpv          # FPV 自杀无人机（M13）
+icons_v1_16.png truck        # 补给卡车（M15）
