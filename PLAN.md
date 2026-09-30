@@ -682,9 +682,9 @@ M5 做了"打光"，这里补"告急"——打光前的最后一段弹链，射�
   均见于引擎类文档；`uid` 可省略由 `resource_format_text.cpp` 的 `next_tag.fields.has("uid")` 确认
 
 **已在真实引擎中验证**：GitHub Actions（`.github/workflows/ci.yml`）用 Godot 4.7.2 headless
-依次执行**九个**测试场景，**合计 454 项断言**。前八个场景全绿（medic_test 经 M16 扩段
-后为 34 项，其余不变），合计 423；truck_test 31 项首跑一次通过。**454 项引擎级验证由
-本次推送后的 CI 首跑完成**——每个场景都把总数写死在
+依次执行**九个**测试场景，**合计 454 项断言，454/454 全绿**（medic_test 经 M16 扩段
+后为 34 项，其首跑挂过的那条是 M10 踩过的老坑——靶子刚 spawn 碰撞体未 flush，
+开枪前等两个物理帧即修）。每个场景都把总数写死在
 `EXPECTED_CHECKS` 里由引擎自己判定数没数够（见下文）。M12–M14 的首跑四轮修复
 写进了验证史——其中三条是产品真 bug：`draw_polygon` 参数序写反（引擎编译器
 拒载脚本，gdtoolkit 却不查引擎签名）、evade 的「趴」缺 prone_hold 窗口
