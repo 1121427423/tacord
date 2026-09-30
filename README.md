@@ -126,6 +126,10 @@ HUD 的「装甲」「空中」「FPV」三行实时显示载具与机体的状�
 两发步枪弹能打下来——**击落是哑弹**，这就是士兵努力瞄准它的理由。
 弹药告急的阵地先"省着打"：总量跌到最后一匣，冷却 0.35 秒拉长到 0.875 秒——
 长点射变成单发，直到有人补进新弹药。
+每队一辆补给卡车停在防线一侧的地图边缘：FOB 落成即自主发车，沿 A\* 开到 96 px 内
+给半径里每个己方士兵发一匣备弹，卸完折返、歇 6 秒再发下一班；半路被新工事截断
+就趴窝在断点（车顶叹号框、HUD 标「断链」），工事被打掉最多 1 秒重新上路；
+60 血薄铁皮，五发步枪弹打断整条补给线——FOB 站桩补弹照旧，两条补给线各管各的。
 
 ### 步骤 5 · 静态检查（可选，但建议提交前跑）
 
@@ -195,7 +199,8 @@ tacord/
 │   ├── units/tank.tscn             # M10：装甲车 + Weapon(主炮) + TankAI
 │   ├── units/drone.tscn            # M11：无人机 + DroneAI（无武器节点）
 │   ├── units/grenade.tscn          # M12：手榴弹（Node2D，一次性投掷物）
-│   └── units/fpv_drone.tscn        # M13：FPV 自杀无人机 + FPVAI
+│   ├── units/fpv_drone.tscn        # M13：FPV 自杀无人机 + FPVAI
+│   └── units/truck.tscn            # M15：补给卡车（状态机内嵌，无 AI 节点）
 ├── scripts/
 │   ├── core/game.gd                 # autoload：引导、命令下发、全局查询
 │   ├── core/battle_map.gd           # 网格/地形/AStar2D/视线/掩体评估/占位渲染
@@ -211,6 +216,7 @@ tacord/
 │   ├── ai/fpv_ai.gd                 # M13：FPV 锁定→俯冲（引爆判定每帧）
 │   ├── units/grenade.gd             # M12：手榴弹（投掷/引信/被扔回/爆炸）
 │   ├── units/fpv_drone.gd           # M13：FPV 本体（撞针引爆/被击落是哑弹）
+│   ├── units/truck.gd               # M15：补给卡车（往返班次/卸弹/断链趴窝）
 │   ├── units/soldier.gd             # 移动 / HP / 命令 / 压制 / 倒地 / 俘虏 / 姿态与翻越
 │   ├── units/weapon.gd              # hitscan 武器：散布、冷却、近失压制、弹匣换弹、枪托
 │   ├── units/build_site.gd          # 工地：施工计时 / 建成转实体 / 被打掉拆地形
@@ -224,9 +230,10 @@ tacord/
 │   ├── drone_test.tscn              # M11：37 项断言（独立场景）
 │   ├── grenade_test.tscn            # M12：49 项断言（独立场景）
 │   ├── fpv_test.tscn                # M13：49 项断言（独立场景）
-│   └── ammo_test.tscn               # M14：20 项断言（独立场景）
+│   ├── ammo_test.tscn               # M14：20 项断言（独立场景）
+│   └── truck_test.tscn              # M15：31 项断言（独立场景）
 ├── assets/                          # 美术资源占位目录
-└── PLAN.md                          # 技术栈决策 + M0~M14 里程碑
+└── PLAN.md                          # 技术栈决策 + M0~M15 里程碑
 ```
 
 物理层约定：**1 = 单位，2 = 静态障碍**（视线射线只打第 2 层）。
@@ -255,7 +262,7 @@ tacord/
 | Job | 内容 |
 | --- | --- |
 | `GDScript 静态检查` | pip 装 `gdtoolkit==4.5.0`，对 `scripts/` 与 `tests/` 跑 `gdparse` + `gdlint` |
-| `Headless 冒烟测试` | 下载 Godot 4.7.2 Linux 版 → `--headless --import` → **依次**跑 `tests/smoke_test.tscn`、`tests/mobility_test.tscn`、`tests/medic_test.tscn`、`tests/tank_test.tscn`、`tests/drone_test.tscn`、`tests/grenade_test.tscn`、`tests/fpv_test.tscn`、`tests/ammo_test.tscn`，八个都必须退出码 0 |
+| `Headless 冒烟测试` | 下载 Godot 4.7.2 Linux 版 → `--headless --import` → **依次**跑 `tests/smoke_test.tscn`、`tests/mobility_test.tscn`、`tests/medic_test.tscn`、`tests/tank_test.tscn`、`tests/drone_test.tscn`、`tests/grenade_test.tscn`、`tests/fpv_test.tscn`、`tests/ammo_test.tscn`、`tests/truck_test.tscn`，九个都必须退出码 0 |
 
 冒烟测试是**引擎原生**的（不依赖 GUT/gdUnit 等第三方插件）。M8 起按里程碑拆成独立场景——
 `smoke_test.gd` 已经 911 行、顶着 gdlint 的 1000 行上限，再往里塞后面的里程碑就没有落脚的地方。
@@ -293,6 +300,11 @@ tacord/
   两带不重叠互为判别，防"两档都被拉长"或"降级没生效"两种假绿）、
   补弹自动恢复、打光（is_dry）≠ 告急的边界、换弹中读数不闪烁、
   降级不伤命中与弹药账、告急线精确踩线（总量 24 算、25 不算）
+- `truck_test.tscn`（**31 项**）：载具身段与不搅局、五发步枪弹击毁断供、
+  发车条件（无 FOB 纹丝不动 / 建成即发车且真的在动）、往返卸弹
+  （**半径外的兵一枚不加**——防"卡车给全场发弹"的假实现）、第二班循环、
+  断链趴窝（半路建实体工事截断 → is_stalled；工事被打掉 1s 重试节拍内恢复）、
+  FOB 站桩补弹不受断供影响（两条补给线各管各的）
 
 CI 里 annotation 上限约 10 条且只保留最先发出的，所以**成功的场景一行不发**，
 失败的才把诊断摊开；各场景日志另传成 `test-logs` artifact 兜底。
@@ -385,17 +397,19 @@ DNS 传播最长 24 小时，之后 `Enforce HTTPS` 才可勾选（站点强制 
 
 ## 七、当前验证状态
 
-**已在真实引擎里跑通**：GitHub Actions 上用 Godot 4.7.2 headless 依次执行八个测试场景，
-**合计 415 项断言**。前五个场景 **297/297 已全绿**——`smoke_test.tscn` 154 项（掩体几何评估、交火掉血、压制数值、
+**已在真实引擎里跑通**：GitHub Actions 上用 Godot 4.7.2 headless 依次执行九个测试场景，
+**合计 446 项断言**。前八个场景 **415/415 已全绿**——`smoke_test.tscn` 154 项（掩体几何评估、交火掉血、压制数值、
 倒地与救援、感知与记忆、弹药与后勤、建造与 FOB、俘虏与审讯）+ `mobility_test.tscn` 40 项
 （翻越、三种姿态、肉搏、三个新打分、端到端趴下与起身）+ `medic_test.tscn` 26 项
 （医疗帐篷的治疗四条件、视线与绕行、不碰胜负与编制、呼救气泡的相位）
 + `tank_test.tscn` 40 项（装甲减伤、双向交火与压制、同图 A\* 机动、
 Utility 三选一、载具不被步兵逻辑认领）+ `drone_test.tscn` 37 项
-（侦察无人机的身段边界、穿墙、盯梢巡逻两选一、墙后目击进黑板、反制命中）。
-第六到第八个场景（M12 手雷 49 / M13 FPV 49 / M14 弹药告急 20）随本批里程碑新增，
-**415/415 全绿**——总数同样写死在 `EXPECTED_CHECKS` 里。它们的首跑四轮修复出
-三个产品真 bug（见下"真 bug"清单）。
+（侦察无人机的身段边界、穿墙、盯梢巡逻两选一、墙后目击进黑板、反制命中）
++ M12–M14 三场景 118 项（手雷 49 / FPV 49 / 弹药告急 20——首跑四轮修复出
+三个产品真 bug）。
+第九个场景 `truck_test.tscn`（M15 补给卡车，31 项）随本里程碑新增：
+静态检查已过，引擎级验证由本次推送后的 CI 首跑完成——总数同样写死在
+`EXPECTED_CHECKS` 里。
 每个总数本身也是一条断言——
 `EXPECTED_CHECKS` 写死在测试里，某个测试段中途崩掉时退出码仍是 0，沙箱又读不到 CI 日志，
 所以必须让引擎自己判定数没数够。这套测试工作累计抓到 **16 个真 bug**（M12 首跑
@@ -451,7 +465,7 @@ FOB 建成后部队上限从 6 提到 9，站在它 48 px 内的士兵以 8 发/
 对面审出来的暗红。押送是有风险的：押送者阵亡或倒地，俘虏当场跑掉。
 实测：完全不干预，俘虏自己投降、押送者 122 帧内完成认领与押送、审出第 2 条情报并放人。
 
-静态验证：19 个脚本加 `tests/` 下八个测试脚本通过 `gdparse` 与 `gdlint`；M0/M1 期间做过一次引擎
+静态验证：20 个脚本加 `tests/` 下九个测试脚本通过 `gdparse` 与 `gdlint`；M0/M1 期间做过一次引擎
 API 逐个比对（脚本里的引擎/项目符号对 Godot **4.7.2** 与 **4.2** 源码自带的类文档，均 0 问题），
 M2 新增代码用到的 `is_equal_approx` / `is_zero_approx` 也在 `@GlobalScope.xml` 里确认过；
 `project.godot` 的每个设置项与 `.tscn` 的每个属性名都在引擎源码中确认存在。
