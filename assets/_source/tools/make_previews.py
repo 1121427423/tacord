@@ -40,6 +40,25 @@ PROPS_SCALE_ROW = [
     ("props/barbed_wire.png", "barbed_wire"),
 ]
 
+VILLAGE_SCALE_ROW = [
+    ("village/cottage_snow.png", "cottage_snow"),
+    ("village/cottage.png", "cottage"),
+    ("village/cottage_ruined.png", "cottage_ruined"),
+    ("village/barn.png", "barn"),
+    ("village/fence.png", "fence"),
+    ("village/rubble.png", "rubble"),
+    ("village/birch.png", "birch"),
+    ("village/pine.png", "pine"),
+    ("village/telegraph_pole.png", "telegraph_pole"),
+]
+
+EXTRA_SCALE_ROW = [
+    ("props/crate_stack.png", "crate_stack"),
+    ("props/crate_pair.png", "crate_pair"),
+    ("props/crate_single.png", "crate_single"),
+    ("props/ammo_boxes.png", "ammo_boxes"),
+]
+
 
 def tiled(tile_path: str, w: int, h: int) -> Image.Image:
     tile = Image.open(tile_path).convert("RGBA")
@@ -50,27 +69,61 @@ def tiled(tile_path: str, w: int, h: int) -> Image.Image:
     return out
 
 
-def scale_check(theme: str, ground: str, rows: list[tuple[str, str]], path: str) -> None:
+def scale_check(theme: str, ground: str, sections: list[tuple[str, list]], path: str) -> None:
+    """把每个分类的单位/道具按游戏 1:1 尺度贴在地形上，整幅放大 4 倍显示。
+
+    建筑 88~96 px、树木 56 px，都比一格（32 px）大得多，所以这里按**实际宽度自适应换行**，
+    而不是一格摆一个——否则预览图上会互相压在一起。
+    """
     zoom = 4
-    cell = 32 * zoom  # 一格 = 32 px，放大 4 倍
     pad = 24
-    width = cell * 9 + pad * 2
-    height = pad * 2 + (cell + 26) * 2 + 60
+    max_w = 1600
+
+    # 先量好每件东西的显示尺寸，再逐行排布
+    plan: list[tuple[str, list[tuple[str, str, tuple[int, int]]], list[list]]] = []
+    for label, items in sections:
+        sized = []
+        for rel, name in items:
+            img = Image.open(os.path.join(ASSETS, rel))
+            sized.append((rel, name, (img.width * zoom, img.height * zoom)))
+        lines: list[list] = []
+        line: list = []
+        line_w = 0
+        for item in sized:
+            w = item[2][0] + 28
+            if line and line_w + w > max_w - pad * 2:
+                lines.append(line)
+                line, line_w = [], 0
+            line.append(item)
+            line_w += w
+        if line:
+            lines.append(line)
+        plan.append((label, sized, lines))
+
+    width = max_w
+    height = pad * 2
+    for label, _sized, lines in plan:
+        height += 30
+        for line in lines:
+            height += max(i[2][1] for i in line) + 26
     canvas = tiled(os.path.join(ASSETS, ground), width, height).convert("RGB")
     canvas = Image.blend(canvas, Image.new("RGB", canvas.size, (10, 12, 16)), 0.25)
     draw = ImageDraw.Draw(canvas)
 
-    y = pad + 46
-    for label, items in (("UNITS (game scale 1:1, shown at 4x)", rows[0]), ("PROPS (game scale 1:1, shown at 4x)", rows[1])):
-        draw.text((pad, y - 34), f"{label}   theme={theme}   cell=32px @ {zoom}x", fill=(255, 232, 150))
-        x = pad + (cell - 32) // 2
-        for rel, name in items:
-            img = Image.open(os.path.join(ASSETS, rel)).convert("RGBA")
-            big = img.resize((img.width * zoom, img.height * zoom), Image.LANCZOS)
-            canvas.paste(big, (x + (64 - big.width) // 2, y + (cell - big.height) // 2), big)
-            draw.text((x + 2, y + cell + 4), name, fill=(236, 236, 240))
-            x += cell
-        y += cell + 58
+    y = pad
+    for label, _sized, lines in plan:
+        draw.text((pad, y), f"{label}   theme={theme}   cell=32px @ {zoom}x", fill=(255, 232, 150))
+        y += 30
+        for line in lines:
+            x = pad
+            line_h = max(i[2][1] for i in line)
+            for rel, name, (w, h) in line:
+                img = Image.open(os.path.join(ASSETS, rel)).convert("RGBA")
+                big = img.resize((w, h), Image.LANCZOS)
+                canvas.paste(big, (x, y + (line_h - h) // 2), big)
+                draw.text((x + 2, y + line_h + 4), name, fill=(236, 236, 240))
+                x += w + 28
+            y += line_h + 26
 
     canvas.save(path)
     print("wrote", path, canvas.size)
@@ -81,6 +134,7 @@ def overview(path: str) -> None:
         ("units", sorted(glob.glob(os.path.join(ASSETS, "units", "*.png")))),
         ("props", sorted(glob.glob(os.path.join(ASSETS, "props", "*.png")))),
         ("terrain", sorted(glob.glob(os.path.join(ASSETS, "terrain", "*.png")))[:4]),
+        ("village", sorted(glob.glob(os.path.join(ASSETS, "village", "*.png")))),
         ("ui/icons", sorted(glob.glob(os.path.join(ASSETS, "ui", "icons", "*.png")))),
     ]
     cell = 132
@@ -116,16 +170,22 @@ def overview(path: str) -> None:
 
 
 if __name__ == "__main__":
+    sections = [
+        ("UNITS (game scale 1:1, shown at 4x)", UNITS_SCALE_ROW),
+        ("PROPS (game scale 1:1, shown at 4x)", PROPS_SCALE_ROW),
+        ("VILLAGE (game scale 1:1, shown at 4x)", VILLAGE_SCALE_ROW),
+        ("CRATES / AMMO (game scale 1:1, shown at 4x)", EXTRA_SCALE_ROW),
+    ]
     scale_check(
         "snow",
         "terrain/snow_ground.png",
-        [UNITS_SCALE_ROW, PROPS_SCALE_ROW],
+        sections,
         os.path.join(OUT, "pack_scale_snow.png"),
     )
     scale_check(
         "desert",
         "terrain/desert_ground.png",
-        [UNITS_SCALE_ROW, PROPS_SCALE_ROW],
+        sections,
         os.path.join(OUT, "pack_scale_desert.png"),
     )
     overview(os.path.join(OUT, "pack_overview.png"))

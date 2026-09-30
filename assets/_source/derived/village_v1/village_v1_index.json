@@ -1,0 +1,47 @@
+[
+ {
+  "file": "village_v1_01.png",
+  "w": 299,
+  "h": 291
+ },
+ {
+  "file": "village_v1_02.png",
+  "w": 229,
+  "h": 240
+ },
+ {
+  "file": "village_v1_03.png",
+  "w": 309,
+  "h": 242
+ },
+ {
+  "file": "village_v1_04.png",
+  "w": 220,
+  "h": 288
+ },
+ {
+  "file": "village_v1_05.png",
+  "w": 333,
+  "h": 83
+ },
+ {
+  "file": "village_v1_06.png",
+  "w": 303,
+  "h": 232
+ },
+ {
+  "file": "village_v1_07.png",
+  "w": 243,
+  "h": 260
+ },
+ {
+  "file": "village_v1_08.png",
+  "w": 288,
+  "h": 303
+ },
+ {
+  "file": "village_v1_09.png",
+  "w": 305,
+  "h": 270
+ }
+]

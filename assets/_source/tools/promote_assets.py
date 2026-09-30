@@ -43,6 +43,21 @@ ASSETS: list[tuple[str, str, int, str]] = [
     ("props_v1/props_v1_07.png", "props/truck_wreck.png", 44, "卡车残骸（断供）"),
     ("props_v1/props_v1_08.png", "props/crater.png", 48, "弹坑（装饰）"),
     ("props_v1/props_v1_09.png", "props/barbed_wire.png", 48, "铁丝网与拒马（装饰）"),
+    # ---- 木箱重出（旧版带红划痕）+ 弹药箱 ----
+    ("crates_v1/crates_v1_01.png", "props/crate_stack.png", 36, "木箱堆（三只，无标记）"),
+    ("crates_v1/crates_v1_02.png", "props/crate_pair.png", 32, "木箱两只"),
+    ("crates_v1/crates_v1_03.png", "props/crate_single.png", 24, "单只大木箱"),
+    ("crates_v1/crates_v1_04.png", "props/ammo_boxes.png", 32, "弹药箱四只"),
+    # ---- 村落与植被（雪地/沙漠通用的地图装饰）----
+    ("village_v1/village_v1_01.png", "village/cottage_snow.png", 88, "积雪红顶木屋"),
+    ("village_v1/village_v1_02.png", "village/cottage.png", 84, "红顶木屋（无雪）"),
+    ("village_v1/village_v1_03.png", "village/cottage_ruined.png", 96, "烧毁坍塌的木屋"),
+    ("village_v1/village_v1_04.png", "village/barn.png", 80, "木板谷仓"),
+    ("village_v1/village_v1_05.png", "village/fence.png", 64, "木栅栏段（带小门）"),
+    ("village_v1/village_v1_06.png", "village/rubble.png", 56, "建筑废墟堆"),
+    ("village_v1/village_v1_07.png", "village/birch.png", 56, "白桦树（俯瞰）"),
+    ("village_v1/village_v1_08.png", "village/pine.png", 56, "松树（俯瞰）"),
+    ("village_v1/village_v1_09.png", "village/telegraph_pole.png", 72, "电线杆（俯瞰）"),
 ]
 
 

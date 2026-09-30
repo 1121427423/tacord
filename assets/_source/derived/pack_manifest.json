@@ -214,5 +214,161 @@
    247,
    244
   ]
+ },
+ {
+  "file": "props/crate_stack.png",
+  "note": "木箱堆（三只，无标记）",
+  "game_size": [
+   36,
+   35
+  ],
+  "hd_size": [
+   452,
+   445
+  ]
+ },
+ {
+  "file": "props/crate_pair.png",
+  "note": "木箱两只",
+  "game_size": [
+   32,
+   20
+  ],
+  "hd_size": [
+   456,
+   290
+  ]
+ },
+ {
+  "file": "props/crate_single.png",
+  "note": "单只大木箱",
+  "game_size": [
+   24,
+   24
+  ],
+  "hd_size": [
+   419,
+   427
+  ]
+ },
+ {
+  "file": "props/ammo_boxes.png",
+  "note": "弹药箱四只",
+  "game_size": [
+   32,
+   31
+  ],
+  "hd_size": [
+   440,
+   431
+  ]
+ },
+ {
+  "file": "village/cottage_snow.png",
+  "note": "积雪红顶木屋",
+  "game_size": [
+   88,
+   86
+  ],
+  "hd_size": [
+   299,
+   291
+  ]
+ },
+ {
+  "file": "village/cottage.png",
+  "note": "红顶木屋（无雪）",
+  "game_size": [
+   80,
+   84
+  ],
+  "hd_size": [
+   229,
+   240
+  ]
+ },
+ {
+  "file": "village/cottage_ruined.png",
+  "note": "烧毁坍塌的木屋",
+  "game_size": [
+   96,
+   75
+  ],
+  "hd_size": [
+   309,
+   242
+  ]
+ },
+ {
+  "file": "village/barn.png",
+  "note": "木板谷仓",
+  "game_size": [
+   61,
+   80
+  ],
+  "hd_size": [
+   220,
+   288
+  ]
+ },
+ {
+  "file": "village/fence.png",
+  "note": "木栅栏段（带小门）",
+  "game_size": [
+   64,
+   16
+  ],
+  "hd_size": [
+   333,
+   83
+  ]
+ },
+ {
+  "file": "village/rubble.png",
+  "note": "建筑废墟堆",
+  "game_size": [
+   56,
+   43
+  ],
+  "hd_size": [
+   303,
+   232
+  ]
+ },
+ {
+  "file": "village/birch.png",
+  "note": "白桦树（俯瞰）",
+  "game_size": [
+   52,
+   56
+  ],
+  "hd_size": [
+   243,
+   260
+  ]
+ },
+ {
+  "file": "village/pine.png",
+  "note": "松树（俯瞰）",
+  "game_size": [
+   53,
+   56
+  ],
+  "hd_size": [
+   288,
+   303
+  ]
+ },
+ {
+  "file": "village/telegraph_pole.png",
+  "note": "电线杆（俯瞰）",
+  "game_size": [
+   72,
+   64
+  ],
+  "hd_size": [
+   305,
+   270
+  ]
  }
 ]
