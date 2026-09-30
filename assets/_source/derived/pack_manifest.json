@@ -1,0 +1,218 @@
+[
+ {
+  "file": "units/soldier.png",
+  "note": "步兵（冬装步枪兵）",
+  "game_size": [
+   19,
+   24
+  ],
+  "hd_size": [
+   156,
+   199
+  ]
+ },
+ {
+  "file": "units/medic.png",
+  "note": "医疗兵（白盔红十字）",
+  "game_size": [
+   17,
+   24
+  ],
+  "hd_size": [
+   134,
+   184
+  ]
+ },
+ {
+  "file": "units/mg_gunner.png",
+  "note": "机枪手（趴射，备用）",
+  "game_size": [
+   14,
+   30
+  ],
+  "hd_size": [
+   128,
+   279
+  ]
+ },
+ {
+  "file": "units/tank.png",
+  "note": "装甲车 M10",
+  "game_size": [
+   19,
+   42
+  ],
+  "hd_size": [
+   195,
+   429
+  ]
+ },
+ {
+  "file": "units/drone.png",
+  "note": "侦察无人机 M11",
+  "game_size": [
+   26,
+   24
+  ],
+  "hd_size": [
+   198,
+   184
+  ]
+ },
+ {
+  "file": "units/fpv_drone.png",
+  "note": "FPV 自杀无人机 M13",
+  "game_size": [
+   26,
+   24
+  ],
+  "hd_size": [
+   186,
+   174
+  ]
+ },
+ {
+  "file": "units/grenade.png",
+  "note": "手榴弹 M12",
+  "game_size": [
+   4,
+   16
+  ],
+  "hd_size": [
+   40,
+   165
+  ]
+ },
+ {
+  "file": "units/truck.png",
+  "note": "补给卡车 M15",
+  "game_size": [
+   19,
+   44
+  ],
+  "hd_size": [
+   140,
+   330
+  ]
+ },
+ {
+  "file": "units/tank_wreck.png",
+  "note": "坦克残骸（击毁态）",
+  "game_size": [
+   23,
+   42
+  ],
+  "hd_size": [
+   179,
+   334
+  ]
+ },
+ {
+  "file": "props/sandbag_wall.png",
+  "note": "沙袋掩体（cover 地形）",
+  "game_size": [
+   44,
+   34
+  ],
+  "hd_size": [
+   260,
+   198
+  ]
+ },
+ {
+  "file": "props/crate_stack.png",
+  "note": "木箱堆",
+  "game_size": [
+   36,
+   29
+  ],
+  "hd_size": [
+   206,
+   165
+  ]
+ },
+ {
+  "file": "props/ruined_wall.png",
+  "note": "断墙",
+  "game_size": [
+   48,
+   26
+  ],
+  "hd_size": [
+   272,
+   150
+  ]
+ },
+ {
+  "file": "props/fob.png",
+  "note": "前进作战基地（建成态）",
+  "game_size": [
+   39,
+   40
+  ],
+  "hd_size": [
+   256,
+   261
+  ]
+ },
+ {
+  "file": "props/medic_tent.png",
+  "note": "医疗帐篷（建成态）",
+  "game_size": [
+   39,
+   40
+  ],
+  "hd_size": [
+   244,
+   248
+  ]
+ },
+ {
+  "file": "props/build_site.png",
+  "note": "工地（施工中）",
+  "game_size": [
+   40,
+   36
+  ],
+  "hd_size": [
+   264,
+   238
+  ]
+ },
+ {
+  "file": "props/truck_wreck.png",
+  "note": "卡车残骸（断供）",
+  "game_size": [
+   44,
+   31
+  ],
+  "hd_size": [
+   305,
+   214
+  ]
+ },
+ {
+  "file": "props/crater.png",
+  "note": "弹坑（装饰）",
+  "game_size": [
+   48,
+   42
+  ],
+  "hd_size": [
+   295,
+   258
+  ]
+ },
+ {
+  "file": "props/barbed_wire.png",
+  "note": "铁丝网与拒马（装饰）",
+  "game_size": [
+   48,
+   47
+  ],
+  "hd_size": [
+   247,
+   244
+  ]
+ }
+]

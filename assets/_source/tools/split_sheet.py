@@ -42,13 +42,17 @@ def _bg_color(arr: np.ndarray) -> np.ndarray:
     return np.median(border, axis=0)
 
 
-def despill(rgb: np.ndarray) -> np.ndarray:
+def despill(rgb: np.ndarray, divisor: float = 40.0, strength: float = 0.95) -> np.ndarray:
     """去洋红溢色：半透明像素（旋翼、烟尘、弹坑边）总带着背景的品红，
-    按「品红程度」把它往该像素的灰度拉回去，缩放后就不会出现粉边。"""
+    按「品红程度」把它往该像素的灰度拉回去，缩放后就不会出现粉边。
+
+    divisor 越小越激进：旋翼这类「灰 + 洋红」的运动模糊残留（r、b 都明显高于 g）
+    只有把除数压到 40 上下才拉得干净。
+    """
     r, g, b = rgb[:, :, 0], rgb[:, :, 1], rgb[:, :, 2]
-    mag = np.clip(((r + b) * 0.5 - g) / 96.0, 0.0, 1.0)
+    mag = np.clip(((r + b) * 0.5 - g) / divisor, 0.0, 1.0)
     lum = (0.299 * r + 0.587 * g + 0.114 * b)[:, :, None]
-    return rgb * (1.0 - mag * 0.9)[:, :, None] + lum * (mag * 0.9)[:, :, None]
+    return rgb * (1.0 - mag * strength)[:, :, None] + lum * (mag * strength)[:, :, None]
 
 
 def cutout(arr: np.ndarray, t0: float = 40.0, t1: float = 105.0) -> np.ndarray:
