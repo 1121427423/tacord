@@ -32,8 +32,8 @@
 | --- | --- | --- |
 | M0.1 | `sim_math` 确定性定点数学（`Mm`/`Ang`/`Q16`/`Prob`/`Vec2`、sin/cos/atan2、sqrt、Pcg32） | ✅ 已完成（45 项单测，CI 双构建通过） |
 | M0.1b | 查找表生成器 `tools/gen_trig.py` + `tools/check_constants.py` 常量自检 | ✅ 已完成（CI 强制） |
-| M0.2 | `sim_core` 体素柱世界 + 破坏/挖掘 + 体素 DDA 射线 | ⬜ 下一步 |
-| M0.3 | `sim_cli bench`（400 单位 / 10 万 tick 性能基线） | ⬜ |
+| M0.2 | `sim_core` 体素柱世界 + 破坏/挖掘 + 体素 DDA 射线（`ray::blocked`，掩体/LOS/弹道共用） | ✅ 已完成（28 项单测含 800 条射线对照 oracle，CI 全绿） |
+| M0.3 | `sim_cli bench` 性能基线 + `sim_core::nav` 寻路 | 🟨 进行中：基线条已写入 [`docs/perf/baseline.md`](../perf/baseline.md)（最坏口径 p99 3.1 ms/tick = 预算 28%）；限长用例与 M1 实测待补 |
 | M0.4 | Godot 薄绑定 + macOS arm64 导出 | ⬜ |
 
 ## 状态
