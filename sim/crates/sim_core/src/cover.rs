@@ -151,7 +151,10 @@ pub struct CoverSlot {
     pub cz: i32,
     /// 站立面高度（mm）
     pub ground_mm: i32,
-    /// 面朝外的法线（背离掩体）
+    /// **掩体正面**朝向：从槽**指回掩体**的方向（= 威胁在哪个方向时这处掩体才有用）。
+    ///
+    /// 命名对照：设计文档 §20.1.2 里 `d` 是"墙柱 → 槽"的方向，而 `normal = -d`。
+    /// 想成"士兵背靠掩体、面朝敌人"就不会搞反 —— 威胁方向与它的夹角才是 α。
     pub normal: Ang,
     /// 遮挡物高度（顶 - 地面，mm）
     pub height_mm: i32,
@@ -313,14 +316,46 @@ impl CoverField {
                 continue;
             }
             let width = self.scan_width(w, hf, (cx, cz), (nx, nz), (*dx, *dz), n_ground, cover_top);
-            let kind = classify(w, hf, (nx, nz), (*dx, *dz), n_ground, height, width, best_mat, has_gap);
+            // 墙角：沿墙方向只有**一侧**到头了（能绕过去探头）；
+            // 两侧都到头 = 一根孤零零的柱子，那是 PILLAR 不是 CORNER。
+            let perp = (dz, -*dx);
+            let open_pos = edge_open(
+                w,
+                hf,
+                (cx + perp.0, cz + perp.1),
+                (nx + perp.0, nz + perp.1),
+                n_ground,
+                cover_top,
+            );
+            let open_neg = edge_open(
+                w,
+                hf,
+                (cx - perp.0, cz - perp.1),
+                (nx - perp.0, nz - perp.1),
+                n_ground,
+                cover_top,
+            );
+            let is_end = open_pos != open_neg;
+            let kind = classify(
+                w,
+                hf,
+                (nx, nz),
+                (*dx, *dz),
+                n_ground,
+                height,
+                width,
+                best_mat,
+                has_gap,
+                is_end,
+            );
             let solidity = ((best_hp as u64 * 65_536) / max_hp as u64).min(65_535) as u16;
             let capacity = (width as i64 / SLOT_CAPACITY_MM).clamp(1, 255) as u8;
             self.slots.push(CoverSlot {
                 cx: nx as i32,
                 cz: nz as i32,
                 ground_mm: n_ground,
-                normal: Ang::from_degrees(DIR_DEG[dir]),
+                // normal = -d：槽在墙的 +d 侧，法线指回墙（威胁来的方向）
+                normal: Ang::from_degrees(DIR_DEG[dir] + 180),
                 height_mm: height,
                 width_mm: width,
                 kind,
@@ -431,6 +466,19 @@ impl CoverField {
 }
 
 /// 分类（优先级从上到下）。
+/// 沿墙再走一格：墙还延续吗？（不延续 = 可以从这一侧绕过去探头）
+fn edge_open(
+    w: &World,
+    hf: &HeightField,
+    wall: (i64, i64),
+    slot: (i64, i64),
+    ground_mm: i32,
+    cover_top: i32,
+) -> bool {
+    !w.overlaps(wall.0 as u32, wall.1 as u32, ground_mm + 1, cover_top)
+        && hf.walkable(slot.0, slot.1)
+}
+
 fn classify(
     w: &World,
     hf: &HeightField,
@@ -441,6 +489,7 @@ fn classify(
     width: i32,
     mat_id: u16,
     has_gap: bool,
+    is_end: bool,
 ) -> CoverKind {
     // 战壕：槽位前面那一格（同方向再走一格）地面明显更高，且能站人 → 人在沟里
     if let Some(fg) = hf.walk_top(slot.0 + d.0, slot.1 + d.1) {
@@ -465,7 +514,7 @@ fn classify(
             faces += 1;
         }
     }
-    if faces >= 2 {
+    if faces >= 2 || is_end {
         return CoverKind::Corner;
     }
     if width < PILLAR_MAX_WIDTH_MM {
@@ -901,12 +950,23 @@ mod tests {
         let (w, hf) = world_with_wall(32, 16, 800); // 0.8 m → 矮墙
         let mut f = CoverField::new();
         f.rebuild_all(&w, &hf);
-        assert!(f.slots.iter().all(|s| s.kind == CoverKind::LowWall));
+        // 注意：墙两端的"端头槽"是 CORNER（能绕过去探头），只对中段断言
+        assert!(f
+            .slots
+            .iter()
+            .filter(|s| s.cx >= 4 && s.cx <= 27)
+            .all(|s| s.kind == CoverKind::LowWall));
 
         let (w2, hf2) = world_with_wall(32, 16, 1_500); // 1.5 m → 高墙
         let mut f2 = CoverField::new();
         f2.rebuild_all(&w2, &hf2);
-        assert!(f2.slots.iter().all(|s| s.kind == CoverKind::HighWall));
+        assert!(f2
+            .slots
+            .iter()
+            .filter(|s| s.cx >= 4 && s.cx <= 27)
+            .all(|s| s.kind == CoverKind::HighWall));
+        // 端头必须是 CORNER（这是最经典的"探头位"）
+        assert!(f2.slots.iter().any(|s| s.kind == CoverKind::Corner));
     }
 
     #[test]
