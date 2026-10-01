@@ -1,1 +1,44 @@
-/Users/runner/work/_temp/1184de32-1825-4bbc-83a7-a5b99d80f8c7.sh: line 2: timeout: command not found
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+[   0% ] [90m[1mfirst_scan_filesystem[22m | Started Project initialization (5 steps)[39m[0m
+[   0% ] [90m[1mfirst_scan_filesystem[22m | Scanning file structure...[39m[0m
+[  16% ] [90m[1mfirst_scan_filesystem[22m | Loading global class names...[39m[0m
+[  33% ] [90m[1mfirst_scan_filesystem[22m | Verifying GDExtensions...[39m[0m
+Initialize godot-rust (API v4.7.2.stable.official, runtime v4.7.2.stable.official, safeguards balanced)
+[  50% ] [90m[1mfirst_scan_filesystem[22m | Creating autoload scripts...[39m[0m
+[  66% ] [90m[1mfirst_scan_filesystem[22m | Initializing plugins...[39m[0m
+[  83% ] [90m[1mfirst_scan_filesystem[22m | Starting file scan...[39m[0m
+[92m[ DONE ][39m [1mfirst_scan_filesystem[22m
+[0m
+[   0% ] [90m[1mupdate_scripts_classes[22m | Started Registering global classes... (4 steps)[39m[0m
+[   0% ] [90m[1mupdate_scripts_classes[22m | [39m[0m
+[  20% ] [90m[1mupdate_scripts_classes[22m | [39m[0m
+[  40% ] [90m[1mupdate_scripts_classes[22m | [39m[0m
+[  60% ] [90m[1mupdate_scripts_classes[22m | [39m[0m
+[92m[ DONE ][39m [1mupdate_scripts_classes[22m
+[0m
+[   0% ] [90m[1mloading_editor_layout[22m | Started Loading editor (5 steps)[39m[0m
+[   0% ] [90m[1mloading_editor_layout[22m | Loading editor layout...[39m[0m
+[  16% ] [90m[1mloading_editor_layout[22m | Loading docks...[39m[0m
+[92m[ DONE ][39m [1mloading_editor_layout[22m
+[0m
+
+================================================================
+handle_crash: Program crashed with signal 11
+Engine version: Godot Engine v4.7.2.stable.official (ed1daf0bf001b61586d9930840f2f1394092c079)
+Dumping the backtrace. Please include this when reporting the bug on: https://github.com/godotengine/godot/issues
+Load address: 102ba4000
+
+[1] 18b2816a4 (libsystem_platform.dylib+36a4) - _sigtramp + 56
+[2] 104d5cdbc (main+21b8dbc) - SDL_GetPerformanceFrequency + 4162848
+[3] 104d3c3c0 (main+21983c0) - SDL_GetPerformanceFrequency + 4029220
+[4] 104d7d69c (main+21d969c) - SDL_GetPerformanceFrequency + 4296192
+[5] 10793037c (main+4d8c37c) - ZSTD_decompressStream_simpleArgs + 6538008
+[6] 107930664 (main+4d8c664) - ZSTD_decompressStream_simpleArgs + 6538752
+[7] 10331694c (main+77294c) - main + 155224
+[8] 10328e578 (main+6ea578) - mvk::SPIRVToMSLConverter::convert(mvk::SPIRVToMSLConversionConfiguration&, mvk::SPIRVToMSLConversionResult&, bool, bool, bool)
+[9] 1032f0ea4 (main+74cea4) - main (in Godot) + 944
+[10] 18aea6b98 (dyld+6b98) - start + 6076
+-- END OF C++ BACKTRACE --
+================================================================
+tools/ci_timeout.sh: line 26:  2040 Abort trap: 6           perl -e 'alarm shift; exec @ARGV' "$secs" "$@"
