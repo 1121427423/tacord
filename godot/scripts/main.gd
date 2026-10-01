@@ -23,8 +23,9 @@ func _ready() -> void:
 	_mm = MultiMeshInstance3D.new()
 	_mm.multimesh = mm
 	add_child(_mm)
+	# 注意：sim 的校验和是 u64，Godot 的整数是 i64 ⇒ 必须用 num_uint64 打印，否则出现负号
 	print("[tacord] units=", sim.unit_count(), " segments=", sim.segment_count(),
-			" checksum=0x", String.num_int64(sim.world_checksum(), 16))
+			" checksum=0x", String.num_uint64(sim.world_checksum(), 16))
 	_sync()
 
 

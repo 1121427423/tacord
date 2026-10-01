@@ -17,11 +17,12 @@ func _initialize() -> void:
 		sim.step()
 	var pos0 := sim.unit_position(0)
 
+	# 校验和是 u64（Godot 整数是 i64）⇒ 用 num_uint64 打印；这个数字用于跨平台逐位比对
 	print("[smoke] units=", sim.unit_count(),
 			" dim=", sim.dim_cells(),
 			" tick=", sim.tick_count(),
-			" world_checksum=0x", String.num_int64(sim.world_checksum(), 16),
-			" pos_checksum=0x", String.num_int64(sim.unit_position_checksum(), 16),
+			" world_checksum=0x", String.num_uint64(sim.world_checksum(), 16),
+			" pos_checksum=0x", String.num_uint64(sim.unit_position_checksum(), 16),
 			" pos0=", str(pos0))
 
 	var ok := true

@@ -4,10 +4,12 @@
 
 | 层 | 选择 | 理由 |
 | --- | --- | --- |
-| 引擎 / 编辑器 / 渲染 / UI | **Godot 4.7.x**（稳定线；4.8 仍在 dev） | MIT 许可；**原生 arm64 macOS 编辑器**；Apple Silicon 上有**原生 Metal 后端**（4.4 起，仅 arm64），Intel Mac 走 MoltenVK；内置导航、物理、动画、UI、导出模板 |
+| 引擎 / 编辑器 / 渲染 / UI | **Godot 4.7.2**（已钉；4.8 仍在 dev） | MIT 许可；**原生 arm64 macOS 编辑器**；Apple Silicon 上有**原生 Metal 后端**（4.4 起，仅 arm64），Intel Mac 走 MoltenVK；内置导航、物理、动画、UI、导出模板 |
 | 模拟核心（AI / 掩体 / 弹道 / 经济） | **独立库 `sim_core`**，不依赖引擎，可被 headless CLI 与 CI 直接跑 | AI 是本项目 80% 的复杂度与风险，必须与表现层解耦，才能确定性回放、批量测试、并行优化、将来做服务器权威 |
 | `sim_core` 语言 | **首选 Rust**（`gdext` 绑定，5.1k★，2026 年仍活跃维护）；**备选 C++20 / godot-cpp** | 数据导向、无 GC 抖动、`rayon` 并行、内存安全；`cargo test` + `proptest` 直接跑在 CI |
-| 绑定方式 | Rust `cdylib` → GDExtension（`gdext`）；若 `gdext` 在某版本卡住，**退路**：`cbindgen` 导出 C ABI，用一层薄的 C++ GDExtension 包装 | 把"绑定风险"限制在一个可替换的薄层里 |
+| 绑定方式 | Rust `cdylib` → GDExtension（`gdext` 0.5.5）；若 `gdext` 在某版本卡住，**退路**：`cbindgen` 导出 C ABI，用一层薄的 C++ GDExtension 包装 | 把"绑定风险"限制在一个可替换的薄层里 |
+| 绑定目录 | `gdext/`（**独立 workspace**，绝不能并入 `sim/`）；`godot/` 只放工程、场景与 GDScript | A6 边界：CI grep 强制 `sim/` 内无 godot |
+| API 绑定 | CI 用 `--features api-custom` + `GODOT4_BIN` 指向真实 4.7.2 生成绑定 | gdext 预置的 API 是 4.6，直接用会走兼容层（"API v4.6 / runtime v4.7.2"）—— 能跑，但不该依赖 |
 | 脚本层 | GDScript 只做**胶水**：UI、相机、特效、音频触发、关卡装载 | 保持热重载的迭代速度；所有游戏规则一律在 `sim_core` |
 | 多人 | **确定性 Lockstep + 命令延迟**（输入只有命令，频率低，天然适合 RTS 式同步） | 支持回放、观战、断线重连、反作弊校验；见 §10.9 |
 
@@ -364,7 +366,7 @@ TunnelGraph {
 - [x] `sim_math` 定点库 + 查表三角 + 定点随机（**M0.1 已完成**：45 项单测，release + debug(溢出检查) 双构建通过；表 `tools/gen_trig.py` 烘焙入库）
 - [ ] `sim_core` 世界/柱/chunk + 破坏与挖掘管线（含脏队列与摊还重建）
 - [ ] `sim_cli` bench 跑通 400 单位 / 10 万 tick，p99 ≤ 预算
-- [ ] Rust → Godot GDExtension 薄绑定跑通（node 每帧驱动 sim tick，渲染读状态）
+- [x] Rust → Godot GDExtension 薄绑定跑通（`gdext/` + `godot/`，CI headless 冒烟：扩展加载 + 300 tick + 校验和）—— M0.4 第一片
 - [ ] macOS arm64 导出 + 签名 + 启动自检在 CI 通过（ad-hoc 通道）
 - [ ] CI grep 强制边界：`sim/` 无 godot 依赖、`godot/scripts/` 无规则逻辑
 - [ ] **三平台（Linux / Windows / macOS arm64）黄金回放校验和逐位一致**（artifact 比对 job，见 §10.2.5）

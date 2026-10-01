@@ -224,7 +224,9 @@ M0.2（`sim_core` 体素世界 + 破坏管线 + 体素 DDA 射线 + `sim_cli ben
    → **已跑通**：`determinism` job 在 ubuntu / macos-15(arm64) / windows 上跑同一个确定性负载，
    `determinism-compare` 逐位比对校验和（三平台 `0xBCDB03CC976971A2` 完全一致）。
    **还不是完整的 A1/A7**：A1 要"10 万 tick 的状态校验和"、A7 要"≥8 个黄金回放三平台一致"，回放系统尚未实现；
-4. **Godot 工程 + 薄绑定**：驱动 sim tick，把 400 个体素小人渲染出来（macOS arm64 优先，A5）；
+4. ~~**Godot 工程 + 薄绑定**~~ → **第一片已跑通**：`gdext/`（SimRoot）+ `godot/`（工程/场景/GDScript），
+   CI 在 ubuntu 与 macos-15 上用真实 Godot 4.7.2 做 headless 冒烟（扩展加载 + 300 tick + 校验和）。
+   **还差**：macOS arm64 的**导出产物**（A5 要 ad-hoc 签名的 app）与真机跑一次看画面；
 5. 真机人工核对 `_open_visual_questions.md` 的 8 项（相机、比例、HUD、镜头语言…）—— 注意 §0.4 的 part2 40–84s 结论**不能作为依据**（R11）。
 
 > **G1 目前不能宣判**：G1 的判据是"400 单位 p99 ≤ 11ms/tick"，而现在只有射线与移动的数字，
