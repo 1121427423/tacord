@@ -235,6 +235,9 @@ M0.2（`sim_core` 体素世界 + 破坏管线 + 体素 DDA 射线 + `sim_cli ben
 
 ## 90.8 待办（本轮审查的遗留项）
 
+- [ ] **浏览器里人工确认 Web 版**：HUD 有 tick / units / fps / 两个校验和，400 个方块在动；
+      且 Web 的 `pos_checksum` 必须等于桌面端 `0x3F2F61446B0811BD`（"Web 展示正确"的判据）
+- [ ] macOS arm64 导出产物（A5 ad-hoc 签名）—— 用户已同意**排在 Web 之后**
 - [ ] `tools/check_geo.py`：可掩体/可破坏渲染物件必须关联柱段（R4，M3）
 - [ ] 把 A8 相机无关性测试写进 `.github/workflows/sim.yml`（R1，M0.2）
 - [ ] `sim_cli dump --what cover|threat` 可视化输出（调参与调试的前提）

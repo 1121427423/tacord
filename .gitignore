@@ -1,0 +1,3 @@
+# Web 导出产物：CI 推到 ci/web-preview 分支，本地用 tools/serve_web.py 起服务
+# 不入库（体积大、且是 CI 生成物）
+web-preview/
