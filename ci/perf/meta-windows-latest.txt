@@ -1,5 +1,5 @@
 os: windows-latest
 arch: x86_64
-cpu: Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz
-commit: 999d53d5c0660bc68eb2613fada4efd0e7227598
-date: Thu Oct  1 18:42:24 UTC 2026
+cpu: INTEL(R) XEON(R) PLATINUM 8573C
+commit: 1f9ef3bbb08afda13b7aa6077556ff5fffc11c10
+date: Thu Oct  1 18:52:20 UTC 2026
