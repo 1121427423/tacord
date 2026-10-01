@@ -137,21 +137,29 @@ jobs:
         working-directory: sim
         run: |
           set +e
+          TICKS="${{ inputs.ticks || '100000' }}"
           {
             echo "commit: ${GITHUB_SHA}"
             echo "runner: $(uname -m) / $(grep -m1 'model name' /proc/cpuinfo | sed 's/.*: //')"
             echo "date: $(date -u)"
             echo
             echo "=== 参数（冻结参数表 §15）==="
-            echo "units 400 / ticks ${{ inputs.ticks || '100000' }} / rays-per-unit-per-tick 4 / world 128m"
+            echo "units 400 / ticks ${TICKS} / world 128m / 柱 0.5m"
+            echo "A 最坏情况 4 射线/tick 不限长 | B 掩体评分 4 射线/tick ≤30m | C 感知 1 射线/tick ≤80m | D 压力 8 射线/tick 不限长 | E 单条成本"
             echo
-            echo "=== A：400 单位 · 4 射线/单位/tick · 128m 世界 ==="
-            cargo run --release -q -p sim_cli -- bench --units 400 --ticks ${{ inputs.ticks || '100000' }} --rays 4 --world 256 --seed 1
+            echo "=== A 最坏情况：400 单位 · 4 射线/tick · 128m 世界 · 不限长 ==="
+            cargo run --release -q -p sim_cli -- bench --units 400 --ticks ${TICKS} --rays 4 --world 256 --seed 1
             echo
-            echo "=== B：400 单位 · 8 射线/单位/tick（更接近掩体评分的实际射线数）==="
-            cargo run --release -q -p sim_cli -- bench --units 400 --ticks $(( ${{ inputs.ticks || '100000' }} / 4 )) --rays 8 --world 256 --seed 1
+            echo "=== B 掩体评分（真实分布）：4 射线/tick · 截断到 30m ==="
+            cargo run --release -q -p sim_cli -- bench --units 400 --ticks ${TICKS} --rays 4 --world 256 --maxdist 30000 --seed 1
             echo
-            echo "=== C：1 单位 · 128m 长射线（单条成本上限）==="
+            echo "=== C 感知 LOS（真实分布）：1 射线/tick · 截断到 80m ==="
+            cargo run --release -q -p sim_cli -- bench --units 400 --ticks ${TICKS} --rays 1 --world 256 --maxdist 80000 --seed 1
+            echo
+            echo "=== D 压力：8 射线/tick · 不限长 ==="
+            cargo run --release -q -p sim_cli -- bench --units 400 --ticks $(( ${TICKS} / 4 )) --rays 8 --world 256 --seed 1
+            echo
+            echo "=== E 单条成本：1 单位 · 不限长 ==="
             cargo run --release -q -p sim_cli -- bench --units 1 --ticks 200000 --rays 4 --world 256 --seed 1
           } > /tmp/ci-baseline.log 2>&1
           cat /tmp/ci-baseline.log

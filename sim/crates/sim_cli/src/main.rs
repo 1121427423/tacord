@@ -17,10 +17,11 @@ fn print_help() {
     println!(
         "用法：sim_cli <子命令> [选项]\n\
          \n\
-         bench        性能基线：--units --ticks --rays --world --seed\n\
+         bench        性能基线：--units --ticks --rays --world --maxdist --seed\n\
          worldcheck   世界构建 + 射线自检 + 校验和\n\
          \n\
-         示例：sim_cli bench --units 400 --ticks 20000 --rays 4 --world 256 --seed 1"
+         --maxdist 0 表示不限长（最坏情况）；掩体评分用 30000、感知用 80000。
+         示例：sim_cli bench --units 400 --ticks 20000 --rays 4 --world 256 --maxdist 30000 --seed 1"
     );
 }
 
@@ -75,6 +76,9 @@ fn cmd_bench(args: &[String]) {
     let units_n = arg(args, "units", 400) as usize;
     let ticks = arg(args, "ticks", 20000) as u64;
     let rays_per_tick = arg(args, "rays", 4) as usize;
+    // 射线长度上限（mm，0 = 不限）。真实负载里射线按用途限长：
+    // 掩体评分 ≤30m、感知 LOS ≤80m（冻结参数表 §4/§15 的 LOD 距离）。
+    let maxdist_mm = arg(args, "maxdist", 0) as i32;
     let dim = arg(args, "world", 256) as u32;
     let seed = arg(args, "seed", 1);
 
@@ -94,7 +98,9 @@ fn cmd_bench(args: &[String]) {
         });
     }
 
-    // 目标点：静态点集（模拟"对已知威胁做遮挡判定"）
+    // 目标点：静态点集（模拟"对已知威胁做遮挡判定"）。
+    // 目标点取全图随机，发射前按 maxdist 截断，于是"长度分布"由 maxdist 控制、
+    // 方向仍是全向的（比"只打近处目标"更接近真实：威胁方向本来就是全向的）。
     let targets: Vec<Vec3> = (0..64)
         .map(|_| {
             Vec3::new(
@@ -104,6 +110,28 @@ fn cmd_bench(args: &[String]) {
             )
         })
         .collect();
+
+    let truncate = |from: Vec3, to: Vec3| -> Vec3 {
+        if maxdist_mm <= 0 {
+            return to;
+        }
+        let dx = i64::from(to.x.0) - i64::from(from.x.0);
+        let dy = i64::from(to.y.0) - i64::from(from.y.0);
+        let dz = i64::from(to.z.0) - i64::from(from.z.0);
+        let len2 = dx * dx + dy * dy + dz * dz;
+        let lim2 = i64::from(maxdist_mm) * i64::from(maxdist_mm);
+        if len2 <= lim2 {
+            return to;
+        }
+        // 整数缩放：k = maxdist / len（len 为整数开方，下取整 => 实际长度 ≤ maxdist）
+        let len = isqrt_i64(len2).max(1);
+        let k = i64::from(maxdist_mm) / len;
+        Vec3::new(
+            Mm(from.x.0 + (dx * k) as i32),
+            Mm(from.y.0 + (dy * k) as i32),
+            Mm(from.z.0 + (dz * k) as i32),
+        )
+    };
 
     let mut samples: Vec<u64> = Vec::with_capacity(ticks as usize);
     let mut rays_total: u64 = 0;
@@ -129,6 +157,7 @@ fn cmd_bench(args: &[String]) {
             for _ in 0..rays_per_tick {
                 let t = targets[(rng.next_u32() as usize) % targets.len()];
                 let eye = Vec3::new(u.pos.x, Mm(1650), u.pos.z);
+                let t = truncate(eye, t);
                 if blocked(&world, eye, t, RayMode::Sight) {
                     hit_count += 1;
                 }
@@ -151,6 +180,9 @@ fn cmd_bench(args: &[String]) {
     println!("单位        : {}", units_n);
     println!("tick 数     : {}", ticks);
     println!("射线/tick   : {}（合计 {}）", rays_per_tick, rays_total);
+    if maxdist_mm > 0 {
+        println!("射线长度上限: {} m", maxdist_mm / 1000);
+    }
     println!("命中率      : {:.1}%", 100.0 * hit_count as f64 / rays_total as f64);
     println!("每 tick 耗时: 平均 {:.1} µs | p50 {:.1} | p90 {:.1} | p99 {:.1} | max {:.1}",
              avg, pct(0.50), pct(0.90), pct(0.99),
@@ -223,4 +255,33 @@ fn cmd_worldcheck(args: &[String]) {
              before, after, if before == after { "未变，异常！" } else { "已变，正常" });
     assert_ne!(before, after, "破坏后校验和必须变化");
     println!("OK");
+}
+
+/// 整数平方根（牛顿法）。只用于 bench 的长度截断，不进 sim 核心（sim 核心不用浮点）。
+fn isqrt_i64(n: i64) -> i64 {
+    if n <= 0 {
+        return 0;
+    }
+    let mut x = n;
+    let mut y = (x + 1) / 2;
+    while y < x {
+        x = y;
+        y = (x + n / x) / 2;
+    }
+    x
+}
+
+#[cfg(test)]
+mod tests {
+    use super::isqrt_i64;
+
+    #[test]
+    fn isqrt_matches_known_values() {
+        assert_eq!(isqrt_i64(0), 0);
+        assert_eq!(isqrt_i64(1), 1);
+        assert_eq!(isqrt_i64(15), 3);
+        assert_eq!(isqrt_i64(16), 4);
+        assert_eq!(isqrt_i64(1_000_000), 1000);
+        assert_eq!(isqrt_i64(1_000_000_000_000), 1_000_000);
+    }
 }
