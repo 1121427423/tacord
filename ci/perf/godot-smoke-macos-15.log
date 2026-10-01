@@ -1,12 +1,12 @@
-Thu Oct  1 19:52:15 UTC 2026
-run_id=36917398731 runner=macOS ARM64
+Thu Oct  1 19:59:02 UTC 2026
+run_id=36918156475 runner=macOS ARM64
 arm64
 /Users/runner/work/tacord/tacord
 --- godot/bin ---
 total 7848
-drwxr-xr-x  3 runner  staff       96 Oct  1 19:52 .
-drwxr-xr-x  9 runner  staff      288 Oct  1 19:52 ..
--rwxr-xr-x  1 runner  staff  4016192 Oct  1 19:52 libtacord_gdext.dylib
+drwxr-xr-x  3 runner  staff       96 Oct  1 19:59 .
+drwxr-xr-x  9 runner  staff      288 Oct  1 19:59 ..
+-rwxr-xr-x  1 runner  staff  4016192 Oct  1 19:59 libtacord_gdext.dylib
 --- tacord.gdextension ---
 [configuration]
 
@@ -35,7 +35,7 @@ windows.x86_64 = "res://bin/tacord_gdext.dll"
 web.debug.wasm32 = "res://bin/tacord_gdext.wasm"
 web.release.wasm32 = "res://bin/tacord_gdext.wasm"
 --- Godot 认为的 feature ---
-/Users/runner/work/_temp/7cff6ee9-5eda-41b6-b6b6-05c67ffecc87.sh: line 14: timeout: command not found
+/Users/runner/work/_temp/f48a91a5-fe61-4794-90e8-2cb733cfc804.sh: line 14: timeout: command not found
 --- smoke ---
-/Users/runner/work/_temp/7cff6ee9-5eda-41b6-b6b6-05c67ffecc87.sh: line 16: timeout: command not found
+/Users/runner/work/_temp/f48a91a5-fe61-4794-90e8-2cb733cfc804.sh: line 16: timeout: command not found
 smoke 退出码: 127
