@@ -1,0 +1,5 @@
+os: macos-15
+arch: arm64
+cpu: Apple M1 (Virtual)
+commit: 77122ffdece3d22d7b7eccc8f373cfcfb1395cc5
+date: Thu Oct  1 16:42:57 UTC 2026
