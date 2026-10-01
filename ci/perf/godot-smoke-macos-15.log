@@ -1,11 +1,12 @@
-Thu Oct  1 20:31:13 UTC 2026
-run_id=36922078996 runner=macOS ARM64
+Thu Oct  1 20:35:40 UTC 2026
+run_id=36922621640 runner=macOS ARM64
 arm64
 /Users/runner/work/tacord/tacord
 --- godot/bin ---
-total 0
-drwxr-xr-x   2 runner  staff   64 Oct  1 20:31 .
-drwxr-xr-x  11 runner  staff  352 Oct  1 20:31 ..
+total 7848
+drwxr-xr-x   3 runner  staff       96 Oct  1 20:35 .
+drwxr-xr-x  11 runner  staff      352 Oct  1 20:35 ..
+-rwxr-xr-x   1 runner  staff  4016448 Oct  1 20:35 libtacord_gdext.dylib
 --- tacord.gdextension ---
 [configuration]
 
@@ -34,12 +35,7 @@ windows.x86_64 = "res://bin/tacord_gdext.dll"
 web.debug.wasm32 = "res://bin/tacord_gdext.wasm"
 web.release.wasm32 = "res://bin/tacord_gdext.wasm"
 --- Godot 认为的 feature ---
-ERROR: Can't open dynamic library: /Users/runner/work/tacord/tacord/godot/bin/libtacord_gdext.dylib. Error: dlopen(/Users/runner/work/tacord/tacord/godot/bin/libtacord_gdext.dylib, 0x0002): tried: '/Users/runner/work/tacord/tacord/godot/bin/libtacord_gdext.dylib' (no such file), '/System/Volumes/Preboot/Cryptexes/OS/Users/runner/work/tacord/tacord/godot/bin/libtacord_gdext.dylib' (no such file), '/Users/runner/work/tacord/tacord/godot/bin/libtacord_gdext.dylib' (no such file).
-   at: open_dynamic_library (platform/macos/os_macos.mm:420)
-ERROR: Can't open GDExtension dynamic library: 'res://tacord.gdextension'.
-   at: open_library (core/extension/gdextension.cpp:811)
-ERROR: Error loading extension: 'res://tacord.gdextension'.
-   at: load_extensions (core/extension/gdextension_manager.cpp:333)
+Initialize godot-rust (API v4.7.2.stable.official, runtime v4.7.2.stable.official, safeguards balanced)
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
 [diag] os=macOS arch=arm64
@@ -55,8 +51,8 @@ Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 [diag] sections=["configuration", "libraries"]
 [diag] key='linux.x86_64' tags=["linux", "x86_64"] 全部命中=false value='res://bin/libtacord_gdext.so' 文件存在=false
 [diag] key='linux.arm64' tags=["linux", "arm64"] 全部命中=false value='res://bin/libtacord_gdext.so' 文件存在=false
-[diag] key='macos.arm64' tags=["macos", "arm64"] 全部命中=true value='res://bin/libtacord_gdext.dylib' 文件存在=false
-[diag] key='macos.x86_64' tags=["macos", "x86_64"] 全部命中=false value='res://bin/libtacord_gdext.dylib' 文件存在=false
+[diag] key='macos.arm64' tags=["macos", "arm64"] 全部命中=true value='res://bin/libtacord_gdext.dylib' 文件存在=true
+[diag] key='macos.x86_64' tags=["macos", "x86_64"] 全部命中=false value='res://bin/libtacord_gdext.dylib' 文件存在=true
 [diag] key='windows.x86_64' tags=["windows", "x86_64"] 全部命中=false value='res://bin/tacord_gdext.dll' 文件存在=false
 [diag] key='web.debug.wasm32' tags=["web", "debug", "wasm32"] 全部命中=false value='res://bin/tacord_gdext.wasm' 文件存在=false
 [diag] key='web.release.wasm32' tags=["web", "release", "wasm32"] 全部命中=false value='res://bin/tacord_gdext.wasm' 文件存在=false
@@ -67,22 +63,12 @@ Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 [diag] res:// 顶层: tacord.gdextension.uid
 [diag] res:// 顶层: project.godot
 [diag] res:// 顶层: export_presets.cfg
-[diag] res://bin 列表: []
+[diag] res://bin 列表: ["libtacord_gdext.dylib"]
 --- smoke ---
-ERROR: Can't open dynamic library: /Users/runner/work/tacord/tacord/godot/bin/libtacord_gdext.dylib. Error: dlopen(/Users/runner/work/tacord/tacord/godot/bin/libtacord_gdext.dylib, 0x0002): tried: '/Users/runner/work/tacord/tacord/godot/bin/libtacord_gdext.dylib' (no such file), '/System/Volumes/Preboot/Cryptexes/OS/Users/runner/work/tacord/tacord/godot/bin/libtacord_gdext.dylib' (no such file), '/Users/runner/work/tacord/tacord/godot/bin/libtacord_gdext.dylib' (no such file).
-   at: open_dynamic_library (platform/macos/os_macos.mm:420)
-ERROR: Can't open GDExtension dynamic library: 'res://tacord.gdextension'.
-   at: open_library (core/extension/gdextension.cpp:811)
-ERROR: Error loading extension: 'res://tacord.gdextension'.
-   at: load_extensions (core/extension/gdextension_manager.cpp:333)
+Initialize godot-rust (API v4.7.2.stable.official, runtime v4.7.2.stable.official, safeguards balanced)
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
-SCRIPT ERROR: Parse Error: Could not find type "SimRoot" in the current scope.
-          at: GDScript::reload (res://scripts/smoke.gd:32)
-SCRIPT ERROR: Parse Error: Cannot infer the type of "cs0" variable because the value doesn't have a set type.
-          at: GDScript::reload (res://scripts/smoke.gd:40)
-SCRIPT ERROR: Parse Error: Cannot infer the type of "pos0" variable because the value doesn't have a set type.
-          at: GDScript::reload (res://scripts/smoke.gd:43)
-ERROR: Failed to load script "res://scripts/smoke.gd" with error "Parse error".
-   at: load (modules/gdscript/gdscript_resource_format.cpp:46)
+[tacord] units=400 segments=4128 dim_cells=64 checksum=0xd3119143ebc0dfc4
+[smoke] units=400 dim=64 tick=300 world_checksum=0xd3119143ebc0dfc4 pos_checksum=0x3f2f61446b0811bd pos0=(11.096, 0.0, 10.996)
+[smoke] PASS
 smoke 退出码: 0
