@@ -25,12 +25,6 @@ ERROR: Can't open dynamic library, file not found: '/home/runner/work/tacord/tac
 ERROR: GDExtension dynamic library not found: 'res://tacord.gdextension'.
    at: open_library (core/extension/gdextension.cpp:810)
 [   0% ] [90m[1msavepack[22m | Started Packing (102 steps)[39m[0m
-SCRIPT ERROR: Parse Error: Cannot find member "SHADING_MODE_UNLIT" in base "BaseMaterial3D".
-          at: GDScript::reload (res://scripts/main.gd:69)
-SCRIPT ERROR: Parse Error: Cannot find member "SHADING_MODE_UNLIT" in base "BaseMaterial3D".
-          at: GDScript::reload (res://scripts/main.gd:108)
-ERROR: Failed to load script "res://scripts/main.gd" with error "Parse error".
-   at: load (modules/gdscript/gdscript_resource_format.cpp:46)
 [   1% ] [90m[1msavepack[22m | Storing File: res://.godot/exported/133200997/export-3ad5c15c4f3250da0cc7c1af1770d85f-main.scn[39m[0m
 [  17% ] [90m[1msavepack[22m | Storing File: res://scripts/features.gdc[39m[0m
 [  33% ] [90m[1msavepack[22m | Storing File: res://scripts/main.gdc[39m[0m
@@ -48,7 +42,3 @@ ERROR: Failed to load script "res://scripts/main.gd" with error "Parse error".
 [  82% ] [90m[1msavepack[22m | Storing File: res://project.binary[39m[0m
 [92m[ DONE ][39m [1msavepack[22m
 [0m
-SCRIPT ERROR: Parse Error: Cannot find member "SHADING_MODE_UNLIT" in base "BaseMaterial3D".
-          at: GDScript::reload (res://scripts/main.gd:69)
-SCRIPT ERROR: Parse Error: Cannot find member "SHADING_MODE_UNLIT" in base "BaseMaterial3D".
-          at: GDScript::reload (res://scripts/main.gd:108)
