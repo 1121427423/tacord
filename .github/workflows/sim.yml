@@ -1,0 +1,69 @@
+name: sim
+
+# 模拟核心的持续集成。
+# 沙箱开发机没有 Rust 工具链，所以这里同时充当"编译器"：
+# 推送后由 GitHub Actions 真正编译并跑单测，结果用 `gh run view` 查看。
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: cargo test (stable)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: sim
+
+      - name: Build
+        working-directory: sim
+        run: cargo build --release --verbose
+
+      - name: Test
+        working-directory: sim
+        run: cargo test --release -- --nocapture
+
+      # 调试构建下的溢出检查：定点运算最容易在这里翻车
+      - name: Test (debug, overflow checks on)
+        working-directory: sim
+        run: cargo test --verbose
+
+  lint:
+    name: 格式与静态检查
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: rustfmt（暂不阻塞，待首次修复后改为强制）
+        working-directory: sim
+        continue-on-error: true
+        run: cargo fmt --all -- --check
+      - name: clippy（暂不阻塞）
+        working-directory: sim
+        continue-on-error: true
+        run: cargo clippy --all-targets
+
+  constants:
+    name: 参数与查找表一致性
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: 常量自检（派生量 / 分频 / 预算 / 文档对照）
+        run: python3 tools/check_constants.py --verbose
+      - name: 查找表必须与生成器一致（防止手改生成物破坏跨平台确定性）
+        run: python3 tools/gen_trig.py --check

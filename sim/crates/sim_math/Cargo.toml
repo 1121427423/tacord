@@ -1,0 +1,8 @@
+[package]
+name = "sim_math"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "tacord 模拟层的确定性定点数学（无浮点、无 libm、可跨平台逐位一致）"
+
+[dependencies]

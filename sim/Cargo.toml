@@ -1,0 +1,4 @@
+# tacord · 模拟核心（与引擎无关，可在无渲染环境下跑测试、回放与 bench）
+[workspace]
+resolver = "2"
+members = ["crates/sim_math"]
