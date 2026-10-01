@@ -1,6 +1,53 @@
+Thu Oct  1 18:19:28 UTC 2026
+run_id=36905879637 runner=macOS ARM64
+arm64
+/Users/runner/work/tacord/tacord
+--- godot/bin ---
+total 7848
+drwxr-xr-x   3 runner  staff       96 Oct  1 18:19 .
+drwxr-xr-x  11 runner  staff      352 Oct  1 18:19 ..
+-rwxr-xr-x   1 runner  staff  4016192 Oct  1 18:19 libtacord_gdext.dylib
+--- tacord.gdextension ---
+[configuration]
+
+entry_symbol = "gdext_rust_init"
+compatibility_minimum = 4.7
+reloadable = true
+
+[libraries]
+
+# 路径必须在 res:// **内部**：导出时 Godot 要把这些文件一起拷进产物，
+# 放在项目外（res://../…）桌面端能跑，但导出（尤其 Web）会漏文件。
+linux.x86_64 = "res://bin/libtacord_gdext.so"
+macos.arm64 = "res://bin/libtacord_gdext.dylib"
+windows.x86_64 = "res://bin/tacord_gdext.dll"
+# Web：单线程侧模块（与 export_presets.cfg 里的 "Thread Support = off" 对应）
+web.debug.wasm32 = "res://bin/tacord_gdext.wasm"
+web.release.wasm32 = "res://bin/tacord_gdext.wasm"
+--- Godot 认为的 feature ---
+Initialize godot-rust (API v4.7.2.stable.official, runtime v4.7.2.stable.official, safeguards balanced)
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+[features] os=macOS arch=arm64 debug_build=true
+[features] linux=false
+[features] macos=true
+[features] windows=false
+[features] web=false
+[features] android=false
+[features] x86_64=false
+[features] x86_32=false
+[features] arm64=true
+[features] arm32=false
+[features] wasm32=false
+[features] debug=true
+[features] release=false
+[features] editor=true
+[features] template=false
+--- smoke ---
 Initialize godot-rust (API v4.7.2.stable.official, runtime v4.7.2.stable.official, safeguards balanced)
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
 [smoke] units=400 dim=64 tick=300 world_checksum=0xd3119143ebc0dfc4 pos_checksum=0x3f2f61446b0811bd pos0=(11.096, 0.0, 10.996)
 [smoke] PASS
 [tacord] units=400 segments=4128 checksum=0xd3119143ebc0dfc4
+smoke 退出码: 0
