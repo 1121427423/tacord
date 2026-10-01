@@ -34,7 +34,7 @@
 | M0.1b | 查找表生成器 `tools/gen_trig.py` + `tools/check_constants.py` 常量自检 | ✅ 已完成（CI 强制） |
 | M0.2 | `sim_core` 体素柱世界 + 破坏/挖掘 + 体素 DDA 射线（`ray::blocked`，掩体/LOS/弹道共用） | ✅ 已完成（28 项单测含 800 条射线对照 oracle，CI 全绿） |
 | M0.3 | `sim_cli bench` 性能基线 + `sim_core::nav` 寻路 | 🟨 进行中：① 基线已写入 [`docs/perf/baseline.md`](../perf/baseline.md)（最坏口径 p99 3.1 ms/tick = 预算 28%；M1 arm64 中位 2.01 ms）**限长用例已补齐**：掩体 1.38 ms/tick、感知 0.60 ms/tick，合计 11 ms 预算的 18%；② `sim_core::nav` 已落地（高度场 + 流场，14 项单测），`sim_cli nav` 可跑 400 单位寻路 + 炸墙重算演示 |
-| M0.4 | Godot 薄绑定 + Web 导出 | 🟨 进行中：Godot 4.7.2 工程 + `gdext` 薄绑定已跑通（ubuntu/macos-15 headless 冒烟通过，400 单位 × 300 tick，校验和逐位一致）；**Web 单线程侧模块导出已跑通**（`ci/web-preview` 分支，`python3 tools/serve_web.py web-preview 8000` 起服务看画面）；**待办**：浏览器里人工确认画面与校验和、macOS arm64 导出产物（用户已同意延后） |
+| M0.4 | Godot 薄绑定 + Web 导出 | 🟨 进行中：Godot 4.7.2 工程 + `gdext` 薄绑定已跑通（ubuntu/macos-15 headless 冒烟通过，400 单位 × 300 tick，校验和逐位一致）；**Web 单线程侧模块导出 + GitHub Pages 部署已跑通**：CI 导出后自动部署到 <https://1121427423.github.io/tacord/>（提交信息带 `[web]` 即触发）；**待办**：浏览器里人工确认画面与 `pos_checksum`、macOS arm64 导出产物（用户已同意延后） |
 
 ## 状态
 

@@ -418,7 +418,18 @@ linux.x86_64 = "res://bin/libtacord_gdext.so"
 1. 日志里有没有 `Project export for preset "xxx" failed`；
 2. 产物清单齐不齐（`index.html` / `index.wasm` / `index.pck` / `<扩展名>.wasm`）。
 
-### 10.12.5 Actions 的 stdout 在沙箱里读不到
+### 10.12.5 Web 部署走 GitHub Pages 的 artifact 路线
+
+仓库 Pages 已配成 `build_type=workflow`，所以**不需要 `gh-pages` 分支**：
+CI 的 `web` job 导出成功后 `actions/upload-pages-artifact@v3`（路径 `godot/dist`），
+再由 `deploy-pages` job（`permissions: pages: write, id-token: write`，
+`environment: github-pages`）用 `actions/deploy-pages@v4` 发布。
+站点：<https://1121427423.github.io/tacord/>（提交信息带 `[web]` 触发）。
+
+产物约 50 MB，其中 `index.side.wasm` 44 MB 是引擎本体（gzip 后约 1/4）。
+单线程导出，因此不要求 COOP/COEP，也不需要 `SharedArrayBuffer`。
+
+### 10.12.6 Actions 的 stdout 在沙箱里读不到
 
 沙箱下载不了 Actions 日志（zip 0 字节、`gh run view --log` EOF）。
 所以 CI 里的每一步都要把诊断信息 `tee` 到文件，再经 contents API 推到 `ci/artifacts` 分支。
