@@ -212,7 +212,10 @@ M0.2（`sim_core` 体素世界 + 破坏管线 + 体素 DDA 射线 + `sim_cli ben
 
 1. **补完基线**：限长用例（掩体 ≤30 m、感知 ≤80 m）待 CI 补测；然后在 **M1 arm64** 上取绝对数字（A2/A4 要求）；
 2. **`sim_core::nav`**：可行走高度场 + 流场/A\* 寻路，让 400 个单位真的会绕开路走（M0 的验收演示需要）；
-3. **CI 加 `windows-latest`** 跑同一批黄金回放（R9 的 A1/A7），三平台校验和逐位比对；
+3. ~~**CI 加 `windows-latest`** 跑同一批黄金回放（R9 的 A1/A7），三平台校验和逐位比对~~
+   → **已跑通**：`determinism` job 在 ubuntu / macos-15(arm64) / windows 上跑同一个确定性负载，
+   `determinism-compare` 逐位比对校验和（三平台 `0xBCDB03CC976971A2` 完全一致）。
+   **还不是完整的 A1/A7**：A1 要"10 万 tick 的状态校验和"、A7 要"≥8 个黄金回放三平台一致"，回放系统尚未实现；
 4. **Godot 工程 + 薄绑定**：驱动 sim tick，把 400 个体素小人渲染出来（macOS arm64 优先，A5）；
 5. 真机人工核对 `_open_visual_questions.md` 的 8 项（相机、比例、HUD、镜头语言…）—— 注意 §0.4 的 part2 40–84s 结论**不能作为依据**（R11）。
 
