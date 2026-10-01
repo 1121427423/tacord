@@ -111,31 +111,10 @@ fn cmd_bench(args: &[String]) {
         })
         .collect();
 
-    let truncate = |from: Vec3, to: Vec3| -> Vec3 {
-        if maxdist_mm <= 0 {
-            return to;
-        }
-        let dx = i64::from(to.x.0) - i64::from(from.x.0);
-        let dy = i64::from(to.y.0) - i64::from(from.y.0);
-        let dz = i64::from(to.z.0) - i64::from(from.z.0);
-        let len2 = dx * dx + dy * dy + dz * dz;
-        let lim2 = i64::from(maxdist_mm) * i64::from(maxdist_mm);
-        if len2 <= lim2 {
-            return to;
-        }
-        // 整数缩放：k = maxdist / len（len 为整数开方，下取整 => 实际长度 ≤ maxdist）
-        let len = isqrt_i64(len2).max(1);
-        let k = i64::from(maxdist_mm) / len;
-        Vec3::new(
-            Mm(from.x.0 + (dx * k) as i32),
-            Mm(from.y.0 + (dy * k) as i32),
-            Mm(from.z.0 + (dz * k) as i32),
-        )
-    };
-
     let mut samples: Vec<u64> = Vec::with_capacity(ticks as usize);
     let mut rays_total: u64 = 0;
     let mut hit_count: u64 = 0;
+    let mut degenerate: u64 = 0;
 
     for _tick in 0..ticks {
         let t0 = std::time::Instant::now();
@@ -157,7 +136,10 @@ fn cmd_bench(args: &[String]) {
             for _ in 0..rays_per_tick {
                 let t = targets[(rng.next_u32() as usize) % targets.len()];
                 let eye = Vec3::new(u.pos.x, Mm(1650), u.pos.z);
-                let t = truncate(eye, t);
+                let t = truncate_ray(eye, t, maxdist_mm);
+                if t == eye {
+                    degenerate += 1; // 截断把射线砍成 0 长度 = bug，必须显示在输出里
+                }
                 if blocked(&world, eye, t, RayMode::Sight) {
                     hit_count += 1;
                 }
@@ -184,6 +166,7 @@ fn cmd_bench(args: &[String]) {
         println!("射线长度上限: {} m", maxdist_mm / 1000);
     }
     println!("命中率      : {:.1}%", 100.0 * hit_count as f64 / rays_total as f64);
+    println!("退化射线    : {}（截断把射线砍成 0 长度的数量，必须恒为 0）", degenerate);
     println!("每 tick 耗时: 平均 {:.1} µs | p50 {:.1} | p90 {:.1} | p99 {:.1} | max {:.1}",
              avg, pct(0.50), pct(0.90), pct(0.99),
              samples[samples.len() - 1] as f64 / 1000.0);
@@ -257,6 +240,32 @@ fn cmd_worldcheck(args: &[String]) {
     println!("OK");
 }
 
+/// 把射线 `from -> to` 截断到 `maxdist_mm`（0 = 不截断）。
+///
+/// 用 Q20 定点缩放而不是整数除：整数除 `k = maxdist / len` 在 len > maxdist 时会得到 0，
+/// 把射线砍成零长度（曾经让 30m 用例的"命中率"变成 0.8%，成本假性降到 0.19 µs/条）。
+fn truncate_ray(from: Vec3, to: Vec3, maxdist_mm: i32) -> Vec3 {
+    if maxdist_mm <= 0 {
+        return to;
+    }
+    let dx = i64::from(to.x.0) - i64::from(from.x.0);
+    let dy = i64::from(to.y.0) - i64::from(from.y.0);
+    let dz = i64::from(to.z.0) - i64::from(from.z.0);
+    let len2 = dx * dx + dy * dy + dz * dz;
+    let lim2 = i64::from(maxdist_mm) * i64::from(maxdist_mm);
+    if len2 <= lim2 {
+        return to;
+    }
+    let len = isqrt_i64(len2).max(1);
+    // scale < 2^20（因为 len > maxdist），dx * scale 不会溢出 i64
+    let scale = (i64::from(maxdist_mm) << 20) / len;
+    Vec3::new(
+        Mm(from.x.0 + ((dx * scale) >> 20) as i32),
+        Mm(from.y.0 + ((dy * scale) >> 20) as i32),
+        Mm(from.z.0 + ((dz * scale) >> 20) as i32),
+    )
+}
+
 /// 整数平方根（牛顿法）。只用于 bench 的长度截断，不进 sim 核心（sim 核心不用浮点）。
 fn isqrt_i64(n: i64) -> i64 {
     if n <= 0 {
@@ -273,7 +282,35 @@ fn isqrt_i64(n: i64) -> i64 {
 
 #[cfg(test)]
 mod tests {
-    use super::isqrt_i64;
+    use super::{isqrt_i64, truncate_ray};
+
+    fn len_of(a: Vec3, b: Vec3) -> i64 {
+        let dx = i64::from(b.x.0) - i64::from(a.x.0);
+        let dy = i64::from(b.y.0) - i64::from(a.y.0);
+        let dz = i64::from(b.z.0) - i64::from(a.z.0);
+        isqrt_i64(dx * dx + dy * dy + dz * dz)
+    }
+
+    #[test]
+    fn truncate_shortens_to_the_limit_without_collapsing() {
+        let from = Vec3::new(Mm(0), Mm(1650), Mm(0));
+        // 90m 的射线截断到 30m：长度必须 ≈30000mm（定点误差 < 1cm），绝不能是 0
+        let to = Vec3::new(Mm(90_000), Mm(1650), Mm(0));
+        let t = truncate_ray(from, to, 30_000);
+        assert!((len_of(from, t) - 30_000).abs() < 10, "len = {}", len_of(from, t));
+        assert_eq!(t.y.0, 1650);
+
+        // 斜向也要保持方向（x:z = 3:4）
+        let to = Vec3::new(Mm(30_000), Mm(1650), Mm(40_000)); // 50m
+        let t = truncate_ray(from, to, 10_000);
+        assert!((len_of(from, t) - 10_000).abs() < 10, "len = {}", len_of(from, t));
+        assert!((t.x.0 * 4 - t.z.0 * 3).abs() < 10, "方向被截断改变了");
+
+        // 比上限短：原样返回
+        assert_eq!(truncate_ray(from, Vec3::new(Mm(1000), Mm(1650), Mm(0)), 30_000).x.0, 1000);
+        // 0 = 不截断
+        assert_eq!(truncate_ray(from, to, 0), to);
+    }
 
     #[test]
     fn isqrt_matches_known_values() {
