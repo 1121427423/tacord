@@ -73,7 +73,7 @@ pub fn cast(world: &World, a: Vec3, b: Vec3, mode: RayMode) -> Option<RayHit> {
         };
     }
 
-    let (den, mut t_max_x, mut t_del_x, mut t_max_z, mut t_del_z, step_x, step_z);
+    let (den, mut t_max_x, t_del_x, mut t_max_z, t_del_z, step_x, step_z);
 
     if adz == 0 {
         // 只沿 X：分母取 |dx|（t 的单位就是"沿 x 走过的毫米"）

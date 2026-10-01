@@ -23,7 +23,7 @@
 
 pub mod tables;
 
-use core::ops::{Add, AddAssign, Mul, Neg, Sub, SubAssign};
+use core::ops::{Add, Mul, Neg, Sub};
 
 // ═══════════════════════════════════ Q16 定点标量 ═══════════════════════════════════
 

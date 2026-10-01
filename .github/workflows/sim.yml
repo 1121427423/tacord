@@ -9,6 +9,15 @@ on:
     branches: ["**"]
   pull_request:
   workflow_dispatch:
+    inputs:
+      long_bench:
+        description: "跑长基线（G1 取数），否则只跑冒烟"
+        type: boolean
+        default: false
+      ticks:
+        description: "长基线的 tick 数"
+        type: string
+        default: "100000"
 
 permissions:
   contents: write
@@ -110,3 +119,54 @@ jobs:
         run: python3 tools/check_constants.py --verbose
       - name: 查找表必须与生成器一致（防止手改生成物破坏跨平台确定性）
         run: python3 tools/gen_trig.py --check
+
+  bench:
+    name: 性能基线（G1 取数，仅手动触发）
+    if: github.event_name == 'workflow_dispatch' && inputs.long_bench
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: sim
+      - name: 长基线
+        working-directory: sim
+        run: |
+          set +e
+          {
+            echo "commit: ${GITHUB_SHA}"
+            echo "runner: $(uname -m) / $(grep -m1 'model name' /proc/cpuinfo | sed 's/.*: //')"
+            echo "date: $(date -u)"
+            echo
+            echo "=== 参数（冻结参数表 §15）==="
+            echo "units 400 / ticks ${{ inputs.ticks }} / rays-per-unit-per-tick 4 / world 128m"
+            echo
+            echo "=== A：400 单位 · 4 射线/单位/tick · 128m 世界 ==="
+            cargo run --release -q -p sim_cli -- bench --units 400 --ticks ${{ inputs.ticks }} --rays 4 --world 256 --seed 1
+            echo
+            echo "=== B：400 单位 · 8 射线/单位/tick（更接近掩体评分的实际射线数）==="
+            cargo run --release -q -p sim_cli -- bench --units 400 --ticks $(( ${{ inputs.ticks }} / 4 )) --rays 8 --world 256 --seed 1
+            echo
+            echo "=== C：1 单位 · 128m 长射线（单条成本上限）==="
+            cargo run --release -q -p sim_cli -- bench --units 1 --ticks 200000 --rays 4 --world 256 --seed 1
+          } > /tmp/ci-baseline.log 2>&1
+          cat /tmp/ci-baseline.log
+      - name: 把基线推到 ci/artifacts
+        if: always()
+        working-directory: sim
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set +e
+          cd "${GITHUB_WORKSPACE}"
+          git config user.name "ci-bot"
+          git config user.email "ci-bot@users.noreply.github.com"
+          git checkout -B ci/artifacts
+          mkdir -p ci/perf
+          [ -f /tmp/ci-baseline.log ] && cp /tmp/ci-baseline.log ci/perf/baseline-${GITHUB_SHA:0:8}.log
+          cp /tmp/ci-baseline.log ci/perf/latest-baseline.log
+          git add -f ci
+          git commit -m "ci: perf baseline for ${GITHUB_SHA:0:8}" || echo "no changes"
+          git push -f origin ci/artifacts

@@ -155,8 +155,10 @@ fn cmd_bench(args: &[String]) {
     println!("每 tick 耗时: 平均 {:.1} µs | p50 {:.1} | p90 {:.1} | p99 {:.1} | max {:.1}",
              avg, pct(0.50), pct(0.90), pct(0.99),
              samples[samples.len() - 1] as f64 / 1000.0);
-    println!("射线吞吐    : {:.2} M ray/s",
-             rays_total as f64 / (sum as f64 / 1e9));
+    let rays_per_s = rays_total as f64 / (sum as f64 / 1e9);
+    println!("射线吞吐    : {:.0} ray/s（{:.2} M ray/s，单条 {:.2} µs）",
+             rays_per_s, rays_per_s / 1e6,
+             sum as f64 / 1000.0 / rays_total as f64);
     println!("预算对照    : p99 {:.1} µs / 11000 µs（每 tick 预算）= {:.2}%",
              pct(0.99), 100.0 * pct(0.99) / 11000.0);
     println!("世界校验和  : 0x{:016X}", world.checksum());
