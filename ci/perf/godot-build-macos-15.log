@@ -3,7 +3,7 @@
 [1m[92m   Compiling[0m sim_math v0.1.0 (/Users/runner/work/tacord/tacord/sim/crates/sim_math)
 [1m[92m   Compiling[0m sim_core v0.1.0 (/Users/runner/work/tacord/tacord/sim/crates/sim_core)
 [1m[92m   Compiling[0m tacord_gdext v0.1.0 (/Users/runner/work/tacord/tacord/gdext)
-[1m[92m    Finished[0m `release` profile [optimized] target(s) in 7.45s
+[1m[92m    Finished[0m `release` profile [optimized] target(s) in 8.09s
 --- 产物 ---
 target/release/libtacord_gdext.dylib
 target/release/libtacord_gdext.d
@@ -11,6 +11,6 @@ cp: target/release/libtacord_gdext.so: No such file or directory
 target/release/libtacord_gdext.dylib -> ../godot/bin/libtacord_gdext.dylib
 --- godot/bin ---
 total 7848
-drwxr-xr-x  3 runner  staff       96 Oct  1 20:43 .
-drwxr-xr-x  9 runner  staff      288 Oct  1 20:43 ..
--rwxr-xr-x  1 runner  staff  4016448 Oct  1 20:43 libtacord_gdext.dylib
+drwxr-xr-x  3 runner  staff       96 Oct  1 20:49 .
+drwxr-xr-x  9 runner  staff      288 Oct  1 20:49 ..
+-rwxr-xr-x  1 runner  staff  4016448 Oct  1 20:49 libtacord_gdext.dylib
