@@ -1,6 +1,6 @@
 Initialize godot-rust (API v4.7.2.stable.official, runtime v4.7.2.stable.official, safeguards balanced)
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
-[smoke] units=400 dim=64 tick=300 world_checksum=0x-2cee6ebc143f203c pos_checksum=0x3f2f61446b0811bd pos0=(11.096, 0.0, 10.996)
+[smoke] units=400 dim=64 tick=300 world_checksum=0xd3119143ebc0dfc4 pos_checksum=0x3f2f61446b0811bd pos0=(11.096, 0.0, 10.996)
 [smoke] PASS
-[tacord] units=400 segments=4128 checksum=0x-2cee6ebc143f203c
+[tacord] units=400 segments=4128 checksum=0xd3119143ebc0dfc4
