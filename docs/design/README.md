@@ -7,7 +7,7 @@
 
 | 文档 | 内容 |
 | --- | --- |
-| [05-frozen-parameters.md](05-frozen-parameters.md) | **参数冻结表（动工前必读）**：按改动代价分级的全部跨系统常量、AI 实现方式裁定、未冻结参数清单 |
+| [05-frozen-parameters.md](05-frozen-parameters.md) | **参数冻结表（动工前必读）**：按改动代价分级的跨系统常量、AI 实现方式裁定、未冻结参数清单、**§21 审查修复对照 R1–R11** |
 | [00-overview.md](00-overview.md) | 设计总纲：支柱、范围与非目标、参考素材拆解、玩法循环、术语表 |
 | [10-architecture.md](10-architecture.md) | 技术选型与 macOS/ARM 方案、仓库结构、确定性模拟核心、渲染与性能预算、网络、CI |
 | [20-cover-perception.md](20-cover-perception.md) | 掩体系统（真实几何派生）、视线/听觉/记忆/无线电、压制、威胁场与杀伤区 |
@@ -21,6 +21,10 @@
 2. 技术负责人看 `10-architecture.md`（选型与 macOS 方案在此定稿）；
 3. 系统实现按 `20 → 30 → 40` 顺序，每份文档末尾都有"实现清单（DoD）"；
 4. 排期与验收看 `90-roadmap-acceptance.md`。
+
+> **v1.1（2026-10-01）**：完成第一轮设计评审的 11 项修复（R1–R11），
+> 集中在：lockstep 的模拟边界与信息可见性、逐点命中规则、几何与导航表示、伤员状态机、
+> M1 依赖、范围与排期、性能与跨平台验收口径。逐条对照见 [05 §21](05-frozen-parameters.md#21-审查修复对照r1r11)。
 
 ## 实现进度（M0 技术验证）
 
