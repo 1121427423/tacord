@@ -329,6 +329,10 @@ jobs:
         shell: bash
         run: |
           set +e
+          echo "--- 冒烟前的状态 ---"
+          pwd
+          ls -la godot/bin
+          cat godot/tacord.gdextension
           "$GODOT_BIN" --headless --path godot --script res://scripts/smoke.gd 2>&1 | tee /tmp/godot-smoke.log
           code=$?
           echo "smoke 退出码: $code"
@@ -432,10 +436,20 @@ jobs:
           set +e
           mkdir -p godot/dist
           "$GODOT_BIN" --headless --path godot --export-release "Web" 2>&1 | tee /tmp/web-export.log
-          code=$?
-          echo "export 退出码: $code"
+          echo "--- 产物 ---"
           ls -la godot/dist
-          exit $code
+          # Godot 导出失败时**退出码仍然是 0**，只能靠"产物是否齐全 + 日志里有没有 failed"来判定
+          if grep -q "Project export for preset .* failed" /tmp/web-export.log; then
+            echo "::error::Godot 导出失败（见日志）"
+            exit 1
+          fi
+          for f in index.html index.wasm index.pck tacord_gdext.wasm; do
+            if [ ! -f "godot/dist/$f" ]; then
+              echo "::error::缺少产物 $f"
+              exit 1
+            fi
+          done
+          echo "✅ 导出产物齐全"
 
       - name: 产物推到 ci/web-preview 分支（沙箱取回用）
         if: always()

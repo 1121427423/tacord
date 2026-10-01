@@ -12,5 +12,6 @@ rustflags = [
     "-C", "llvm-args=-enable-emscripten-cxx-exceptions=0",
     "-Z", "default-visibility=hidden",                 # 多扩展共存时避免全局变量被合并
     "-Z", "link-native-libraries=no",                  # 绕过 wasm-ld 的链接错误
-    "-Z", "emscripten-wasm-eh=false",
+    # 注意：网上流传的教程里还有 "-Z emscripten-wasm-eh=false"，
+    # 那个 nightly 选项已经被移除（2026 年的 nightly 会报 unknown unstable option），不要抄。
 ]
