@@ -90,10 +90,11 @@ func _build_environment() -> void:
 	env.environment = e
 	add_child(env)
 
-	var sun := DirectionalLight3D.new()
-	sun.rotation_degrees = Vector3(-50.0, 30.0, 0.0)
-	sun.energy = 1.2
-	add_child(sun)
+	# 这里**故意不建 DirectionalLight3D**：方块和地面都是 unlit（unshaded）材质，
+	# 有没有光都看得见 —— 少一个"光源没配好就黑屏"的失败模式。
+	# 另外 4.7 的 Light3D 已经没有 `energy` 属性了（改成物理单位 Light3D.PARAM_INTENSITY /
+	# light_intensity），照 4.3 的教程写 `light.energy = 1.2` 会报
+	# "Invalid assignment of property or key 'energy'"。M1 真要做打光时再处理。
 
 
 func _build_ground() -> void:

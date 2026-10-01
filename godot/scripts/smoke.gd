@@ -13,15 +13,27 @@ extends SceneTree
 
 const TICKS := 300
 
-func _initialize() -> void:
-	var scene: Node = load("res://scenes/main.tscn").instantiate()
-	root.add_child(scene)
+var _scene: Node
+var _done := false
 
-	var sim: SimRoot = scene.get("sim")
+
+func _initialize() -> void:
+	_scene = load("res://scenes/main.tscn").instantiate()
+	root.add_child(_scene)
+	# 注意：add_child 之后 _ready() 要到**第一帧**才跑，
+	# 所以 sim 只能在 _process 里取 —— 在 _initialize 里取一定是 null。
+
+
+func _process(_delta: float) -> bool:
+	if _done:
+		return true
+	_done = true
+
+	var sim: SimRoot = _scene.get("sim")
 	if sim == null:
 		print("[smoke] FAIL：SimRoot 没挂上（扩展没加载？见 main.gd 的 _setup_sim）")
 		quit(1)
-		return
+		return true
 
 	sim.set_auto_advance(false)   # 关掉帧驱动：校验和必须只由 tick 数决定
 
@@ -47,3 +59,4 @@ func _initialize() -> void:
 
 	print("[smoke] ", "PASS" if ok else "FAIL")
 	quit(0 if ok else 1)
+	return true
