@@ -1,12 +1,12 @@
-Thu Oct  1 19:52:22 UTC 2026
-run_id=36917398731 runner=Linux X64
+Thu Oct  1 19:58:51 UTC 2026
+run_id=36918156475 runner=Linux X64
 x86_64
 /home/runner/work/tacord/tacord
 --- godot/bin ---
 total 4976
-drwxr-xr-x 2 runner runner    4096 Oct  1 19:52 .
-drwxr-xr-x 6 runner runner    4096 Oct  1 19:52 ..
--rwxr-xr-x 1 runner runner 5084824 Oct  1 19:52 libtacord_gdext.so
+drwxr-xr-x 2 runner runner    4096 Oct  1 19:58 .
+drwxr-xr-x 6 runner runner    4096 Oct  1 19:58 ..
+-rwxr-xr-x 1 runner runner 5084824 Oct  1 19:58 libtacord_gdext.so
 --- tacord.gdextension ---
 [configuration]
 
@@ -68,17 +68,14 @@ Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 Initialize godot-rust (API v4.7.2.stable.official, runtime v4.7.2.stable.official, safeguards balanced)
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
-SCRIPT ERROR: Parse Error: Cannot find member "SHADING_MODE_UNLIT" in base "BaseMaterial3D".
-          at: GDScript::reload (res://scripts/main.gd:69)
-          GDScript backtrace (most recent call first):
-              [0] _initialize (res://scripts/smoke.gd:17)
-SCRIPT ERROR: Parse Error: Cannot find member "SHADING_MODE_UNLIT" in base "BaseMaterial3D".
-          at: GDScript::reload (res://scripts/main.gd:108)
-          GDScript backtrace (most recent call first):
-              [0] _initialize (res://scripts/smoke.gd:17)
-ERROR: Failed to load script "res://scripts/main.gd" with error "Parse error".
-   at: load (modules/gdscript/gdscript_resource_format.cpp:46)
-   GDScript backtrace (most recent call first):
-       [0] _initialize (res://scripts/smoke.gd:17)
 [smoke] FAIL：SimRoot 没挂上（扩展没加载？见 main.gd 的 _setup_sim）
+SCRIPT ERROR: Invalid assignment of property or key 'energy' with value of type 'float' on a base object of type 'DirectionalLight3D'.
+          at: _build_environment (res://scripts/main.gd:95)
+          GDScript backtrace (most recent call first):
+              [0] _build_environment (res://scripts/main.gd:95)
+              [1] _ready (res://scripts/main.gd:33)
+[tacord] units=400 segments=4128 dim_cells=64 checksum=0xd3119143ebc0dfc4
+WARNING: 1 ObjectDB instance was leaked at exit (run with `--verbose` for details).
+   at: cleanup (core/object/object.cpp:2536)
+ERROR: 1 RID allocations of type 'N17RendererSceneCull8InstanceE' were leaked at exit.
 smoke 退出码: 1
