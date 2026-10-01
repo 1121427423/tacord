@@ -55,6 +55,14 @@ pub const TRENCH_DEPTH_MM: i32 = 500;
 pub const PEEK_OFFSET_MM: i32 = 450;
 /// 槽位预留保持时间（tick）。
 pub const SLOT_RESERVE_TICKS: u32 = 30;
+/// `reach_score` 的时间视野（tick）：走 3 秒还没到的槽，reach 归零。
+///
+/// 为什么用**时间**而不是距离：`reach` 的本意是"到达时间的反比"（§20.1.5）。
+/// 只按距离算的话，15 m 外那个"完美掩体"会赢过脚边的矮墙，
+/// 于是士兵在 3 秒验收窗口里一直在开阔地跑 —— 实测成功率只有 7%。
+pub const REACH_HORIZON_TICKS: i64 = 90;
+/// 步行速度（mm/tick）：1.5 m/s ÷ 30 Hz，与 `constants.ron` 的 `speed_walk_mmps` 一致。
+pub const WALK_MM_PER_TICK: i64 = 50;
 
 // 评分权重（ai_weights.ron 的 M1 子集，Q16 口径：1.0 = 65536）
 pub const W_BLOCK: i32 = 65_536; // 1.00
@@ -881,11 +889,16 @@ fn score_slot(
     }
     score += (W_ANGLE as i64 * angle) >> 16;
 
-    // reach：越近越好（1 - d/R）
+    // reach：到达时间的反比（§20.1.5）—— 走不到就等于没有
     let dx = slot.center_x_mm() - from_x_mm;
     let dz = slot.center_z_mm() - from_z_mm;
-    let d = isqrt_i64(dx * dx + dz * dz).min(SEARCH_RADIUS_MM);
-    let reach = 65_536 - ((d << 16) / SEARCH_RADIUS_MM);
+    let d = isqrt_i64(dx * dx + dz * dz);
+    let travel_ticks = d / WALK_MM_PER_TICK;
+    let reach = if travel_ticks >= REACH_HORIZON_TICKS {
+        0
+    } else {
+        65_536 - ((travel_ticks << 16) / REACH_HORIZON_TICKS)
+    };
     score += (W_REACH as i64 * reach) >> 16;
 
     // crowd：挤了就扣分

@@ -663,6 +663,9 @@ fn cmd_cover(args: &[String]) {
     let dim_i = dim as i64;
     let mut reached = 0u32;
     let mut evaluated = 0u32;
+    let mut arrived = 0u32;
+    let mut dist_sum = 0i64;
+    let mut moved_sum = 0i64;
     let mut scrape: Vec<u32> = Vec::new();
     let t2 = std::time::Instant::now();
     for _ in 0..trials {
@@ -696,9 +699,11 @@ fn cmd_cover(args: &[String]) {
             confidence: 65_535,
         };
         let mut pos = (ux * CELL + CELL / 2, uz * CELL + CELL / 2);
+        let mut ff = FlowField::new(dim);
+        ff.set_radius_cells(40); // 只算 20 m 内的场：全图 Dijkstra 太贵，掩体转移不需要
         let mut goal: Option<(i64, i64)> = None;
         for tick in 0..ticks_3s {
-            // 5 Hz 重新选槽（constants.ron 的 time.cover_period），中间继续朝目标走
+            // 5 Hz 重新选槽（constants.ron 的 time.cover_period），并重算到它的流场
             if goal.is_none() || tick % cover_period == 0 {
                 if let Some(c) = pick_cover(
                     &world,
@@ -711,12 +716,28 @@ fn cmd_cover(args: &[String]) {
                     &mut scrape,
                 ) {
                     if let Some(s) = field.slot(c.slot) {
-                        goal = Some((s.center_x_mm(), s.center_z_mm()));
+                        goal = Some((s.cx as i64, s.cz as i64));
+                        ff.compute(&hf, goal.unwrap(), &p, None);
+                        if tick == 0 {
+                            let dx = s.center_x_mm() - pos.0;
+                            let dz = s.center_z_mm() - pos.1;
+                            dist_sum += isqrt_i64(dx * dx + dz * dz);
+                        }
                     }
                 }
             }
-            if let Some(g) = goal {
-                pos = steer_to(&hf, &p, pos, g, step_mm);
+            // 沿流场走一步（本地转向会被楼挡住，所以必须走流场）
+            let cur = (pos.0 / CELL, pos.1 / CELL);
+            if let Some(nc) = ff.next_cell(cur.0, cur.1) {
+                let tx = nc.0 * CELL + CELL / 2;
+                let tz = nc.1 * CELL + CELL / 2;
+                pos = step_toward(pos, (tx, tz), step_mm);
+                moved_sum += 1;
+            }
+        }
+        if let Some(g) = goal {
+            if (pos.0 / CELL, pos.1 / CELL) == g {
+                arrived += 1;
             }
         }
         evaluated += 1;
@@ -736,6 +757,13 @@ fn cmd_cover(args: &[String]) {
     println!("反脚本化验证（§20.1.8）: {evaluated} 次随机遭遇");
     println!(
         "  3 秒内 blocking ≥ 0.7: {reached}/{evaluated} = {pct:.1}%   （目标 ≥ 95%）"
+    );
+    println!(
+        "  平均: 选中槽距离 {} mm / 到达槽位 {}/{} / 走了 {} 步",
+        dist_sum / evaluated.max(1) as i64,
+        arrived,
+        evaluated,
+        moved_sum / evaluated.max(1) as i64
     );
     println!("  每 trial 平均 {} µs", eval_us / evaluated.max(1) as u128);
     // 给 CI 用的机器可读行（反脚本化验收门禁读这一行）
