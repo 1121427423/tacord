@@ -191,23 +191,23 @@ fn cmd_worldcheck(args: &[String]) {
     // 破坏管线：打掉一段，确认脏队列与校验和都变了
     let before = w.checksum();
     let mut destroyed = 0;
-    for cx in 0..dim {
+    'outer: for cx in 0..dim {
         for cz in 0..dim {
-            let segs = w.segments(cx, cz);
-            for (i, s) in segs.iter().enumerate() {
-                if s.material == mat::WOOD && w.damage(cx, cz, i as u32, 1000) {
+            // 先拷出索引与材质再改（否则 &world 与 &mut world 借用冲突）
+            let snapshot: Vec<(usize, u16)> = w
+                .segments(cx, cz)
+                .iter()
+                .enumerate()
+                .map(|(i, s)| (i, s.material))
+                .collect();
+            for (i, m) in snapshot {
+                if m == mat::WOOD && w.damage(cx, cz, i as u32, 1000) {
                     destroyed += 1;
                 }
                 if destroyed >= 4 {
-                    break;
+                    break 'outer;
                 }
             }
-            if destroyed >= 4 {
-                break;
-            }
-        }
-        if destroyed >= 4 {
-            break;
         }
     }
     let after = w.checksum();

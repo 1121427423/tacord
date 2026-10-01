@@ -39,6 +39,34 @@ jobs:
           cargo run --release -q -p sim_cli -- worldcheck --world 64
           cargo run --release -q -p sim_cli -- bench --units 400 --ticks 20000 --rays 4 --world 256 --seed 1
 
+      - name: 失败时把编译/测试日志推到 ci/artifacts 分支
+        if: failure()
+        working-directory: sim
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set +e
+          {
+            echo "commit: ${GITHUB_SHA}"
+            echo "branch: ${GITHUB_REF_NAME}"
+            echo "date: $(date -u)"
+            echo
+            echo "=== cargo build (short) ==="
+            cargo build --release --message-format short 2>&1
+            echo
+            echo "=== cargo test (nocapture) ==="
+            cargo test --release -- --nocapture 2>&1
+          } > /tmp/ci-last-failure.log 2>&1
+          cd "${GITHUB_WORKSPACE}"
+          git config user.name "ci-bot"
+          git config user.email "ci-bot@users.noreply.github.com"
+          git checkout -B ci/artifacts
+          mkdir -p ci
+          cp /tmp/ci-last-failure.log ci/last-failure.log
+          git add -f ci/last-failure.log
+          git commit -m "ci: build log for ${GITHUB_SHA:0:8}" || echo "no changes"
+          git push -f origin ci/artifacts
+
       # 调试构建下的溢出检查：定点运算最容易在这里翻车
       - name: Test (debug, overflow checks on)
         working-directory: sim
