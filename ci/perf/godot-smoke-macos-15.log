@@ -1,12 +1,12 @@
-Thu Oct  1 18:19:28 UTC 2026
-run_id=36905879637 runner=macOS ARM64
+Thu Oct  1 18:27:08 UTC 2026
+run_id=36906823108 runner=macOS ARM64
 arm64
 /Users/runner/work/tacord/tacord
 --- godot/bin ---
 total 7848
-drwxr-xr-x   3 runner  staff       96 Oct  1 18:19 .
-drwxr-xr-x  11 runner  staff      352 Oct  1 18:19 ..
--rwxr-xr-x   1 runner  staff  4016192 Oct  1 18:19 libtacord_gdext.dylib
+drwxr-xr-x   3 runner  staff       96 Oct  1 18:27 .
+drwxr-xr-x  11 runner  staff      352 Oct  1 18:27 ..
+-rwxr-xr-x   1 runner  staff  4016192 Oct  1 18:27 libtacord_gdext.dylib
 --- tacord.gdextension ---
 [configuration]
 
@@ -28,21 +28,30 @@ web.release.wasm32 = "res://bin/tacord_gdext.wasm"
 Initialize godot-rust (API v4.7.2.stable.official, runtime v4.7.2.stable.official, safeguards balanced)
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
-[features] os=macOS arch=arm64 debug_build=true
-[features] linux=false
-[features] macos=true
-[features] windows=false
-[features] web=false
-[features] android=false
-[features] x86_64=false
-[features] x86_32=false
-[features] arm64=true
-[features] arm32=false
-[features] wasm32=false
-[features] debug=true
-[features] release=false
-[features] editor=true
-[features] template=false
+[diag] os=macOS arch=arm64
+[diag] feature linux=false
+[diag] feature macos=true
+[diag] feature x86_64=false
+[diag] feature arm64=true
+[diag] feature web=false
+[diag] feature wasm32=false
+[diag] feature debug=true
+[diag] feature release=false
+[diag] config load err=0
+[diag] sections=["configuration", "libraries"]
+[diag] key='#è·¯å¾å¿é¡»å¨res://**åé¨**ï¼å¯¼åºæ¶Godotè¦æè¿äºæä»¶ä¸èµ·æ·è¿äº§ç©ï¼#æ¾å¨é¡¹ç®å¤ï¼res://../â¦ï¼æ¡é¢ç«¯è½è·ï¼ä½å¯¼åºï¼å°¤å¶Webï¼ä¼æ¼æä»¶ãlinux.x86_64' tags=["#è·¯å¾å¿é¡»å¨res://**åé¨**ï¼å¯¼åºæ¶Godotè¦æè¿äºæä»¶ä¸èµ·æ·è¿äº§ç©ï¼#æ¾å¨é¡¹ç®å¤ï¼res://", "", "/â¦ï¼æ¡é¢ç«¯è½è·ï¼ä½å¯¼åºï¼å°¤å¶Webï¼ä¼æ¼æä»¶ãlinux", "x86_64"] 全部命中=false value='res://bin/libtacord_gdext.so' 文件存在=false
+[diag] key='macos.arm64' tags=["macos", "arm64"] 全部命中=true value='res://bin/libtacord_gdext.dylib' 文件存在=true
+[diag] key='windows.x86_64' tags=["windows", "x86_64"] 全部命中=false value='res://bin/tacord_gdext.dll' 文件存在=false
+[diag] key='Thread Support = offå¯¹åºï¼web.debug.wasm32' tags=["Thread Support = offå¯¹åºï¼web", "debug", "wasm32"] 全部命中=false value='res://bin/tacord_gdext.wasm' 文件存在=false
+[diag] key='web.release.wasm32' tags=["web", "release", "wasm32"] 全部命中=false value='res://bin/tacord_gdext.wasm' 文件存在=false
+[diag] res:// 顶层: scenes
+[diag] res:// 顶层: bin
+[diag] res:// 顶层: scripts
+[diag] res:// 顶层: tacord.gdextension
+[diag] res:// 顶层: tacord.gdextension.uid
+[diag] res:// 顶层: project.godot
+[diag] res:// 顶层: export_presets.cfg
+[diag] res://bin 列表: ["libtacord_gdext.dylib"]
 --- smoke ---
 Initialize godot-rust (API v4.7.2.stable.official, runtime v4.7.2.stable.official, safeguards balanced)
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
