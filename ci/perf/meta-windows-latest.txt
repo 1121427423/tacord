@@ -1,5 +1,5 @@
 os: windows-latest
 arch: x86_64
-cpu: INTEL(R) XEON(R) PLATINUM 8573C
-commit: 720a44bc52775915ad74e5f47d5d3e686c43c5ce
-date: Thu Oct  1 19:38:42 UTC 2026
+cpu: AMD EPYC 9V74 80-Core Processor                
+commit: 538b49de9cf558fefc990ef870a2f0a6d9da8492
+date: Thu Oct  1 19:53:33 UTC 2026
