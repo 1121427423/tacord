@@ -25,7 +25,7 @@ fn print_help() {
          bench        性能基线：--units --ticks --rays --world --maxdist --seed\n\
          nav          400 单位沿流场寻路：--units --ticks --world --rebuild --breach --seed\n\
          worldcheck   世界构建 + 射线自检 + 校验和\n\
-         cover        掩体派生 + "挨打会不会自己找掩体"（§20.1.8 反脚本化）\n\
+         cover        掩体派生 + 挨打会不会自己找掩体（§20.1.8 反脚本化）\n\
          \n\
          --maxdist 0 表示不限长（最坏情况）；掩体评分用 30000、感知用 80000。
          示例：sim_cli bench --units 400 --ticks 20000 --rays 4 --world 256 --maxdist 30000 --seed 1\n\
