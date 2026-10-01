@@ -1,5 +1,5 @@
 os: windows-latest
 arch: x86_64
-cpu: AMD EPYC 7763 64-Core Processor                
-commit: ca8bce6615e36e52876a5f9be8e6dc1e9da6fd8c
-date: Thu Oct  1 20:00:00 UTC 2026
+cpu: AMD EPYC 9V74 80-Core Processor                
+commit: fe5fbf0638a504bbcfa01316e1ab23c73f56eab2
+date: Thu Oct  1 20:06:30 UTC 2026
