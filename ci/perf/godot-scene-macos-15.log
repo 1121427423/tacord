@@ -1,18 +1,9 @@
-ERROR: Can't open dynamic library: /Users/runner/work/tacord/tacord/godot/bin/libtacord_gdext.dylib. Error: dlopen(/Users/runner/work/tacord/tacord/godot/bin/libtacord_gdext.dylib, 0x0002): tried: '/Users/runner/work/tacord/tacord/godot/bin/libtacord_gdext.dylib' (no such file), '/System/Volumes/Preboot/Cryptexes/OS/Users/runner/work/tacord/tacord/godot/bin/libtacord_gdext.dylib' (no such file), '/Users/runner/work/tacord/tacord/godot/bin/libtacord_gdext.dylib' (no such file).
-   at: open_dynamic_library (platform/macos/os_macos.mm:420)
-ERROR: Can't open GDExtension dynamic library: 'res://tacord.gdextension'.
-   at: open_library (core/extension/gdextension.cpp:811)
-ERROR: Error loading extension: 'res://tacord.gdextension'.
-   at: load_extensions (core/extension/gdextension_manager.cpp:333)
+Initialize godot-rust (API v4.7.2.stable.official, runtime v4.7.2.stable.official, safeguards balanced)
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
 [scene] 加载 res://scenes/main.tscn
 [scene] 已实例化: Main
-ERROR: [tacord] 扩展没加载：SimRoot 未注册（侧模块 tacord_gdext.wasm 没起来）
-   at: push_error (core/variant/variant_utility.cpp:1023)
-   GDScript backtrace (most recent call first):
-       [0] _setup_sim (res://scripts/main.gd:46)
-       [1] _ready (res://scripts/main.gd:34)
-[scene] 状态: NO-SIM: 扩展没加载：SimRoot 未注册（侧模块 tacord_gdext.wasm 没起来）
+[tacord] units=400 segments=4128 dim_cells=64 checksum=0xd3119143ebc0dfc4
+[scene] 状态: tick=20 units=400 cubes=400 pos=0xFFAB6872F5BD5E7
 [scene] DONE frames=30
 scene 退出码: 0
