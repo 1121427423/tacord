@@ -36,35 +36,41 @@ jobs:
       - name: 冒烟：世界自检 + 性能基线（结果仅记录，不作性能门禁）
         working-directory: sim
         run: |
-          cargo run --release -q -p sim_cli -- worldcheck --world 64
-          cargo run --release -q -p sim_cli -- bench --units 400 --ticks 20000 --rays 4 --world 256 --seed 1
+          cargo run --release -q -p sim_cli -- worldcheck --world 64 2>&1 | tee /tmp/ci-bench.log
+          cargo run --release -q -p sim_cli -- bench --units 400 --ticks 20000 --rays 4 --world 256 --seed 1 2>&1 | tee -a /tmp/ci-bench.log
 
-      - name: 失败时把编译/测试日志推到 ci/artifacts 分支
-        if: failure()
+      - name: 把日志推到 ci/artifacts 分支（沙箱读不到 Actions 日志）
+        if: always()
         working-directory: sim
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set +e
-          {
-            echo "commit: ${GITHUB_SHA}"
-            echo "branch: ${GITHUB_REF_NAME}"
-            echo "date: $(date -u)"
-            echo
-            echo "=== cargo build (short) ==="
-            cargo build --release --message-format short 2>&1
-            echo
-            echo "=== cargo test (nocapture) ==="
-            cargo test --release -- --nocapture 2>&1
-          } > /tmp/ci-last-failure.log 2>&1
+          if [ "${{ job.status }}" != "success" ]; then
+            {
+              echo "commit: ${GITHUB_SHA}"
+              echo "branch: ${GITHUB_REF_NAME}"
+              echo "date: $(date -u)"
+              echo "job status: ${{ job.status }}"
+              echo
+              echo "=== cargo build (short) ==="
+              cargo build --release --message-format short 2>&1
+              echo
+              echo "=== cargo test (nocapture) ==="
+              cargo test --release -- --nocapture 2>&1
+            } > /tmp/ci-last-failure.log 2>&1
+          else
+            rm -f /tmp/ci-last-failure.log
+          fi
           cd "${GITHUB_WORKSPACE}"
           git config user.name "ci-bot"
           git config user.email "ci-bot@users.noreply.github.com"
           git checkout -B ci/artifacts
           mkdir -p ci
-          cp /tmp/ci-last-failure.log ci/last-failure.log
-          git add -f ci/last-failure.log
-          git commit -m "ci: build log for ${GITHUB_SHA:0:8}" || echo "no changes"
+          [ -f /tmp/ci-last-failure.log ] && cp /tmp/ci-last-failure.log ci/last-failure.log
+          [ -f /tmp/ci-bench.log ] && cp /tmp/ci-bench.log ci/perf-latest.log
+          git add -f ci
+          git commit -m "ci: logs for ${GITHUB_SHA:0:8} (${{ job.status }})" || echo "no changes"
           git push -f origin ci/artifacts
 
       # 调试构建下的溢出检查：定点运算最容易在这里翻车
