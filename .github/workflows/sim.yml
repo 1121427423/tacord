@@ -307,6 +307,11 @@ jobs:
           set -e
           export GODOT4_BIN="$GODOT_BIN"
           cargo build --release --features api-custom 2>&1 | tee /tmp/godot-build.log
+          # 库必须落到 res:// 内部（godot/bin/），否则导出时不会被打包进产物
+          mkdir -p ../godot/bin
+          cp target/release/libtacord_gdext.so    ../godot/bin/ 2>/dev/null || true
+          cp target/release/libtacord_gdext.dylib ../godot/bin/ 2>/dev/null || true
+          ls -la ../godot/bin
 
       - name: 导入工程
         shell: bash
@@ -347,6 +352,101 @@ jobs:
           put_file "ci/perf/godot-smoke-${{ matrix.os }}.log" /tmp/godot-smoke.log
           put_file "ci/perf/godot-import-${{ matrix.os }}.log" /tmp/godot-import.log
           put_file "ci/perf/godot-build-${{ matrix.os }}.log" /tmp/godot-build.log
+          exit 0
+
+  # ─────────────────────────── Web 导出（wasm 侧模块）───────────────────────────
+  # 单线程（nothreads）路线：sim 本来就是单线程，且产物不要求服务端配 COOP/COEP 头。
+  # 触发：提交信息含 [web]、推送到 main、或手动 dispatch（emsdk + build-std 很慢）。
+  web:
+    name: Web 导出（wasm）
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.ref == 'refs/heads/main' ||
+      (github.event_name == 'push' && contains(github.event.head_commit.message, '[web]'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      # wasm 需要 nightly：-Zbuild-std 是 nightly 特性（std 要为 wasm 重新编译）
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src
+          targets: wasm32-unknown-emscripten
+      - name: Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: gdext
+
+      - name: Install emsdk 3.1.74
+        run: |
+          set -e
+          git clone --depth 1 https://github.com/emscripten-core/emsdk.git /tmp/emsdk
+          cd /tmp/emsdk
+          ./emsdk install 3.1.74
+          ./emsdk activate 3.1.74
+          echo "/tmp/emsdk" >> "$GITHUB_PATH"
+          echo "/tmp/emsdk/upstream/emscripten" >> "$GITHUB_PATH"
+
+      - name: Download Godot 4.7.2 + 导出模板
+        run: |
+          set -e
+          VER=4.7.2
+          curl -sSL -o /tmp/godot.zip "https://github.com/godotengine/godot/releases/download/${VER}-stable/Godot_v${VER}-stable_linux.x86_64.zip"
+          mkdir -p /tmp/godot
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          GODOT_BIN="/tmp/godot/Godot_v${VER}-stable_linux.x86_64"
+          chmod +x "$GODOT_BIN"
+          echo "GODOT_BIN=$GODOT_BIN" >> "$GITHUB_ENV"
+          # 导出模板：Godot 要求放在 export_templates/<version>/ 下
+          curl -sSL -o /tmp/templates.tpz "https://github.com/godotengine/godot/releases/download/${VER}-stable/Godot_v${VER}-stable_export_templates.tpz"
+          mkdir -p "$HOME/.local/share/godot/export_templates"
+          unzip -q /tmp/templates.tpz -d /tmp/templates
+          mv /tmp/templates/templates "$HOME/.local/share/godot/export_templates/${VER}.stable"
+          ls "$HOME/.local/share/godot/export_templates/${VER}.stable"
+
+      - name: emcc 版本
+        run: emcc --version | head -2
+
+      - name: 构建 wasm 扩展（侧模块 · 单线程）
+        working-directory: gdext
+        run: |
+          set -e
+          export GODOT4_BIN="$GODOT_BIN"
+          cargo +nightly build -Zbuild-std --target wasm32-unknown-emscripten --release \
+            --features web-nothreads 2>&1 | tee /tmp/web-build.log
+          mkdir -p ../godot/bin
+          cp target/wasm32-unknown-emscripten/release/tacord_gdext.wasm ../godot/bin/
+          ls -la ../godot/bin
+
+      - name: 导出 Web
+        run: |
+          set +e
+          mkdir -p godot/dist
+          "$GODOT_BIN" --headless --path godot --export-release "Web" 2>&1 | tee /tmp/web-export.log
+          code=$?
+          echo "export 退出码: $code"
+          ls -la godot/dist
+          exit $code
+
+      - name: 产物推到 ci/web-preview 分支（沙箱取回用）
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set +e
+          cd "${GITHUB_WORKSPACE}"
+          [ -d godot/dist ] && cp -r godot/dist/. /tmp/webdist/ || mkdir -p /tmp/webdist
+          echo "=== 产物清单 ==="
+          ls -la /tmp/webdist
+          git config user.name "ci-bot"
+          git config user.email "ci-bot@users.noreply.github.com"
+          git checkout --orphan ci/web-preview
+          git rm -rf --cached . -q || true
+          find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} + || true
+          cp -r /tmp/webdist/. .
+          git add -A
+          git commit -m "web build ${GITHUB_SHA:0:8}" || echo "no changes"
+          git push -f origin ci/web-preview
           exit 0
 
   # ─────────────────────────── 静态检查与参数 ───────────────────────────

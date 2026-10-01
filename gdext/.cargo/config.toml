@@ -1,0 +1,16 @@
+# wasm 构建配置（Godot 的 GDExtension 在 Web 上是**侧模块 side module**，
+# 由 Godot 的 main module 在运行时动态加载 —— 和 native 的 .so/.dll 同一回事）。
+#
+# 走的是**单线程（nothreads）**路线：不带 -pthread / +atomics。
+# 理由：sim 本来就是单线程的，而且单线程的 Web 导出不需要服务端配
+# Cross-Origin-Opener-Policy / Cross-Origin-Embedder-Policy 头，部署起来没有坑。
+#
+# 参考：https://godot-rust.github.io/book/toolchain/export-web.html
+[target.wasm32-unknown-emscripten]
+rustflags = [
+    "-C", "link-args=-sSIDE_MODULE=2",                 # 编成侧模块，Godot 才能 dlopen
+    "-C", "llvm-args=-enable-emscripten-cxx-exceptions=0",
+    "-Z", "default-visibility=hidden",                 # 多扩展共存时避免全局变量被合并
+    "-Z", "link-native-libraries=no",                  # 绕过 wasm-ld 的链接错误
+    "-Z", "emscripten-wasm-eh=false",
+]

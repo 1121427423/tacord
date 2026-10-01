@@ -6,6 +6,11 @@ reloadable = true
 
 [libraries]
 
-linux.x86_64 = "res://../gdext/target/release/libtacord_gdext.so"
-macos.arm64 = "res://../gdext/target/release/libtacord_gdext.dylib"
-windows.x86_64 = "res://../gdext/target/release/tacord_gdext.dll"
+# 路径必须在 res:// **内部**：导出时 Godot 要把这些文件一起拷进产物，
+# 放在项目外（res://../…）桌面端能跑，但导出（尤其 Web）会漏文件。
+linux.x86_64 = "res://bin/libtacord_gdext.so"
+macos.arm64 = "res://bin/libtacord_gdext.dylib"
+windows.x86_64 = "res://bin/tacord_gdext.dll"
+# Web：单线程侧模块（与 export_presets.cfg 里的 "Thread Support = off" 对应）
+web.debug.wasm32 = "res://bin/tacord_gdext.wasm"
+web.release.wasm32 = "res://bin/tacord_gdext.wasm"

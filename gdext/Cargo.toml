@@ -17,6 +17,11 @@ crate-type = ["cdylib"]
 # 本地没装 Godot 时用默认的预置 API 也能编译（版本不同会走兼容层，能跑但不该依赖）。
 api-custom = ["godot/api-custom"]
 
+# Web（wasm）导出：gdext 的 wasm 支持仍是实验性的，需要显式打开。
+# `web` = 多线程版（需要服务端 COOP/COEP 头）；`web-nothreads` = 单线程版（我们走这个）。
+web = ["godot/experimental-wasm", "api-custom"]
+web-nothreads = ["web", "godot/experimental-wasm-nothreads"]
+
 [dependencies]
 # gdext 预置的 API 是 4.6，而我们用 Godot 4.7.2 ⇒ CI 用 `--features api-custom`
 # （配 GODOT4_BIN 指向真实二进制）生成精确绑定；本地没有 Godot 时用默认的预置 API 也能编译。
