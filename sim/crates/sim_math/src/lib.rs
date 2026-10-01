@@ -444,8 +444,15 @@ pub fn atan2(y: Mm, x: Mm) -> Ang {
     };
     // 转成 Ang 单位（π/2 = 16384）
     let theta: i64 = theta_units / 8;
+    // 象限修正（π/2 = 16384，π = 32768）：
+    //   x≥0,y≥0 → θ          x<0,y≥0 → π − θ
+    //   x<0,y<0 → π + θ      x≥0,y<0 → 2π − θ
     let units: i64 = if xi < 0 {
-        32768 - theta
+        if yi < 0 {
+            32768 + theta
+        } else {
+            32768 - theta
+        }
     } else if yi < 0 {
         65536 - theta
     } else {
