@@ -9,10 +9,15 @@
 #![deny(unsafe_code)]
 #![deny(clippy::float_arithmetic)]
 
+pub mod cover;
 pub mod nav;
 pub mod ray;
 pub mod world;
 
+pub use cover::{
+    angular_factor, blocking_aggregate, blocking_at, coverage_angle_deg, CoverChoice, CoverField,
+    CoverKind, CoverSlot, Posture, Threat,
+};
 pub use nav::{FlowField, HeightField, NavParams};
 pub use ray::{blocked, cast, hit_point, RayHit, RayMode};
 pub use world::{Material, Segment, World};

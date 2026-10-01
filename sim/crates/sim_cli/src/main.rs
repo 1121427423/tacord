@@ -8,6 +8,9 @@
 //! 注意：这里可以用浮点与 `std::time`（不进 sim），但**任何影响模拟结果的输入都必须来自
 //! 确定性 PRNG**，否则回放会分叉。
 
+use sim_core::cover::{
+    blocking_at, pick_cover, CoverField, CoverKind, Posture, Threat,
+};
 use sim_core::nav::{nearest_walkable, step_toward, FlowField, HeightField, NavParams};
 use sim_core::ray::{blocked, RayMode};
 use sim_core::world::{mat, Segment, World};
@@ -22,10 +25,12 @@ fn print_help() {
          bench        性能基线：--units --ticks --rays --world --maxdist --seed\n\
          nav          400 单位沿流场寻路：--units --ticks --world --rebuild --breach --seed\n\
          worldcheck   世界构建 + 射线自检 + 校验和\n\
+         cover        掩体派生 + "挨打会不会自己找掩体"（§20.1.8 反脚本化）\n\
          \n\
          --maxdist 0 表示不限长（最坏情况）；掩体评分用 30000、感知用 80000。
          示例：sim_cli bench --units 400 --ticks 20000 --rays 4 --world 256 --maxdist 30000 --seed 1\n\
-        示例：sim_cli nav --units 400 --ticks 6000 --world 256 --rebuild 15 --breach 1500 --seed 1"
+        示例：sim_cli nav --units 400 --ticks 6000 --world 256 --rebuild 15 --breach 1500 --seed 1\n\
+        示例：sim_cli cover --world 256 --trials 200 --seed 1"
     );
 }
 
@@ -44,6 +49,7 @@ fn main() {
         "bench" => cmd_bench(&args),
         "nav" => cmd_nav(&args),
         "worldcheck" => cmd_worldcheck(&args),
+        "cover" => cmd_cover(&args),
         _ => print_help(),
     }
 }
@@ -495,4 +501,189 @@ mod tests {
         assert_eq!(truncate_ray(from, to, 0), to);
     }
 
+}
+
+/// 贴墙滑行：直线走不通就只走 x / 只走 z（本地转向的最小实现，
+/// 长距离仍走班组流场 —— 见冻结表 §6.2）。
+fn steer_to(
+    hf: &HeightField,
+    p: &NavParams,
+    pos: (i64, i64),
+    target: (i64, i64),
+    step_mm: i64,
+) -> (i64, i64) {
+    let cell = |x: i64, z: i64| (x / CELL, z / CELL);
+    let cand = step_toward(pos, target, step_mm);
+    let fc = cell(pos.0, pos.1);
+    let tc = cell(cand.0, cand.1);
+    if fc == tc || hf.can_step(fc.0, fc.1, tc.0, tc.1, p) {
+        return cand;
+    }
+    let try_x = (cand.0, pos.1);
+    let txc = cell(try_x.0, try_x.1);
+    if hf.can_step(fc.0, fc.1, txc.0, txc.1, p) {
+        return try_x;
+    }
+    let try_z = (pos.0, cand.1);
+    let tzc = cell(try_z.0, try_z.1);
+    if hf.can_step(fc.0, fc.1, tzc.0, tzc.1, p) {
+        return try_z;
+    }
+    pos
+}
+
+/// `cover`：掩体派生 + 反脚本化验证（§20.1.8）。
+///
+/// 场景里**没有任何手工掩体标记**，槽位全部从体素几何算出。
+/// 每个 trial：随机放 1 个士兵 + 1 个敌人，敌人开火（视为一个 Threat），
+/// 士兵按 5 Hz 重新选槽并走过去，3 秒后看他的遮挡度是否 ≥ 0.7。
+fn cmd_cover(args: &[String]) {
+    let dim = arg(args, "world", 256) as u32;
+    let trials = arg(args, "trials", 200) as u32;
+    let seed = arg(args, "seed", 1);
+    let p = NavParams::default();
+    let cover_period = 6u64; // 5 Hz（constants.ron 的 time.cover_period）
+    let ticks_3s = 90u64;
+    let step_mm = 50i64; // 1.5 m/s ÷ 30 Hz
+
+    let mut rng = Pcg32::new(seed, 11);
+    let world = build_world(&mut rng, dim);
+
+    let t0 = std::time::Instant::now();
+    let mut hf = HeightField::new(dim);
+    hf.rebuild_all(&world, &p);
+    let hf_us = t0.elapsed().as_micros();
+
+    let t1 = std::time::Instant::now();
+    let mut field = CoverField::new();
+    field.rebuild_all(&world, &hf);
+    let cover_us = t1.elapsed().as_micros();
+
+    // ── 槽位统计 ──
+    let mut by_kind = [0u64; 7];
+    let mut hsum = 0i64;
+    let mut wsum = 0i64;
+    for s in field.slots.iter() {
+        by_kind[s.kind as usize] += 1;
+        hsum += s.height_mm as i64;
+        wsum += s.width_mm as i64;
+    }
+    let kind_name = |k: usize| match k {
+        0 => "战壕",
+        1 => "矮墙",
+        2 => "高墙",
+        3 => "转角",
+        4 => "窗洞",
+        5 => "残骸",
+        _ => "窄柱",
+    };
+
+    println!("── sim_cli cover ──────────────────────────────");
+    println!("世界: {dim}×{dim} 柱（{} m 见方）", dim as i64 * CELL / 1000);
+    println!("高度场重建: {hf_us} µs");
+    println!("掩体派生:   {cover_us} µs  →  {} 个槽", field.len());
+    if !field.is_empty() {
+        println!(
+            "平均: 高 {} mm / 宽 {} mm",
+            hsum / field.len() as i64,
+            wsum / field.len() as i64
+        );
+    }
+    for k in 0..7 {
+        if by_kind[k] > 0 {
+            println!("  {:<4} {:>7}", kind_name(k), by_kind[k]);
+        }
+    }
+    println!("掩体场校验和: 0x{:016X}", field.checksum());
+
+    // ── 反脚本化验证（§20.1.8）──
+    let dim_i = dim as i64;
+    let mut reached = 0u32;
+    let mut evaluated = 0u32;
+    let mut scrape: Vec<u32> = Vec::new();
+    let t2 = std::time::Instant::now();
+    for _ in 0..trials {
+        // 随机士兵位置（可站立）
+        let (ux, uz) = loop {
+            let x = rng.next_range(dim) as i64;
+            let z = rng.next_range(dim) as i64;
+            if hf.walkable(x, z) {
+                break (x, z);
+            }
+        };
+        // 随机敌人：8..40 m 之外，且可站
+        let (ex, ez) = loop {
+            let x = rng.next_range(dim) as i64;
+            let z = rng.next_range(dim) as i64;
+            if !hf.walkable(x, z) {
+                continue;
+            }
+            let d2 = (x - ux) * (x - ux) + (z - uz) * (z - uz);
+            let d = isqrt_i64(d2);
+            if d > 16 && d < 80 {
+                break (x, z);
+            }
+        };
+        let _ = dim_i;
+        let threat = Threat {
+            x_mm: (ex * CELL + CELL / 2) as i32,
+            y_mm: hf.walk_top(ex, ez).unwrap_or(0),
+            z_mm: (ez * CELL + CELL / 2) as i32,
+            confidence: 65_535,
+        };
+        let mut pos = (ux * CELL + CELL / 2, uz * CELL + CELL / 2);
+        for tick in 0..ticks_3s {
+            if tick % cover_period == 0 {
+                if let Some(c) = pick_cover(
+                    &world,
+                    &field,
+                    pos.0,
+                    pos.1,
+                    Posture::Crouch,
+                    &[threat],
+                    12,
+                    &mut scrape,
+                ) {
+                    if let Some(s) = field.slot(c.slot) {
+                        pos = steer_to(&hf, &p, pos, (s.center_x_mm(), s.center_z_mm()), step_mm);
+                    }
+                }
+            } else {
+                // 没到重评估周期也继续朝上一次的目标走（简化：每 tick 重选目标）
+                if let Some(c) = pick_cover(
+                    &world,
+                    &field,
+                    pos.0,
+                    pos.1,
+                    Posture::Crouch,
+                    &[threat],
+                    12,
+                    &mut scrape,
+                ) {
+                    if let Some(s) = field.slot(c.slot) {
+                        pos = steer_to(&hf, &p, pos, (s.center_x_mm(), s.center_z_mm()), step_mm);
+                    }
+                }
+            }
+        }
+        evaluated += 1;
+        let b = blocking_at(&world, &hf, pos.0, pos.1, Posture::Crouch, &[threat]);
+        if b.0 >= 45_875 {
+            // 0.7 × 65536
+            reached += 1;
+        }
+    }
+    let eval_us = t2.elapsed().as_micros();
+    let pct = if evaluated > 0 {
+        reached as f64 * 100.0 / evaluated as f64
+    } else {
+        0.0
+    };
+    println!();
+    println!("反脚本化验证（§20.1.8）: {evaluated} 次随机遭遇");
+    println!(
+        "  3 秒内 blocking ≥ 0.7: {reached}/{evaluated} = {pct:.1}%   （目标 ≥ 95%）"
+    );
+    println!("  每 trial 平均 {} µs", eval_us / evaluated.max(1) as u128);
+    println!("───────────────────────────────────────────────");
 }
