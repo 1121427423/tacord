@@ -1,3 +1,11 @@
+[1m[93mwarning[0m[1m[97m: unused import: `Posture`[0m
+  [1m[96m--> [0mcrates\sim_cli\src\main.rs:11:60
+   [1m[96m|[0m
+[1m[96m11[0m [1m[96m|[0m use sim_core::cover::{blocking_at, pick_cover, CoverField, Posture, Threat};
+   [1m[96m|[0m                                                            [1m[93m^^^^^^^[0m
+   [1m[96m|[0m
+   [1m[96m= [0m[1m[97mnote[0m: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
 [1m[93mwarning[0m[1m[97m: function `steer_to` is never used[0m
    [1m[96m--> [0mcrates\sim_cli\src\main.rs:571:4
     [1m[96m|[0m
@@ -8,21 +16,21 @@
 
 ── sim_cli cover ──────────────────────────────
 世界: 256×256 柱（128 m 见方）
-高度场重建: 611 µs
-掩体派生:   1439 µs  →  752 个槽
-平均: 高 3963 mm / 宽 4279 mm
-  战壕         1
-  矮墙        34
-  高墙       344
-  转角        98
-  窗洞       194
-  残骸        64
-  窄柱        17
-掩体场校验和: 0x51E7561A501A7100
+高度场重建: 599 µs
+掩体派生:   1773 µs  →  1618 个槽
+平均: 高 3641 mm / 宽 5024 mm
+  战壕        16
+  矮墙       180
+  高墙       641
+  转角       206
+  窗洞       480
+  残骸        55
+  窄柱        40
+掩体场校验和: 0x6D3B6819177006A8
 
 反脚本化验证（§20.1.8）: 100 次随机遭遇
-  3 秒内 blocking ≥ 0.7: 6/100 = 6.0%   （目标 ≥ 95%）
-  平均: 选中槽距离 9222 mm / 到达槽位 6/100 / 走了 75 步
-  每 trial 平均 6818 µs
-cover_rate_pct=6.0
+  3 秒内 blocking ≥ 0.7: 39/100 = 39.0%   （目标 ≥ 95%）
+  平均: 选中槽距离 6415 mm / 到达槽位 26/100 / 走了 65 步
+  每 trial 平均 6496 µs
+cover_rate_pct=39.0
 ───────────────────────────────────────────────
