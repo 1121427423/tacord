@@ -1,30 +1,12 @@
-commit: fd20d494547e3de8bba65bea19d8ae918d5bda8d
+commit: dcf98b5ea8449b15c38612ab90f54cf516df5c5b
 branch: arena/01a0f7c2-tacord
-date: Thu Oct  1 20:39:14 UTC 2026
+date: Thu Oct  1 20:42:59 UTC 2026
 job status: failure
 
 === cargo build (short) ===
-[1m[33mwarning[0m[1m: unused import: `CoverKind`[0m
-  [1m[94m--> [0mcrates/sim_cli/src/main.rs:12:42
-   [1m[94m|[0m
-[1m[94m12[0m [1m[94m|[0m     blocking_at, pick_cover, CoverField, CoverKind, Posture, Threat,
-   [1m[94m|[0m                                          [1m[33m^^^^^^^^^[0m
-   [1m[94m|[0m
-   [1m[94m= [0m[1mnote[0m: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
-
-[1m[33mwarning[0m: `sim_cli` (bin "sim_cli") generated 1 warning (run `cargo fix --bin "sim_cli" -p sim_cli` to apply 1 suggestion)
 [1m[92m    Finished[0m `release` profile [optimized] target(s) in 0.00s
 
 === cargo test (nocapture) ===
-[1m[33mwarning[0m[1m: unused import: `CoverKind`[0m
-  [1m[94m--> [0mcrates/sim_cli/src/main.rs:12:42
-   [1m[94m|[0m
-[1m[94m12[0m [1m[94m|[0m     blocking_at, pick_cover, CoverField, CoverKind, Posture, Threat,
-   [1m[94m|[0m                                          [1m[33m^^^^^^^^^[0m
-   [1m[94m|[0m
-   [1m[94m= [0m[1mnote[0m: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
-
-[1m[33mwarning[0m: `sim_cli` (bin "sim_cli" test) generated 1 warning (run `cargo fix --bin "sim_cli" -p sim_cli --tests` to apply 1 suggestion)
 [1m[92m    Finished[0m `release` profile [optimized] target(s) in 0.00s
 [1m[92m     Running[0m unittests src/main.rs (target/release/deps/sim_cli-1320e17642fdad2e)
 
@@ -36,30 +18,27 @@ test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 [1m[92m     Running[0m unittests src/lib.rs (target/release/deps/sim_core-14091a5ac2bac8ee)
 
 running 34 tests
-
-thread 'cover::tests::blocking_high_when_behind_wall' (2713) panicked at crates/sim_core/src/world.rs:174:9:
-dim 必须是 chunk 的整数倍
-note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
-
-thread 'cover::tests::low_wall_vs_high_wall_classification' (2714) panicked at crates/sim_core/src/world.rs:174:9:
-dim 必须是 chunk 的整数倍
 test cover::tests::angular_factor_front_is_full_and_back_is_zero ... ok
 
-thread 'cover::tests::wall_generates_slots_on_both_sides' (2715) panicked at crates/sim_core/src/world.rs:174:9:
-dim 必须是 chunk 的整数倍
-test cover::tests::blocking_high_when_behind_wall ... FAILED
-test cover::tests::low_wall_vs_high_wall_classification ... FAILED
+thread 'cover::tests::low_wall_vs_high_wall_classification' (2415) panicked at crates/sim_core/src/cover.rs:904:9:
+assertion failed: f.slots.iter().all(|s| s.kind == CoverKind::LowWall)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread 'cover::tests::blocking_high_when_behind_wall' (2414) panicked at crates/sim_core/src/cover.rs:954:9:
+蹲在 1.5m 墙后应几乎全挡住，实际 Q16(0)
 test nav::tests::bridge_deck_is_walkable_but_you_cannot_climb_it ... ok
-test cover::tests::wall_generates_slots_on_both_sides ... FAILED
+test cover::tests::low_wall_vs_high_wall_classification ... FAILED
+test cover::tests::blocking_high_when_behind_wall ... FAILED
+test cover::tests::wall_generates_slots_on_both_sides ... ok
 test nav::tests::compute_is_deterministic ... ok
 test nav::tests::destruction_opens_a_path ... ok
 test nav::tests::flat_ground_is_walkable_everywhere ... ok
-test nav::tests::flow_field_shortest_path_on_flat_ground ... ok
 test nav::tests::flow_field_routes_around_a_wall ... ok
+test nav::tests::flow_field_shortest_path_on_flat_ground ... ok
 test nav::tests::no_corner_cutting ... ok
 test nav::tests::radius_limits_the_field ... ok
-test nav::tests::step_toward_moves_at_most_one_step ... ok
 test nav::tests::step_up_and_down_limits ... ok
+test nav::tests::step_toward_moves_at_most_one_step ... ok
 test nav::tests::unreachable_target_yields_empty_field ... ok
 test nav::tests::void_columns_are_unwalkable ... ok
 test nav::tests::wall_top_is_standable_but_unreachable_on_foot ... ok
@@ -69,8 +48,8 @@ test ray::tests::destroyed_wall_stops_blocking ... ok
 test ray::tests::directed_cases ... ok
 test ray::tests::hit_point_lies_between_endpoints ... ok
 test ray::tests::overhang_gap_is_walkable_and_shootable ... ok
-test ray::tests::is_deterministic_across_repeated_runs ... ok
 test ray::tests::wire_blocks_move_but_not_sight_or_bullets ... ok
+test ray::tests::is_deterministic_across_repeated_runs ... ok
 test tests::floor_div_matches_floor_semantics ... ok
 test world::tests::checksum_is_deterministic_and_order_sensitive ... ok
 test world::tests::damage_destroys_and_marks_dirty ... ok
@@ -86,8 +65,7 @@ failures:
 failures:
     cover::tests::blocking_high_when_behind_wall
     cover::tests::low_wall_vs_high_wall_classification
-    cover::tests::wall_generates_slots_on_both_sides
 
-test result: FAILED. 31 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: FAILED. 32 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
 [1m[91merror[0m: test failed, to rerun pass `-p sim_core --lib`
