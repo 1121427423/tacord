@@ -25,6 +25,12 @@ Constants(
         axis: "y_up_x_east_z_south",   // 冻结：改动 = 三角函数与法线全反号
         bearing_zero: "-z",            // 方位角 0 = 北
         bearing_dir: "clockwise",
+        // 几何与导航表示（R4）
+        segments_allow_gaps: true,      // 段之间允许空隙 → 可表达悬挑/阳台/桥下
+        slope_max_deg: 30,              // 可行走斜面的阶梯近似上限（美术约束）
+        nav_model: "field_2d + explicit_graph",  // 地表 2D 流场 + 室内/地道显式图
+        max_floor_levels: 2,            // 1.0 支持到 2 层建筑
+        geo_authority: "voxel",         // 掩体/LOS/弹道/破坏/导航代价只走体素，不碰渲染网格
     ),
 
     // ───────────────────────── 2. 时间与步进（T0）─────────────────────────
@@ -80,6 +86,11 @@ Constants(
         forbid: ["behavior_tree", "goap", "ml", "rl", "llm"],
         layers: 3,
         require_reason: true,               // 每个决策必须输出结构化 Reason
+        // 模拟 LOD 的依据（R1）：只能是 sim 内部状态，绝不能是相机/选中
+        lod_basis: "sim_state",
+        forbid_lod_inputs: ["camera", "selected", "viewport", "focus"],
+        // 命中判定粒度（R3）：逐命中点，不用汇总 blocking
+        hit_granularity: "per_point",
         // 个性维度（0..65535 概率定点）
         personality_dims: ["nerve", "discipline", "aggression", "initiative",
                            "marksmanship", "fitness", "experience"],
@@ -107,10 +118,12 @@ Constants(
         slot_capacity_mm:   800,            // 每人 0.8 m 肩宽
         graph_edge_mm:      8000,           // 掩体图连边 ≤ 8 m
         graph_edge_max_threat: 0.60,
+        // 角度一律按【半角】判定（R10）：coverage 为全角，cover_half = coverage/2
         coverage_base_deg:  60,
         coverage_width_deg: 30,             // coverage = clamp(60 + 30*(width/2m), 60, 110)
         coverage_max_deg:   110,
-        flank_margin_deg:   25,             // 超出 coverage/2 + 25° → angular_factor = 0
+        flank_margin_deg:   25,             // 超出 cover_half_angle + 25° → angular_factor = 0
+        coverage_is_full_angle: true,        // 验收必须调用 angular_factor()，不得重述阈值
         flank_dist_mm:      3000,           // 绕墙近距特判：<3m 且夹角 >120° → 失效
         // 身体采样点（mm，相对脚底）——与命中判定共用，改动牵动整个战斗系统
         samples_stand_mm:   [1700, 1350, 1000, 550],
@@ -211,15 +224,28 @@ Constants(
 
     // ──────────────────────── 9. 伤员链路（T2）─────────────────────────
     wounded: Wounded(
+        // 状态机（R5）：Active → Downed →(bleed 归零)→ Critical →(30s 无 CPR)→ Dead
+        //   bleed 归零【不是】死亡，而是进入 Critical；Dead 只在
+        //   Critical 超时 / CPR 失败 / vitality≤0 时倒下 时进入
         bleed_ms_min:       45000,
         bleed_ms_max:       90000,
         bleed_ms_default:   60000,
         vitality_max:       100,
         vitality_loss:      25,
         vitality_jitter:    8,
-        critical_window_ms: 30000,          // bleed 归零后的 CPR 窗口
+        critical_window_ms: 30000,          // Critical 的 CPR 窗口
+        critical_bleed_reset_ms: 15000,     // CPR 成功后重置的失血时间
         cpr_ms:             8000,
         cpr_success:        0.60,
+        cpr_vitality_loss:  30,
+        // 救援决策（R5）：对 risk 的全函数，不得有未定义区间
+        rescue_risk_direct:     0.45,   // [0, 0.45]      直接派 RESCUE（Runner + Cover）
+        rescue_risk_low:        0.55,   // (0.45, 0.55]   单兵低姿救援（走掩体链）
+        rescue_risk_suppress:   0.85,   // (0.55, 0.85]   先 SUPPRESS 再重估 / HOLD / 强制
+                                        // > 0.85          请求支援；Critical 时仍强制救援
+        rescue_risk_force_on_critical: true,
+        rescue_reeval_ms:       5000,   // HOLD 状态下的重估周期
+        rescue_b7_risk_ceiling: 0.85,   // B7 验收的适用上限（超过只要求有动作）
         aid_buddy_ms:       10000,
         aid_buddy_hp:       0.35,
         aid_medic_ms:       5000,
@@ -323,6 +349,9 @@ Constants(
     // ────────────────────────── 14. 网络（T0）─────────────────────────
     net: Net(
         model: "lockstep",
+        // 信息可见性（R2）：模拟无秘密（lockstep 必然结果），呈现层才有战争迷雾。
+        // 反作弊只承诺"不篡改"，不承诺"防信息泄露"。
+        visibility: "render_fog",
         input_delay_ticks:  6,              // 200 ms
         input_delay_min:    4,
         input_delay_max:    10,
@@ -343,8 +372,11 @@ Constants(
         high_res: "1440p",
         high_fps: 120,
         high_units: 800,
-        tick_p50_ms: 6.0,
-        tick_p99_ms: 11.0,
+        tick_p50_ms: 6.0,          // 每 sim tick（不是每帧）
+        tick_p99_ms: 11.0,         // 每 sim tick
+        frame_amort_ms: 5.5,       // 60fps 下每帧摊销 = 11.0 × 0.5
+        max_ticks_per_frame: 2,    // 追帧上限（lockstep 下绝不能丢 tick）
+        catchup_stall_ticks: 30,   // 落后超过这个值 → 触发全局同步降级
         render_cpu_ms: 3.0,
         gpu_ms: 5.0,
         mem_sim_mb: 384,

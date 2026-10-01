@@ -67,6 +67,11 @@ def parse_ron(text: str) -> dict[str, str]:
     return flat
 
 
+def s(v: str | None) -> str:
+    """去掉 ron 字符串的引号。"""
+    return (v or "").strip().strip('"')
+
+
 def as_int(v: str | None) -> int | None:
     if v is None:
         return None
@@ -189,6 +194,73 @@ def main() -> int:
     check("schema_version" in ron or "constants_schema" in ron, "ron 带 schema 版本")
     check(ron.get("record_constants_hash", "").lower() in ("true", "yes"),
           "回放记录 constants_hash（调参后旧回放自动失效）")
+
+    # ── E. 审查修复项的不变量（R1/R2/R3/R4/R5/R8/R10）────────────────────
+    # R1：模拟 LOD 只能依赖 sim 状态，禁止相机/选中进入 sim
+    check(s(ron.get("lod_basis")) == "sim_state", "R1 模拟 LOD 依据 = sim_state", s(ron.get("lod_basis")))
+    check("camera" in (ron.get("forbid_lod_inputs") or ""), "R1 禁止相机作为 LOD 输入")
+    # R2：模拟无秘密 / 呈现有迷雾
+    check(s(ron.get("visibility")) == "render_fog", "R2 信息可见性 = render_fog", s(ron.get("visibility")))
+    # R3：命中判定逐点
+    check(s(ron.get("hit_granularity")) == "per_point", "R3 命中判定 = per_point", s(ron.get("hit_granularity")))
+    # R4：几何与导航
+    check(s(ron.get("geo_authority")) == "voxel", "R4 权威几何 = voxel")
+    check(s(ron.get("segments_allow_gaps")).lower() == "true", "R4 段之间允许空隙（悬挑/桥下）")
+    nav = s(ron.get("nav_model"))
+    check("field_2d" in nav and "explicit_graph" in nav, "R4 导航 = 2D 流场 + 显式图", nav)
+    slope = as_int(ron.get("slope_max_deg"))
+    check(slope is not None and 0 < slope <= 45, "R4 斜面阶梯近似的坡度上限合理", f"{slope}°")
+
+    # R5：伤员状态机时间线自洽
+    bmin, bmax, bdef = (as_int(ron.get("bleed_ms_min")), as_int(ron.get("bleed_ms_max")),
+                        as_int(ron.get("bleed_ms_default")))
+    check(bmin and bmax and bdef and bmin <= bdef <= bmax, "R5 bleed 默认值落在 [min, max]",
+          f"{bdef} ∈ [{bmin}, {bmax}]")
+    crit = as_int(ron.get("critical_window_ms"))
+    check(crit is not None and crit > 0, "R5 Critical 窗口 > 0（CPR 才有意义）", f"{crit}")
+    cpr_v = as_int(ron.get("cpr_vitality_loss"))
+    check(cpr_v is not None and cpr_v > 0, "R5 CPR 成功要扣 vitality", f"{cpr_v}")
+    check(as_int(ron.get("critical_bleed_reset_ms")) is not None
+          and as_int(ron.get("critical_bleed_reset_ms")) > 0, "R5 CPR 后重置失血时间 > 0")
+
+    # R5：救援决策必须是 risk 的全函数，分区严格递增且都 < 1
+    r_direct, r_low, r_sup = (ron.get("rescue_risk_direct"), ron.get("rescue_risk_low"),
+                              ron.get("rescue_risk_suppress"))
+    try:
+        vals = [float(r_direct), float(r_low), float(r_sup)]
+    except (TypeError, ValueError):
+        vals = []
+    check(len(vals) == 3 and vals[0] < vals[1] < vals[2] < 1.0,
+          "R5 救援风险分区严格递增且 < 1（无未定义区间）", f"{vals}")
+    check(s(ron.get("rescue_risk_force_on_critical")).lower() == "true",
+          "R5 Critical 时强制救援（绝不丢下任何人）")
+    b7 = ron.get("rescue_b7_risk_ceiling")
+    check(b7 is not None and float(b7) == float(r_sup), "R5 B7 验收上限 = 强制救援阈值", f"{b7} vs {r_sup}")
+
+    # R8：预算口径自洽（每 tick 与每帧摊销）
+    p50, amort = ron.get("tick_p50_ms"), ron.get("frame_amort_ms")
+    if p99 and amort:
+        expect = float(p99) * 0.5
+        check(abs(float(amort) - expect) < 0.2, "R8 每帧摊销 = p99 × 0.5（60fps）",
+              f"{amort} vs {expect:.2f}")
+    mtpf = as_int(ron.get("max_ticks_per_frame"))
+    check(mtpf is not None and mtpf >= 1, "R8 追帧上限 ≥ 1", f"{mtpf}")
+    check(as_int(ron.get("catchup_stall_ticks")) is not None
+          and as_int(ron.get("catchup_stall_ticks")) > mtpf, "R8 降级阈值 > 追帧上限")
+
+    # R10：覆盖角按半角判定
+    cbase, cmax = as_int(ron.get("coverage_base_deg")), as_int(ron.get("coverage_max_deg"))
+    check(cbase and cmax and cbase <= cmax <= 180, "R10 覆盖角范围合理", f"{cbase}..{cmax}")
+    check(s(ron.get("coverage_is_full_angle")).lower() == "true",
+          "R10 coverage 标记为全角（判定时取半角）")
+    fm = as_int(ron.get("flank_margin_deg"))
+    check(fm is not None and 0 < fm <= 45, "R10 侧翼 margin 合理", f"{fm}°")
+
+    # 文档同步：关键裁定必须在设计文档里出现
+    for needle, label in [("Critical", "R5 伤员状态机"), ("render_fog", "R2 信息可见性"),
+                          ("angular_factor", "R10 侧翼判定"), ("per_point", "R3 逐点命中"),
+                          ("sim_state", "R1 LOD 依据")]:
+        check(needle.lower() in doc.lower(), f"文档包含「{label}」裁定 ({needle})")
 
     # ── 输出 ──────────────────────────────────────────────────────────
     if "--verbose" in sys.argv:
