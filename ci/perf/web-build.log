@@ -1,7 +1,68 @@
-[1m[91merror[0m: failed to run `rustc` to learn about target-specific information
-
-Caused by:
-  process didn't exit successfully: `/home/runner/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rustc - --crate-name ___ --print=file-names -C link-args=-sSIDE_MODULE=2 -C llvm-args=-enable-emscripten-cxx-exceptions=0 -Z default-visibility=hidden -Z link-native-libraries=no -Z emscripten-wasm-eh=false --target wasm32-unknown-emscripten --crate-type bin --crate-type rlib --crate-type dylib --crate-type cdylib --crate-type staticlib --crate-type proc-macro --print=sysroot --print=split-debuginfo --print=crate-name --print=cfg -Wwarnings` (exit status: 1)
-  --- stderr
-  error: unknown unstable option: `emscripten-wasm-eh`
-
+[1m[92m    Updating[0m crates.io index
+[1m[92m     Locking[0m 25 packages to highest compatible versions
+[1m[92m    Updating[0m crates.io index
+[1m[92m Downloading[0m crates ...
+[1m[92m  Downloaded[0m cfg-if v1.0.4
+[1m[92m  Downloaded[0m addr2line v0.27.1
+[1m[92m  Downloaded[0m adler2 v2.0.1
+[1m[92m  Downloaded[0m foldhash v0.2.0
+[1m[92m  Downloaded[0m rustc-literal-escaper v0.0.8
+[1m[92m  Downloaded[0m getopts v0.2.24
+[1m[92m  Downloaded[0m miniz_oxide v0.9.1
+[1m[92m  Downloaded[0m rustc-demangle v0.1.28
+[1m[92m  Downloaded[0m hashbrown v0.17.1
+[1m[92m  Downloaded[0m gimli v0.34.0
+[1m[92m  Downloaded[0m object v0.39.1
+[1m[92m   Compiling[0m compiler_builtins v0.1.160 (/home/runner/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins)
+[1m[92m   Compiling[0m core v0.0.0 (/home/runner/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core)
+[1m[92m   Compiling[0m libc v0.2.189
+[1m[92m   Compiling[0m regex-syntax v0.8.11
+[1m[92m   Compiling[0m godot-bindings v0.5.5
+[1m[92m   Compiling[0m gdextension-api v0.5.1
+[1m[92m   Compiling[0m regex-automata v0.4.18
+[1m[92m   Compiling[0m which v8.0.6
+[1m[92m   Compiling[0m proc-macro2 v1.0.107
+[1m[92m   Compiling[0m unicode-ident v1.0.26
+[1m[92m   Compiling[0m quote v1.0.47
+[1m[92m   Compiling[0m object v0.39.1
+[1m[92m   Compiling[0m std v0.0.0 (/home/runner/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std)
+[1m[92m   Compiling[0m nanoserde-derive v0.2.1
+[1m[92m   Compiling[0m heck v0.5.0
+[1m[92m   Compiling[0m venial v0.6.1
+[1m[92m   Compiling[0m regex v1.13.1
+[1m[92m   Compiling[0m nanoserde v0.2.1
+[1m[92m   Compiling[0m godot-codegen v0.5.5
+[1m[92m   Compiling[0m godot-macros v0.5.5
+[1m[92m   Compiling[0m godot-ffi v0.5.5
+[1m[92m   Compiling[0m godot-core v0.5.5
+[1m[92m   Compiling[0m rustc-std-workspace-core v1.99.0 (/home/runner/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/rustc-std-workspace-core)
+[1m[92m   Compiling[0m alloc v0.0.0 (/home/runner/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc)
+[1m[92m   Compiling[0m unwind v0.0.0 (/home/runner/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/unwind)
+[1m[92m   Compiling[0m adler2 v2.0.1
+[1m[92m   Compiling[0m memchr v2.8.3
+[1m[92m   Compiling[0m cfg-if v1.0.4
+[1m[92m   Compiling[0m rustc-demangle v0.1.28
+[1m[92m   Compiling[0m rustc-literal-escaper v0.0.8
+[1m[92m   Compiling[0m rustc-std-workspace-alloc v1.99.0 (/home/runner/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/rustc-std-workspace-alloc)
+[1m[92m   Compiling[0m panic_unwind v0.0.0 (/home/runner/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/panic_unwind)
+[1m[92m   Compiling[0m panic_abort v0.0.0 (/home/runner/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/panic_abort)
+[1m[92m   Compiling[0m gimli v0.34.0
+[1m[92m   Compiling[0m std_detect v0.1.5 (/home/runner/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std_detect)
+[1m[92m   Compiling[0m hashbrown v0.17.1
+[1m[92m   Compiling[0m miniz_oxide v0.9.1
+[1m[92m   Compiling[0m addr2line v0.27.1
+[1m[92m   Compiling[0m proc_macro v0.0.0 (/home/runner/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/proc_macro)
+[1m[92m   Compiling[0m godot-cell v0.5.5
+[1m[92m   Compiling[0m glam v0.32.1
+[1m[92m   Compiling[0m sim_math v0.1.0 (/home/runner/work/tacord/tacord/sim/crates/sim_math)
+[1m[92m   Compiling[0m sim_core v0.1.0 (/home/runner/work/tacord/tacord/sim/crates/sim_core)
+[1m[92m   Compiling[0m godot v0.5.5
+[1m[92m   Compiling[0m tacord_gdext v0.1.0 (/home/runner/work/tacord/tacord/gdext)
+[1m[92m    Finished[0m `release` profile [optimized] target(s) in 20m 11s
+--- wasm 产物 ---
+target/wasm32-unknown-emscripten/release/tacord_gdext.wasm
+'target/wasm32-unknown-emscripten/release/tacord_gdext.wasm' -> '../godot/bin/tacord_gdext.wasm'
+total 3660
+drwxr-xr-x 2 runner runner    4096 Oct  1 18:32 .
+drwxr-xr-x 5 runner runner    4096 Oct  1 18:32 ..
+-rwxr-xr-x 1 runner runner 3737093 Oct  1 18:32 tacord_gdext.wasm
