@@ -1,5 +1,5 @@
 os: windows-latest
 arch: x86_64
-cpu: Intel(R) Xeon(R) 6973P-C
-commit: 2a69a7afd78933759fd1603a9317c12b320321df
-date: Thu Oct  1 20:50:31 UTC 2026
+cpu: AMD EPYC 9V45 96-Core Processor                
+commit: 4d6d3bf817a691746f0dfcf59f19a72faed658b8
+date: Thu Oct  1 20:55:24 UTC 2026
