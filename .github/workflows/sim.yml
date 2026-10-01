@@ -463,6 +463,12 @@ jobs:
           done
           echo "✅ 导出产物齐全"
 
+      # 直接交给 GitHub Pages（仓库的 Pages 已经配成 build_type=workflow）
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: godot/dist
+
       - name: 产物推到 ci/web-preview 分支（沙箱取回用）
         if: always()
         env:
@@ -502,6 +508,26 @@ jobs:
           put_file ci/perf/web-build.log /tmp/web-build.log
           put_file ci/perf/web-export.log /tmp/web-export.log
           exit 0
+
+  # ─────────────────────────── 部署到 GitHub Pages ───────────────────────────
+  # 地址：https://1121427423.github.io/tacord/
+  # 用的是 artifact 部署路线（build_type=workflow），不需要 gh-pages 分支
+  deploy-pages:
+    name: 部署到 GitHub Pages
+    needs: web
+    if: needs.web.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: 部署
+        id: deployment
+        uses: actions/deploy-pages@v4
 
   # ─────────────────────────── 静态检查与参数 ───────────────────────────
   lint:
