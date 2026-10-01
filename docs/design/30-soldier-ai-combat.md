@@ -229,7 +229,7 @@ ray = muzzle + dir(aim_point) rotated by spread(cone_rad)
 | "我能打中他吗" | `!ray_blocked(muzzle, hit_point)` | **逐点，且就是被命中的那一点** |
 
 > **看得见的那个部位，才是能被击中的部位。**
-> 三者共用同一套采样点与同一个 `ray_blocked`，区别只在"汇总 vs 单点"——
+> 三者共用同一套采样点与同一个 `ray_blocked`（实现：`sim_core::ray::blocked`，见 §20.1.3 的命名对照），区别只在"汇总 vs 单点"——
 > 汇总值只用于评分与探测速率，绝不作为命中门槛。
 
 **验证（新增 B9，见 §90.3）**：把单位放在只露头胸、躯干被墙挡住的位置，

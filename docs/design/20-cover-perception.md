@@ -73,6 +73,12 @@ fn blocking(threat: Vec3, unit_pos, posture, world) -> f32 /* 0..1 */ {
 - 为了兼顾性能：采样点数量按 LOD 裁剪（Full = 全部，Reduced = 头+胸两点，Dormant = 1 点）。
 - `ray_blocked` 用 **体素 DDA（Amanatides–Woo）** 遍历柱，遇到 SOLID 段且射线高度落在该段区间 → 命中。**不穿**则继续；材质穿透在射击系统单独处理（视觉上看不见 vs 子弹能打穿是两件事：这里只看"能否被看见"）。
 
+> **命名对照（已实现，M0.2）**：本文统一把"是否被挡"写成 `ray_blocked(a, b)` 以突出语义，
+> 实现是 `sim_core::ray::blocked(world, a, b, mode)`；`ray_hit_first` 对应 `sim_core::ray::cast(...)`，
+> 返回 `RayHit { cell_x, cell_z, seg_index, t_num, t_den }`（`t_num/t_den` 是有理数距离，避免开方）。
+> `mode` 取 `RayMode::Sight`（铁丝网不挡视线）或 `RayMode::Projectile`（铁丝网也不挡子弹，但木板挡）。
+> 三个系统（掩体评分、感知 LOS、弹道命中）**必须**调同一个函数，不允许各写一份。
+
 #### 20.1.3.1 汇总 blocking 的**唯一**用途（R3）
 
 > 原设计用 `blocking < 1.0` 作为"能否开枪命中"的门槛（§30.3.2），这是错的：
@@ -329,7 +335,7 @@ threat(g) = 0.40*norm(bullet_density) + 0.35*enemy_influence
 
 ## 20.3 实现清单（DoD，掩体与感知）
 
-- [ ] 体素 DDA 射线 + `ray_blocked` / `ray_hit_first`（含层结构、窗户空洞、TRENCH 标记）
+- [x] 体素 DDA 射线：`sim_core::ray::blocked` / `cast`（含层结构、窗户空洞、铁丝网 `blocks_move` 三态）—— M0.2 已完成，28 项单测（含 800 条射线对密集采样 oracle 对照）
 - [ ] 掩体槽生成（chunk 粒度）+ 分类 + 占用管理
 - [ ] `blocking` / `angular_factor` 计算，与射击系统**共用** `exposure_samples`
 - [ ] 掩体评分函数（权重外置到 `ai_weights.ron`）+ top-K 剪枝 + 缓存与事件失效
