@@ -1,6 +1,6 @@
-commit: 8fdcb6ac07140227b1f5fbbe973b3d16fb7fd7c2
+commit: a381c5df27c7b37544f72577d3cf76772e68ccbc
 branch: arena/01a0f7c2-tacord
-date: Thu Oct  1 21:13:28 UTC 2026
+date: Thu Oct  1 21:19:22 UTC 2026
 job status: failure
 
 === cargo build (short) ===
@@ -63,8 +63,8 @@ test nav::tests::no_corner_cutting ... ok
 test nav::tests::radius_limits_the_field ... ok
 test nav::tests::step_toward_moves_at_most_one_step ... ok
 test nav::tests::step_up_and_down_limits ... ok
-test cover::tests::blocking_high_when_behind_wall ... ok
 test cover::tests::wall_generates_slots_on_both_sides ... ok
+test cover::tests::blocking_high_when_behind_wall ... ok
 test nav::tests::unreachable_target_yields_empty_field ... ok
 test nav::tests::void_columns_are_unwalkable ... ok
 test nav::tests::wall_top_is_standable_but_unreachable_on_foot ... ok
@@ -74,15 +74,15 @@ test ray::tests::destroyed_wall_stops_blocking ... ok
 test ray::tests::directed_cases ... ok
 test ray::tests::hit_point_lies_between_endpoints ... ok
 test ray::tests::overhang_gap_is_walkable_and_shootable ... ok
+test ray::tests::wire_blocks_move_but_not_sight_or_bullets ... ok
 test ray::tests::is_deterministic_across_repeated_runs ... ok
 test tests::floor_div_matches_floor_semantics ... ok
-test ray::tests::wire_blocks_move_but_not_sight_or_bullets ... ok
 test world::tests::checksum_is_deterministic_and_order_sensitive ... ok
-test world::tests::damage_destroys_and_marks_dirty ... ok
+test world::tests::flat_world_has_ground_everywhere ... ok
 test world::tests::material_flags_are_independent ... ok
 test world::tests::max_segments_per_column_enforced ... ok
-test world::tests::flat_world_has_ground_everywhere ... ok
 test cover::tests::low_wall_vs_high_wall_classification ... ok
+test world::tests::damage_destroys_and_marks_dirty ... ok
 test world::tests::out_of_bounds_is_empty_not_panic ... ok
 test world::tests::segments_stay_sorted_and_allow_gaps ... ok
 test world::tests::take_dirty_respects_max_for_amortized_rebuild ... ok
@@ -102,8 +102,8 @@ test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 
 running 16 tests
 test isqrt_tests::isqrt_matches_known_values ... ok
-test tests::ang_helpers ... ok
 test tests::atan2_known_slopes ... ok
+test tests::ang_helpers ... ok
 test tests::atan2_quadrants ... ok
 test tests::mm_scaling ... ok
 test tests::pcg32_determinism_and_streams ... ok
