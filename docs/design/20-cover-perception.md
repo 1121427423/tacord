@@ -73,25 +73,62 @@ fn blocking(threat: Vec3, unit_pos, posture, world) -> f32 /* 0..1 */ {
 - 为了兼顾性能：采样点数量按 LOD 裁剪（Full = 全部，Reduced = 头+胸两点，Dormant = 1 点）。
 - `ray_blocked` 用 **体素 DDA（Amanatides–Woo）** 遍历柱，遇到 SOLID 段且射线高度落在该段区间 → 命中。**不穿**则继续；材质穿透在射击系统单独处理（视觉上看不见 vs 子弹能打穿是两件事：这里只看"能否被看见"）。
 
+#### 20.1.3.1 汇总 blocking 的**唯一**用途（R3）
+
+> 原设计用 `blocking < 1.0` 作为"能否开枪命中"的门槛（§30.3.2），这是错的：
+> 只要有一个采样点露出，汇总 blocking 就 < 1.0，于是整条命中的判定就放行了——
+> 哪怕子弹实际会打在被墙挡住的躯干上。这让"掩体"在最关键的判定上失效。
+
+**裁定：汇总 `blocking` 只用于两件事，绝不用于命中判定：**
+
+| 用途 | 函数 | 说明 |
+| --- | --- | --- |
+| AI 掩体评分 | `blocking_aggregate()` | 加权汇总值，衡量"总体藏得多好"，适合横向比较候选掩体 |
+| 视觉探测速率 | `exposure_factor = 1 - blocking_aggregate` | 露得越多，被发现越快（一个连续量，天然适合做速率） |
+
+**命中与"看得见"一律走逐点判定**（§30.3.2 已按此重写）：
+
+```
+visible_any(target)  = ∃ 采样点 p: !ray_blocked(shooter_eye, p)      // 看见：任一点
+can_hit(point)       = !ray_blocked(muzzle, point)                   // 命中：具体那一点
+```
+
+这样"能看见 = 能打中"的承诺被精确化为：**"看得见的那个部位，才是能被击中的部位"**——
+同一套采样点、同一个 `ray_blocked`，只是不再用汇总值做门槛。半身露头会被打头，藏在墙后的躯干打不到。
+
 ### 20.1.4 有效遮挡角与"被包抄"
 
 槽的 `blocking` 只对**一定角度范围**内的威胁成立：
 
-```
-coverage_angle(slot) = clamp(60° + 30° * (slot.width / 2.0m), 60°, 110°)   // 越宽的墙，能挡的范围越大
-```
-
-对威胁方向 `d`（单位 → 威胁的水平向量）与槽法线 `n` 的夹角 `α = angle(d, n)`：
+> **角度定义统一（R10）**：原文档 §20 用"覆盖角/2 + 25°"，§90 B2 验收却写"绕到 coverage + 25°"，
+> 且没说明 coverage 是全角还是半角——测试与实现会用不同阈值。这里一次性定死 **半角** 语义。
 
 ```
-angular_factor(α, slot):
-    if α <= coverage_angle/2:        return 1.0
-    if α >= coverage_angle/2 + 25°:  return 0.0        // 已被包抄，这处掩体对此威胁失效
-    else:                            线性衰减
+// coverage_angle 是【全角】；判定时一律用它的半角
+coverage_angle(slot)     = clamp(60° + 30° * (slot.width / 2.0m), 60°, 110°)   // 越宽的墙，能挡的范围越大
+cover_half_angle(slot)   = coverage_angle(slot) / 2                            // 30°..55°
+FLANK_MARGIN_DEG         = 25°                                                 // 常量，见 constants.ron
 ```
+
+对威胁方向 `d`（单位 → 威胁的水平向量）与槽法线 `n` 的夹角 `α = angle(d, n)`（**半角，0..180°**）：
+
+```
+angular_factor(α, slot) -> Q16:
+    if α <= cover_half_angle(slot):                       return 1.0
+    if α >= cover_half_angle(slot) + FLANK_MARGIN_DEG:    return 0.0   // 已被包抄，对此威胁失效
+    else:                                                 线性衰减（1 → 0）
+```
+
+**验收必须调用生产函数，不得重述阈值**（§90.3 B2 已改为）：
+
+```
+B2: 敌人移动到使 angular_factor(slot, threat) == 0 的位置后，
+    单位在 1.5s 内放弃该掩体，成功率 ≥ 90%
+```
+测试代码直接 `use sim_core::cover::angular_factor` —— 阈值一改，测试自动跟随，不可能出现两套标准。
 
 - **被包抄的即时反馈**：当某个已知威胁的 `angular_factor` 从 >0.5 掉到 0 时，触发 `COVER_FLANKED` 事件 → 该单位立即（不等摊还周期）重新评估掩体；班组层会尝试压制该方向或呼叫支援。
-- 反向也成立：如果 **敌人在掩体的另一侧**（比如同一堵墙的另一面，距离 < 2m），掩体对该敌人无效（近距离绕墙判定：`α > 120°` 且距离 < 3m → factor = 0）。
+- 反向也成立：如果 **敌人在掩体的另一侧**（比如同一堵墙的另一面，距离 < 2m），掩体对该敌人无效（近距离绕墙判定：`α > 120°` 且距离 < 3m → factor = 0）。注意这里的 `120°` 同样以**半角**理解（来自槽法线），与上式一致。
 
 ### 20.1.5 掩体评分（Utility）
 
