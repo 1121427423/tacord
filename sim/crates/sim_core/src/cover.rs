@@ -65,6 +65,22 @@ pub const REACH_HORIZON_TICKS: i64 = 90;
 pub const WALK_MM_PER_TICK: i64 = 50;
 
 // 评分权重（ai_weights.ron 的 M1 子集，Q16 口径：1.0 = 65536）
+impl CoverKind {
+    /// 这处掩体**该用什么姿态**（§20.1.2 的"可用姿态"列）。
+    ///
+    /// 为什么必须显式化：蹲在 0.9 m 矮墙后，头顶采样点（1150 mm）是露在外面的，
+    /// 两点评测只有 0.53 —— 达不到"藏住"。矮墙/战壕/残骸必须**卧倒**才算藏好。
+    /// 少了这一步，AI 会认为矮墙没用，或者站错了姿态被人打头。
+    pub const fn best_posture(self) -> Posture {
+        match self {
+            CoverKind::Trench | CoverKind::LowWall | CoverKind::Wreck | CoverKind::Pillar => {
+                Posture::Prone
+            }
+            CoverKind::HighWall | CoverKind::Corner | CoverKind::Window => Posture::Crouch,
+        }
+    }
+}
+
 pub const W_BLOCK: i32 = 65_536; // 1.00
 pub const W_ANGLE: i32 = 29_491; // 0.45
 pub const W_REACH: i32 = 22_938; // 0.35
@@ -636,9 +652,10 @@ fn bearing_dir(a: Ang) -> (Q16, Q16) {
 pub fn blocking_aggregate(
     w: &World,
     slot: &CoverSlot,
-    posture: Posture,
+    posture: Option<Posture>,
     threats: &[Threat],
 ) -> Q16 {
+    let posture = posture.unwrap_or_else(|| slot.kind.best_posture());
     if threats.is_empty() {
         // 没有已知威胁：退化为"这堵墙本身有多高"（相对姿态），只是个排序用的量
         let eye = slot.ground_mm + posture.eye_mm();
@@ -706,7 +723,7 @@ pub fn blocking_at(
     hf: &HeightField,
     x_mm: i64,
     z_mm: i64,
-    posture: Posture,
+    posture: Option<Posture>,
     threats: &[Threat],
 ) -> Q16 {
     let cx = (x_mm / CELL_MM) as i32;
@@ -784,7 +801,7 @@ pub fn pick_cover(
     field: &CoverField,
     from_x_mm: i64,
     from_z_mm: i64,
-    posture: Posture,
+    posture: Option<Posture>,
     threats: &[Threat],
     max_candidates: usize,
     scratch: &mut Vec<u32>,
@@ -1023,10 +1040,10 @@ mod tests {
             z_mm: slot.center_z_mm() as i32 + 10_000,
             confidence: 65_535,
         };
-        let b = blocking_aggregate(&w, &slot, Posture::Crouch, &[t]);
+        let b = blocking_aggregate(&w, &slot, Some(Posture::Crouch), &[t]);
         assert!(b.0 > 60_000, "蹲在 1.5m 墙后应几乎全挡住，实际 {b:?}");
         // 站立时头露出来 → 遮挡下降
-        let bs = blocking_aggregate(&w, &slot, Posture::Stand, &[t]);
+        let bs = blocking_aggregate(&w, &slot, Some(Posture::Stand), &[t]);
         assert!(bs.0 < b.0, "站立应比蹲下暴露更多: stand={bs:?} crouch={b:?}");
     }
 }

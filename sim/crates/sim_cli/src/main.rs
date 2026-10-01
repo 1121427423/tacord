@@ -91,7 +91,7 @@ fn build_city(rng: &mut Pcg32, dim_cells: u32) -> World {
     };
 
     // 建筑：矩形块（4..13 柱 ≈ 2..6.5 m 宽），高 3..7.5 m；1/3 带窗洞
-    let blocks = (dim / 16).max(4);
+    let blocks = (dim / 8).max(6);
     for _ in 0..blocks {
         let bw = 4 + rng.next_range(9) as i64;
         let bd = 4 + rng.next_range(9) as i64;
@@ -115,7 +115,7 @@ fn build_city(rng: &mut Pcg32, dim_cells: u32) -> World {
     }
 
     // 院墙：成排矮墙（0.9..1.3 m），是"蹲下全藏、起身探头"的主力掩体
-    let walls = (dim / 24).max(3);
+    let walls = (dim / 12).max(4);
     for _ in 0..walls {
         let len = 6 + rng.next_range(14) as i64;
         let x0 = rng.next_range(dim_cells) as i64;
@@ -710,7 +710,7 @@ fn cmd_cover(args: &[String]) {
                     &field,
                     pos.0,
                     pos.1,
-                    Posture::Crouch,
+                    None, // None = 用这处掩体该用的姿态（矮墙卧倒、高墙蹲下）
                     &[threat],
                     12,
                     &mut scrape,
@@ -741,7 +741,7 @@ fn cmd_cover(args: &[String]) {
             }
         }
         evaluated += 1;
-        let b = blocking_at(&world, &hf, pos.0, pos.1, Posture::Crouch, &[threat]);
+        let b = blocking_at(&world, &hf, pos.0, pos.1, None, &[threat]);
         if b.0 >= 45_875 {
             // 0.7 × 65536
             reached += 1;
