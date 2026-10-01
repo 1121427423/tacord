@@ -1,0 +1,10 @@
+[package]
+name = "sim_cli"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "tacord 的 headless 工具：跑图、回放、性能 bench、调试导出"
+
+[dependencies]
+sim_math = { path = "../sim_math" }
+sim_core = { path = "../sim_core" }

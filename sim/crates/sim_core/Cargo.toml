@@ -1,0 +1,9 @@
+[package]
+name = "sim_core"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "tacord 的体素世界、射线与破坏管线（掩体与命中判定共用的唯一几何真理）"
+
+[dependencies]
+sim_math = { path = "../sim_math" }

@@ -252,6 +252,38 @@ impl Mul<Q16> for Mm {
     }
 }
 
+/// 三维点/向量（毫米）。`y` 为**高度**，`x`/`z` 为地面平面
+/// （与 `Vec2` 的 `x`/`y` 对应同一个地面平面，注意命名差异）。
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
+pub struct Vec3 {
+    pub x: Mm,
+    pub y: Mm,
+    pub z: Mm,
+}
+
+impl Vec3 {
+    #[inline]
+    pub const fn new(x: Mm, y: Mm, z: Mm) -> Self {
+        Vec3 { x, y, z }
+    }
+    #[inline]
+    pub const fn add(self, rhs: Vec3) -> Vec3 {
+        Vec3 {
+            x: Mm(self.x.0 + rhs.x.0),
+            y: Mm(self.y.0 + rhs.y.0),
+            z: Mm(self.z.0 + rhs.z.0),
+        }
+    }
+    #[inline]
+    pub const fn sub(self, rhs: Vec3) -> Vec3 {
+        Vec3 {
+            x: Mm(self.x.0 - rhs.x.0),
+            y: Mm(self.y.0 - rhs.y.0),
+            z: Mm(self.z.0 - rhs.z.0),
+        }
+    }
+}
+
 /// 地面平面上的二维向量（X-Z，单位毫米）。
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
 pub struct Vec2 {
