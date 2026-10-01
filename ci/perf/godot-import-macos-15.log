@@ -4,7 +4,10 @@ Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 [   0% ] [90m[1mfirst_scan_filesystem[22m | Scanning file structure...[39m[0m
 [  16% ] [90m[1mfirst_scan_filesystem[22m | Loading global class names...[39m[0m
 [  33% ] [90m[1mfirst_scan_filesystem[22m | Verifying GDExtensions...[39m[0m
-Initialize godot-rust (API v4.6.stable.official, runtime v4.7.2.stable.official, safeguards balanced)
+ERROR: Can't open dynamic library: /Users/runner/work/tacord/tacord/godot/../gdext/target/release/libtacord_gdext.dylib. Error: dlopen(/Users/runner/work/tacord/tacord/godot/../gdext/target/release/libtacord_gdext.dylib, 0x0002): tried: '/Users/runner/work/tacord/tacord/godot/../gdext/target/release/libtacord_gdext.dylib' (no such file), '/System/Volumes/Preboot/Cryptexes/OS/Users/runner/work/tacord/tacord/godot/../gdext/target/release/libtacord_gdext.dylib' (no such file), '/Users/runner/work/tacord/tacord/godot/../gdext/target/release/libtacord_gdext.dylib' (no such file).
+   at: open_dynamic_library (platform/macos/os_macos.mm:420)
+ERROR: Can't open GDExtension dynamic library: 'res://tacord.gdextension'.
+   at: open_library (core/extension/gdextension.cpp:811)
 [  50% ] [90m[1mfirst_scan_filesystem[22m | Creating autoload scripts...[39m[0m
 [  66% ] [90m[1mfirst_scan_filesystem[22m | Initializing plugins...[39m[0m
 [  83% ] [90m[1mfirst_scan_filesystem[22m | Starting file scan...[39m[0m
@@ -15,27 +18,20 @@ Initialize godot-rust (API v4.6.stable.official, runtime v4.7.2.stable.official,
 [  33% ] [90m[1mupdate_scripts_classes[22m | [39m[0m
 [92m[ DONE ][39m [1mupdate_scripts_classes[22m
 [0m
+ERROR: Can't open dynamic library: /Users/runner/work/tacord/tacord/godot/../gdext/target/release/libtacord_gdext.dylib. Error: dlopen(/Users/runner/work/tacord/tacord/godot/../gdext/target/release/libtacord_gdext.dylib, 0x0002): tried: '/Users/runner/work/tacord/tacord/godot/../gdext/target/release/libtacord_gdext.dylib' (no such file), '/System/Volumes/Preboot/Cryptexes/OS/Users/runner/work/tacord/tacord/godot/../gdext/target/release/libtacord_gdext.dylib' (no such file), '/Users/runner/work/tacord/tacord/godot/../gdext/target/release/libtacord_gdext.dylib' (no such file).
+   at: open_dynamic_library (platform/macos/os_macos.mm:420)
+ERROR: Can't open GDExtension dynamic library: 'res://tacord.gdextension'.
+   at: open_library (core/extension/gdextension.cpp:811)
 [   0% ] [90m[1mloading_editor_layout[22m | Started Loading editor (5 steps)[39m[0m
 [   0% ] [90m[1mloading_editor_layout[22m | Loading editor layout...[39m[0m
 [  16% ] [90m[1mloading_editor_layout[22m | Loading docks...[39m[0m
 [92m[ DONE ][39m [1mloading_editor_layout[22m
 [0m
-
-================================================================
-handle_crash: Program crashed with signal 11
-Engine version: Godot Engine v4.7.2.stable.official (ed1daf0bf001b61586d9930840f2f1394092c079)
-Dumping the backtrace. Please include this when reporting the bug on: https://github.com/godotengine/godot/issues
-Load address: 1005e0000
-
-[1] 1969b56a4 (libsystem_platform.dylib+36a4) - _sigtramp + 56
-[2] 102798dbc (main+21b8dbc) - SDL_GetPerformanceFrequency + 4162848
-[3] 1027783c0 (main+21983c0) - SDL_GetPerformanceFrequency + 4029220
-[4] 1027b969c (main+21d969c) - SDL_GetPerformanceFrequency + 4296192
-[5] 10536c37c (main+4d8c37c) - ZSTD_decompressStream_simpleArgs + 6538008
-[6] 10536c664 (main+4d8c664) - ZSTD_decompressStream_simpleArgs + 6538752
-[7] 100d5294c (main+77294c) - main + 155224
-[8] 100cca578 (main+6ea578) - mvk::SPIRVToMSLConverter::convert(mvk::SPIRVToMSLConversionConfiguration&, mvk::SPIRVToMSLConversionResult&, bool, bool, bool)
-[9] 100d2cea4 (main+74cea4) - main (in Godot) + 944
-[10] 1965dab98 (dyld+6b98) - start + 6076
--- END OF C++ BACKTRACE --
-================================================================
+SCRIPT ERROR: Parse Error: Could not find type "SimRoot" in the current scope.
+          at: GDScript::reload (res://scripts/main.gd:10)
+ERROR: Failed to load script "res://scripts/main.gd" with error "Parse error".
+   at: load (modules/gdscript/gdscript_resource_format.cpp:46)
+ERROR: Cannot get class 'SimRoot'.
+   at: _instantiate_internal (core/object/class_db.cpp:587)
+SCRIPT ERROR: Parse Error: Could not find type "SimRoot" in the current scope.
+          at: GDScript::reload (res://scripts/main.gd:10)
