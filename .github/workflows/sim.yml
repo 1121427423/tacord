@@ -121,8 +121,10 @@ jobs:
         run: python3 tools/gen_trig.py --check
 
   bench:
-    name: 性能基线（G1 取数，仅手动触发）
-    if: github.event_name == 'workflow_dispatch' && inputs.long_bench
+    name: 性能基线（G1 取数，手动触发或提交信息含 [bench]）
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.long_bench) ||
+      (github.event_name == 'push' && contains(github.event.head_commit.message, '[bench]'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -141,13 +143,13 @@ jobs:
             echo "date: $(date -u)"
             echo
             echo "=== 参数（冻结参数表 §15）==="
-            echo "units 400 / ticks ${{ inputs.ticks }} / rays-per-unit-per-tick 4 / world 128m"
+            echo "units 400 / ticks ${{ inputs.ticks || '100000' }} / rays-per-unit-per-tick 4 / world 128m"
             echo
             echo "=== A：400 单位 · 4 射线/单位/tick · 128m 世界 ==="
-            cargo run --release -q -p sim_cli -- bench --units 400 --ticks ${{ inputs.ticks }} --rays 4 --world 256 --seed 1
+            cargo run --release -q -p sim_cli -- bench --units 400 --ticks ${{ inputs.ticks || '100000' }} --rays 4 --world 256 --seed 1
             echo
             echo "=== B：400 单位 · 8 射线/单位/tick（更接近掩体评分的实际射线数）==="
-            cargo run --release -q -p sim_cli -- bench --units 400 --ticks $(( ${{ inputs.ticks }} / 4 )) --rays 8 --world 256 --seed 1
+            cargo run --release -q -p sim_cli -- bench --units 400 --ticks $(( ${{ inputs.ticks || '100000' }} / 4 )) --rays 8 --world 256 --seed 1
             echo
             echo "=== C：1 单位 · 128m 长射线（单条成本上限）==="
             cargo run --release -q -p sim_cli -- bench --units 1 --ticks 200000 --rays 4 --world 256 --seed 1
