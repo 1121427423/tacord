@@ -11,6 +11,12 @@ crate-type = ["cdylib"]
 # 独立 workspace：绝不能并入 sim/（A6 边界：sim 不得依赖 Godot）
 [workspace]
 
+[features]
+# 用**真实**的 Godot 二进制生成 API 绑定（需要环境变量 GODOT4_BIN）。
+# CI 用这个特性，保证绑定与我们钉的 Godot 版本逐位一致；
+# 本地没装 Godot 时用默认的预置 API 也能编译（版本不同会走兼容层，能跑但不该依赖）。
+api-custom = ["godot/api-custom"]
+
 [dependencies]
 # gdext 预置的 API 是 4.6，而我们用 Godot 4.7.2 ⇒ CI 用 `--features api-custom`
 # （配 GODOT4_BIN 指向真实二进制）生成精确绑定；本地没有 Godot 时用默认的预置 API 也能编译。
