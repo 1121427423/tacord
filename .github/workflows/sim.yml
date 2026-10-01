@@ -83,7 +83,14 @@ jobs:
           [ -f /tmp/ci-bench.log ] && cp /tmp/ci-bench.log ci/perf-latest.log
           git add -f ci
           git commit -m "ci: logs for ${GITHUB_SHA:0:8} (${{ job.status }})" || echo "no changes"
-          git push -f origin ci/artifacts
+          # 多个 job 可能同时推这个分支：先 rebase 再重试，避免非快进被拒导致丢日志
+          for i in 1 2 3 4; do
+            git fetch -q origin ci/artifacts 2>/dev/null || true
+            git rebase -q origin/ci/artifacts 2>/dev/null || true
+            git push -q -f origin ci/artifacts && break
+            echo "push 失败，重试 $i"
+            sleep 10
+          done
 
       # 调试构建下的溢出检查：定点运算最容易在这里翻车
       - name: Test (debug, overflow checks on)
@@ -179,4 +186,117 @@ jobs:
           cp /tmp/ci-baseline.log ci/perf/latest-baseline.log
           git add -f ci
           git commit -m "ci: perf baseline for ${GITHUB_SHA:0:8}" || echo "no changes"
-          git push -f origin ci/artifacts
+          # 多个 job 可能同时推这个分支：先 rebase 再重试，避免非快进被拒导致丢日志
+          for i in 1 2 3 4; do
+            git fetch -q origin ci/artifacts 2>/dev/null || true
+            git rebase -q origin/ci/artifacts 2>/dev/null || true
+            git push -q -f origin ci/artifacts && break
+            echo "push 失败，重试 $i"
+            sleep 10
+          done
+  # R9 / A1 / A7：三平台（含 macOS arm64）跑同一个确定性负载，校验和逐位比对。
+  # 同时是唯一能拿到"目标机型（M1）真实数字"的入口 —— Linux 的数字只能看趋势。
+  # 触发：推送到 main、提交信息含 [xplat]、或手动 dispatch（macOS runner 分钟数较贵）。
+  determinism:
+    name: 三平台确定性（${{ matrix.os }}）
+    if: >-
+      github.ref == 'refs/heads/main' ||
+      (github.event_name == 'push' && contains(github.event.head_commit.message, '[xplat]')) ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-15, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: sim
+
+      - name: Test (release)
+        shell: bash
+        working-directory: sim
+        run: cargo test --release
+
+      - name: 确定性负载（世界校验和 + bench）
+        shell: bash
+        working-directory: sim
+        run: |
+          set +e
+          cargo run --release -q -p sim_cli -- worldcheck --world 64 > "worldcheck-${{ matrix.os }}.txt" 2>&1
+          cargo run --release -q -p sim_cli -- bench --units 400 --ticks 20000 --rays 4 --world 256 --seed 1 > "bench-${{ matrix.os }}.txt" 2>&1
+          echo "--- worldcheck ---"; cat "worldcheck-${{ matrix.os }}.txt"
+          echo "--- bench ---";      cat "bench-${{ matrix.os }}.txt"
+          {
+            echo "os: ${{ matrix.os }}"
+            echo "arch: $(uname -m)"
+            echo "cpu: $( [ -f /proc/cpuinfo ] && grep -m1 'model name' /proc/cpuinfo | sed 's/.*: //' || sysctl -n machdep.cpu.brand_string 2>/dev/null || echo unknown )"
+            echo "commit: ${GITHUB_SHA}"
+            echo "date: $(date -u)"
+          } > "meta-${{ matrix.os }}.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sim-${{ matrix.os }}
+          path: sim/*-${{ matrix.os }}.txt
+          if-no-files-found: error
+
+  # A7 要求的"artifact 比对 job"：下载三平台产物，逐字节比对校验和
+  determinism-compare:
+    name: 三平台校验和比对（A1 / A7）
+    needs: determinism
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: 列出产物
+        run: ls -R artifacts
+      - name: 逐平台校验和必须逐位一致
+        run: |
+          set -e
+          fail=0
+          for kind in worldcheck bench; do
+            echo "=== ${kind} ==="
+            base=""
+            for f in artifacts/sim-*/${kind}-*.txt; do
+              os=$(basename "$f" .txt | sed "s/^${kind}-//")
+              sum=$(grep -o '0x[0-9A-F]\{16\}' "$f" | tail -1)
+              if [ -z "$sum" ]; then echo "  ${os}: 没找到校验和，视为失败"; fail=1; continue; fi
+              echo "  ${os}: ${sum}"
+              if [ -z "$base" ]; then base="$sum"; elif [ "$sum" != "$base" ]; then
+                echo "  ❌ ${os} 与基线不一致（${sum} != ${base}）"; fail=1
+              fi
+            done
+          done
+          # bench 的世界校验和也必须一致（确定性地图生成）
+          if [ "$fail" != "0" ]; then echo "::error::三平台校验和不一致"; exit 1; fi
+          echo "✅ 三平台逐位一致"
+      - name: 把各平台结果推到 ci/artifacts（沙箱读不到 Actions 日志）
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set +e
+          git config user.name "ci-bot"
+          git config user.email "ci-bot@users.noreply.github.com"
+          git checkout -B ci/artifacts
+          mkdir -p ci/perf
+          for f in artifacts/sim-*/*.txt; do
+            cp "$f" "ci/perf/$(basename "$f")"
+          done
+          git add -f ci
+          git commit -m "ci: xplat determinism for ${GITHUB_SHA:0:8}" || echo "no changes"
+          # 多个 job 可能同时推这个分支：先 rebase 再重试，避免非快进被拒导致丢日志
+          for i in 1 2 3 4; do
+            git fetch -q origin ci/artifacts 2>/dev/null || true
+            git rebase -q origin/ci/artifacts 2>/dev/null || true
+            git push -q -f origin ci/artifacts && break
+            echo "push 失败，重试 $i"
+            sleep 10
+          done
