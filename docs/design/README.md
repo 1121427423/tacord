@@ -22,6 +22,16 @@
 3. 系统实现按 `20 → 30 → 40` 顺序，每份文档末尾都有"实现清单（DoD）"；
 4. 排期与验收看 `90-roadmap-acceptance.md`。
 
+## 实现进度（M0 技术验证）
+
+| 步骤 | 内容 | 状态 |
+| --- | --- | --- |
+| M0.1 | `sim_math` 确定性定点数学（`Mm`/`Ang`/`Q16`/`Prob`/`Vec2`、sin/cos/atan2、sqrt、Pcg32） | ✅ 已完成（45 项单测，CI 双构建通过） |
+| M0.1b | 查找表生成器 `tools/gen_trig.py` + `tools/check_constants.py` 常量自检 | ✅ 已完成（CI 强制） |
+| M0.2 | `sim_core` 体素柱世界 + 破坏/挖掘 + 体素 DDA 射线 | ⬜ 下一步 |
+| M0.3 | `sim_cli bench`（400 单位 / 10 万 tick 性能基线） | ⬜ |
+| M0.4 | Godot 薄绑定 + macOS arm64 导出 | ⬜ |
+
 ## 状态
 
 - 版本：v0.1（初稿，待评审）

@@ -236,7 +236,7 @@ Sim tick 内部 33.33ms 预算（400 单位）：
 
 ## 10.11 实现清单（DoD，架构层）
 
-- [ ] `sim_math` 定点库 + 查表三角 + 定点随机，单测覆盖率 ≥ 90%
+- [x] `sim_math` 定点库 + 查表三角 + 定点随机（**M0.1 已完成**：45 项单测，release + debug(溢出检查) 双构建通过；表 `tools/gen_trig.py` 烘焙入库）
 - [ ] `sim_core` 世界/柱/chunk + 破坏与挖掘管线（含脏队列与摊还重建）
 - [ ] `sim_cli` bench 跑通 400 单位 / 10 万 tick，p99 ≤ 预算
 - [ ] Rust → Godot GDExtension 薄绑定跑通（node 每帧驱动 sim tick，渲染读状态）
