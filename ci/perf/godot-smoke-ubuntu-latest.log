@@ -1,12 +1,12 @@
-Thu Oct  1 18:26:57 UTC 2026
-run_id=36906823108 runner=Linux X64
+Thu Oct  1 18:36:08 UTC 2026
+run_id=36907969127 runner=Linux X64
 x86_64
 /home/runner/work/tacord/tacord
 --- godot/bin ---
 total 4976
-drwxr-xr-x 2 runner runner    4096 Oct  1 18:26 .
-drwxr-xr-x 6 runner runner    4096 Oct  1 18:26 ..
--rwxr-xr-x 1 runner runner 5084824 Oct  1 18:26 libtacord_gdext.so
+drwxr-xr-x 2 runner runner    4096 Oct  1 18:35 .
+drwxr-xr-x 6 runner runner    4096 Oct  1 18:36 ..
+-rwxr-xr-x 1 runner runner 5084824 Oct  1 18:35 libtacord_gdext.so
 --- tacord.gdextension ---
 [configuration]
 
@@ -16,21 +16,26 @@ reloadable = true
 
 [libraries]
 
-# 路径必须在 res:// **内部**：导出时 Godot 要把这些文件一起拷进产物，
-# 放在项目外（res://../…）桌面端能跑，但导出（尤其 Web）会漏文件。
+; 注意：这个文件是 ConfigFile 格式，而 Godot 的 ConfigFile 只认 ";" 注释 —— "#" 不是注释。
+; 更坑的是换行不清空正在累积的 key，所以 "# 中文注释" 会被整段拼进下一个 key：
+;   曾经写成 `# 路径必须在 res:// 内部` 注释，结果 key 变成
+;   "# 路径必须在 res:// 内部……linux.x86_64"，Linux 上就再也匹配不到库了
+;   （macOS 恰好因为注释被上一个 key 吃掉而幸免 —— 极其隐蔽）。
+; 结论：这个文件里一个 "#" 都不要写。CI 有 lint 会拦。
+
+; 路径必须在 res:// **内部**：导出时 Godot 要把这些文件一起拷进产物，
+; 放在项目外（res://../…）桌面端能跑，但导出（尤其 Web）会漏文件。
 linux.x86_64 = "res://bin/libtacord_gdext.so"
+linux.arm64 = "res://bin/libtacord_gdext.so"
 macos.arm64 = "res://bin/libtacord_gdext.dylib"
+macos.x86_64 = "res://bin/libtacord_gdext.dylib"
 windows.x86_64 = "res://bin/tacord_gdext.dll"
-# Web：单线程侧模块（与 export_presets.cfg 里的 "Thread Support = off" 对应）
+
+; Web：单线程侧模块（与 export_presets.cfg 里的 variant/thread_support=false 对应）
 web.debug.wasm32 = "res://bin/tacord_gdext.wasm"
 web.release.wasm32 = "res://bin/tacord_gdext.wasm"
 --- Godot 认为的 feature ---
-ERROR: No GDExtension library found for current OS and architecture (linux.x86_64) in configuration file: res://tacord.gdextension
-   at: parse_gdextension_file (core/extension/gdextension_library_loader.cpp:369)
-ERROR: GDExtension dynamic library not found: 'res://tacord.gdextension'.
-   at: open_library (core/extension/gdextension.cpp:810)
-ERROR: Error loading extension: 'res://tacord.gdextension'.
-   at: load_extensions (core/extension/gdextension_manager.cpp:333)
+Initialize godot-rust (API v4.7.2.stable.official, runtime v4.7.2.stable.official, safeguards balanced)
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
 [diag] os=Linux arch=x86_64
@@ -44,10 +49,12 @@ Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 [diag] feature release=false
 [diag] config load err=0
 [diag] sections=["configuration", "libraries"]
-[diag] key='#è·¯å¾å¿é¡»å¨res://**åé¨**ï¼å¯¼åºæ¶Godotè¦æè¿äºæä»¶ä¸èµ·æ·è¿äº§ç©ï¼#æ¾å¨é¡¹ç®å¤ï¼res://../â¦ï¼æ¡é¢ç«¯è½è·ï¼ä½å¯¼åºï¼å°¤å¶Webï¼ä¼æ¼æä»¶ãlinux.x86_64' tags=["#è·¯å¾å¿é¡»å¨res://**åé¨**ï¼å¯¼åºæ¶Godotè¦æè¿äºæä»¶ä¸èµ·æ·è¿äº§ç©ï¼#æ¾å¨é¡¹ç®å¤ï¼res://", "", "/â¦ï¼æ¡é¢ç«¯è½è·ï¼ä½å¯¼åºï¼å°¤å¶Webï¼ä¼æ¼æä»¶ãlinux", "x86_64"] 全部命中=false value='res://bin/libtacord_gdext.so' 文件存在=true
+[diag] key='linux.x86_64' tags=["linux", "x86_64"] 全部命中=true value='res://bin/libtacord_gdext.so' 文件存在=true
+[diag] key='linux.arm64' tags=["linux", "arm64"] 全部命中=false value='res://bin/libtacord_gdext.so' 文件存在=true
 [diag] key='macos.arm64' tags=["macos", "arm64"] 全部命中=false value='res://bin/libtacord_gdext.dylib' 文件存在=false
+[diag] key='macos.x86_64' tags=["macos", "x86_64"] 全部命中=false value='res://bin/libtacord_gdext.dylib' 文件存在=false
 [diag] key='windows.x86_64' tags=["windows", "x86_64"] 全部命中=false value='res://bin/tacord_gdext.dll' 文件存在=false
-[diag] key='Thread Support = offå¯¹åºï¼web.debug.wasm32' tags=["Thread Support = offå¯¹åºï¼web", "debug", "wasm32"] 全部命中=false value='res://bin/tacord_gdext.wasm' 文件存在=false
+[diag] key='web.debug.wasm32' tags=["web", "debug", "wasm32"] 全部命中=false value='res://bin/tacord_gdext.wasm' 文件存在=false
 [diag] key='web.release.wasm32' tags=["web", "release", "wasm32"] 全部命中=false value='res://bin/tacord_gdext.wasm' 文件存在=false
 [diag] res:// 顶层: scenes
 [diag] res:// 顶层: project.godot
@@ -58,20 +65,10 @@ Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 [diag] res:// 顶层: bin
 [diag] res://bin 列表: ["libtacord_gdext.so"]
 --- smoke ---
-ERROR: No GDExtension library found for current OS and architecture (linux.x86_64) in configuration file: res://tacord.gdextension
-   at: parse_gdextension_file (core/extension/gdextension_library_loader.cpp:369)
-ERROR: GDExtension dynamic library not found: 'res://tacord.gdextension'.
-   at: open_library (core/extension/gdextension.cpp:810)
-ERROR: Error loading extension: 'res://tacord.gdextension'.
-   at: load_extensions (core/extension/gdextension_manager.cpp:333)
+Initialize godot-rust (API v4.7.2.stable.official, runtime v4.7.2.stable.official, safeguards balanced)
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
-SCRIPT ERROR: Parse Error: Could not find type "SimRoot" in the current scope.
-          at: GDScript::reload (res://scripts/smoke.gd:12)
-SCRIPT ERROR: Parse Error: Cannot infer the type of "cs0" variable because the value doesn't have a set type.
-          at: GDScript::reload (res://scripts/smoke.gd:15)
-SCRIPT ERROR: Parse Error: Cannot infer the type of "pos0" variable because the value doesn't have a set type.
-          at: GDScript::reload (res://scripts/smoke.gd:18)
-ERROR: Failed to load script "res://scripts/smoke.gd" with error "Parse error".
-   at: load (modules/gdscript/gdscript_resource_format.cpp:46)
-smoke 退出码: 1
+[smoke] units=400 dim=64 tick=300 world_checksum=0xd3119143ebc0dfc4 pos_checksum=0x3f2f61446b0811bd pos0=(11.096, 0.0, 10.996)
+[smoke] PASS
+[tacord] units=400 segments=4128 checksum=0xd3119143ebc0dfc4
+smoke 退出码: 0
