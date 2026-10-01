@@ -2,15 +2,115 @@
 [1m[92m     Locking[0m 25 packages to highest compatible versions
 [1m[92m   Compiling[0m sim_math v0.1.0 (/home/runner/work/tacord/tacord/sim/crates/sim_math)
 [1m[92m   Compiling[0m sim_core v0.1.0 (/home/runner/work/tacord/tacord/sim/crates/sim_core)
-[1m[92m   Compiling[0m tacord_gdext v0.1.0 (/home/runner/work/tacord/tacord/gdext)
-[1m[92m    Finished[0m `release` profile [optimized] target(s) in 1.82s
+[1m[91merror[E0308][0m[1m: mismatched types[0m
+   [1m[94m--> [0m/home/runner/work/tacord/tacord/sim/crates/sim_core/src/cover.rs:257:38
+    [1m[94m|[0m
+[1m[94m257[0m [1m[94m|[0m         self.slots.retain(|s| s.cx < x0 || s.cx > x1 || s.cz < z0 || s.cz > z1);
+    [1m[94m|[0m                               [1m[94m----[0m   [1m[91m^^[0m [1m[91mexpected `i32`, found `i64`[0m
+    [1m[94m|[0m                               [1m[94m|[0m
+    [1m[94m|[0m                               [1m[94mexpected because this is `i32`[0m
+    [1m[94m|[0m
+[1m[96mhelp[0m: you can convert `s.cx` from `i32` to `i64`, matching the type of `x0`
+    [1m[94m|[0m
+[1m[94m257[0m [1m[94m| [0m        self.slots.retain(|s| [92mi64::from([0ms.cx[92m)[0m < x0 || s.cx > x1 || s.cz < z0 || s.cz > z1);
+    [1m[94m|[0m                               [92m++++++++++[0m    [92m+[0m
+
+[1m[91merror[E0308][0m[1m: mismatched types[0m
+   [1m[94m--> [0m/home/runner/work/tacord/tacord/sim/crates/sim_core/src/cover.rs:257:51
+    [1m[94m|[0m
+[1m[94m257[0m [1m[94m|[0m         self.slots.retain(|s| s.cx < x0 || s.cx > x1 || s.cz < z0 || s.cz > z1);
+    [1m[94m|[0m                                            [1m[94m----[0m   [1m[91m^^[0m [1m[91mexpected `i32`, found `i64`[0m
+    [1m[94m|[0m                                            [1m[94m|[0m
+    [1m[94m|[0m                                            [1m[94mexpected because this is `i32`[0m
+    [1m[94m|[0m
+[1m[96mhelp[0m: you can convert `s.cx` from `i32` to `i64`, matching the type of `x1`
+    [1m[94m|[0m
+[1m[94m257[0m [1m[94m| [0m        self.slots.retain(|s| s.cx < x0 || [92mi64::from([0ms.cx[92m)[0m > x1 || s.cz < z0 || s.cz > z1);
+    [1m[94m|[0m                                            [92m++++++++++[0m    [92m+[0m
+
+[1m[91merror[E0308][0m[1m: mismatched types[0m
+   [1m[94m--> [0m/home/runner/work/tacord/tacord/sim/crates/sim_core/src/cover.rs:257:64
+    [1m[94m|[0m
+[1m[94m257[0m [1m[94m|[0m         self.slots.retain(|s| s.cx < x0 || s.cx > x1 || s.cz < z0 || s.cz > z1);
+    [1m[94m|[0m                                                         [1m[94m----[0m   [1m[91m^^[0m [1m[91mexpected `i32`, found `i64`[0m
+    [1m[94m|[0m                                                         [1m[94m|[0m
+    [1m[94m|[0m                                                         [1m[94mexpected because this is `i32`[0m
+    [1m[94m|[0m
+[1m[96mhelp[0m: you can convert `s.cz` from `i32` to `i64`, matching the type of `z0`
+    [1m[94m|[0m
+[1m[94m257[0m [1m[94m| [0m        self.slots.retain(|s| s.cx < x0 || s.cx > x1 || [92mi64::from([0ms.cz[92m)[0m < z0 || s.cz > z1);
+    [1m[94m|[0m                                                         [92m++++++++++[0m    [92m+[0m
+
+[1m[91merror[E0308][0m[1m: mismatched types[0m
+   [1m[94m--> [0m/home/runner/work/tacord/tacord/sim/crates/sim_core/src/cover.rs:257:77
+    [1m[94m|[0m
+[1m[94m257[0m [1m[94m|[0m         self.slots.retain(|s| s.cx < x0 || s.cx > x1 || s.cz < z0 || s.cz > z1);
+    [1m[94m|[0m                                                                      [1m[94m----[0m   [1m[91m^^[0m [1m[91mexpected `i32`, found `i64`[0m
+    [1m[94m|[0m                                                                      [1m[94m|[0m
+    [1m[94m|[0m                                                                      [1m[94mexpected because this is `i32`[0m
+    [1m[94m|[0m
+[1m[96mhelp[0m: you can convert `s.cz` from `i32` to `i64`, matching the type of `z1`
+    [1m[94m|[0m
+[1m[94m257[0m [1m[94m| [0m        self.slots.retain(|s| s.cx < x0 || s.cx > x1 || s.cz < z0 || [92mi64::from([0ms.cz[92m)[0m > z1);
+    [1m[94m|[0m                                                                      [92m++++++++++[0m    [92m+[0m
+
+[1m[91merror[E0308][0m[1m: mismatched types[0m
+   [1m[94m--> [0m/home/runner/work/tacord/tacord/sim/crates/sim_core/src/cover.rs:635:25
+    [1m[94m|[0m
+[1m[94m635[0m [1m[94m|[0m     sim_math::isqrt_i64(n as u64) as i64
+    [1m[94m|[0m     [1m[94m-------------------[0m [1m[91m^^^^^^^^[0m [1m[91mexpected `i64`, found `u64`[0m
+    [1m[94m|[0m     [1m[94m|[0m
+    [1m[94m|[0m     [1m[94marguments to this function are incorrect[0m
+    [1m[94m|[0m
+[1m[92mnote[0m: function defined here
+   [1m[94m--> [0m/home/runner/work/tacord/tacord/sim/crates/sim_math/src/lib.rs:632:8
+    [1m[94m|[0m
+[1m[94m632[0m [1m[94m|[0m pub fn isqrt_i64(n: i64) -> i64 {
+    [1m[94m|[0m        [1m[92m^^^^^^^^^[0m
+[1m[96mhelp[0m: you can convert a `u64` to an `i64` and panic if the converted value doesn't fit
+    [1m[94m|[0m
+[1m[94m635[0m [1m[94m| [0m    sim_math::isqrt_i64([92m([0mn as u64[92m).try_into().unwrap()[0m) as i64
+    [1m[94m|[0m                         [92m+[0m        [92m+++++++++++++++++++++[0m
+
+[1m[91merror[E0502][0m[1m: cannot borrow `*self` as immutable because it is also borrowed as mutable[0m
+   [1m[94m--> [0m/home/runner/work/tacord/tacord/sim/crates/sim_core/src/cover.rs:384:29
+    [1m[94m|[0m
+[1m[94m384[0m [1m[94m|[0m             self.bucket_ofs[self.bucket_index(s.cx as i64, s.cz as i64) + 1] += 1;
+    [1m[94m|[0m             [1m[94m----------------[0m[1m[91m^^^^[0m[1m[94m--------------------------------------------[0m
+    [1m[94m|[0m             [1m[94m|[0m              [1m[94m|[0m[1m[91m|[0m
+    [1m[94m|[0m             [1m[94m|[0m              [1m[94m|[0m[1m[91mimmutable borrow occurs here[0m
+    [1m[94m|[0m             [1m[94m|[0m              [1m[94mmutable borrow later used here[0m
+    [1m[94m|[0m             [1m[94mmutable borrow occurs here[0m
+    [1m[94m|[0m
+[1m[96mhelp[0m: try adding a local storing this...
+   [1m[94m--> [0m/home/runner/work/tacord/tacord/sim/crates/sim_core/src/cover.rs:384:29
+    [1m[94m|[0m
+[1m[94m384[0m [1m[94m|[0m             self.bucket_ofs[self.bucket_index(s.cx as i64, s.cz as i64) + 1] += 1;
+    [1m[94m|[0m                             [1m[96m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+[1m[96mhelp[0m: ...and then using that local here
+   [1m[94m--> [0m/home/runner/work/tacord/tacord/sim/crates/sim_core/src/cover.rs:384:28
+    [1m[94m|[0m
+[1m[94m384[0m [1m[94m|[0m             self.bucket_ofs[self.bucket_index(s.cx as i64, s.cz as i64) + 1] += 1;
+    [1m[94m|[0m                            [1m[96m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+
+[1m[33mwarning[0m[1m: variable does not need to be mutable[0m
+   [1m[94m--> [0m/home/runner/work/tacord/tacord/sim/crates/sim_core/src/cover.rs:605:13
+    [1m[94m|[0m
+[1m[94m605[0m [1m[94m|[0m         let mut weight = (t.confidence as i64 * dw) >> 16;
+    [1m[94m|[0m             [1m[94m----[0m[1m[33m^^^^^^[0m
+    [1m[94m|[0m             [1m[94m|[0m
+    [1m[94m|[0m             [1m[94mhelp: remove this `mut`[0m
+    [1m[94m|[0m
+    [1m[94m= [0m[1mnote[0m: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+[1mSome errors have detailed explanations: E0308, E0502.[0m
+[1mFor more information about an error, try `rustc --explain E0308`.[0m
+[1m[33mwarning[0m: `sim_core` (lib) generated 1 warning
+[1m[91merror[0m: could not compile `sim_core` (lib) due to 6 previous errors; 1 warning emitted
 --- 产物 ---
-target/release/libtacord_gdext.d
-target/release/libtacord_gdext.so
-'target/release/libtacord_gdext.so' -> '../godot/bin/libtacord_gdext.so'
+cp: cannot stat 'target/release/libtacord_gdext.so': No such file or directory
 cp: cannot stat 'target/release/libtacord_gdext.dylib': No such file or directory
 --- godot/bin ---
-total 4976
-drwxr-xr-x 2 runner runner    4096 Oct  1 20:11 .
-drwxr-xr-x 5 runner runner    4096 Oct  1 20:11 ..
--rwxr-xr-x 1 runner runner 5084824 Oct  1 20:11 libtacord_gdext.so
+total 8
+drwxr-xr-x 2 runner runner 4096 Oct  1 20:30 .
+drwxr-xr-x 5 runner runner 4096 Oct  1 20:30 ..
