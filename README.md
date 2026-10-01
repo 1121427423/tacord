@@ -21,6 +21,7 @@
 
 | 文档 | 内容 |
 | --- | --- |
+| [05-frozen-parameters.md](docs/design/05-frozen-parameters.md) | **参数冻结表**：按改动代价分级的跨系统常量、AI 实现方式裁定（动工前必读） |
 | [00-overview.md](docs/design/00-overview.md) | 设计总纲：支柱、范围、参考素材拆解、玩法循环、术语表 |
 | [10-architecture.md](docs/design/10-architecture.md) | 技术选型、macOS/ARM 方案、仓库结构、确定性模拟核心、性能预算、网络、CI |
 | [20-cover-perception.md](docs/design/20-cover-perception.md) | 掩体系统（真实几何派生）、感知、记忆与无线电、压制、威胁场 |

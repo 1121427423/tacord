@@ -1,0 +1,368 @@
+// tacord · 参数冻结表（可执行镜像）
+//
+// 这是《docs/design/05-frozen-parameters.md》的机器可读版本，是**唯一数据源**。
+// 由 `sim_core/build.rs` 生成 `sim_core/src/generated/constants.rs`，业务代码只允许引用生成物。
+// 修改规则见设计文档 §0：T0 只能在 M0 结束前改；改动必须同步更新设计文档表格。
+//
+// 单位约定：
+//   长度 i32 毫米 / 角度 u16(0..65535 ≡ 0..2π) / 标量 Q16.16 i32 / 概率 u16(0..65535)
+//   时间以 tick 为单位（SIM_HZ = 30 → 1 tick = 33.333ms）
+//   方位角：0 = -Z（北），顺时针递增；坐标系 Y-up（与 Godot 一致）
+
+Constants(
+    schema_version: 1,
+
+    // ───────────────────────── 1. 世界与几何（T0）─────────────────────────
+    world: World(
+        size_mm:            1024000,   // 1024 m = 2^10 m（注意：不是 2^20 mm，CI 会校验）
+        column_size_mm:     500,       // 0.5 m = 2^-1 m
+        grid_dim:           2048,      // 导出：size / column = 2^11（勿手改，CI 校验）
+        chunk_dim_cells:    32,        // 16 m = 2^5 cells
+        chunk_grid:         64,        // 导出：grid / chunk = 2^6（勿手改，CI 校验）
+        height_min_mm:      -8000,     // -8 m：地道 / 地下室 / 河床
+        height_max_mm:      48000,     // +48 m：6 层楼 + 瞭望塔
+        max_segments:       4,         // 每柱最多 4 段（一层实体 + 窗洞 + 楼板 + 屋顶）
+        axis: "y_up_x_east_z_south",   // 冻结：改动 = 三角函数与法线全反号
+        bearing_zero: "-z",            // 方位角 0 = 北
+        bearing_dir: "clockwise",
+    ),
+
+    // ───────────────────────── 2. 时间与步进（T0）─────────────────────────
+    time: Time(
+        sim_hz:             30,
+        tick_ms_x16:        5461,      // Q16: 1/30 s —— 禁止使用浮点 dt
+        soldier_period:     3,         // 士兵决策 10 Hz（30/3）
+        cover_period:       6,         // 掩体评估 5 Hz（30/6）
+        perception_period:  3,         // 感知 10 Hz（30/3）
+        squad_period:       15,        // 班组 2 Hz（30/15）
+        command_period:     30,        // 指挥 1 Hz（30/30）
+        checksum_period:    30,        // 1 s
+        snapshot_period:    1800,      // 60 s
+        threat_decay_ticks: 180,       // τ = 6 s
+        // 单局时长（tick）
+        match_skirmish_ticks:  45000,  // 25 min
+        match_campaign_ticks:  81000,  // 45 min
+        match_slice_ticks:      9000,  // 5 min（M1 验证）
+    ),
+
+    // ──────────────────── 3. 规模：人数 / 编制 / 速度（T0/T1）───────────────
+    scale: Scale(
+        sim_max_units:      512,       // T0：SoA 预分配硬上限（双方合计）
+        perf_target_units:  400,       // 性能验收口径
+        default_per_side:   32,        // 排级（合计 64）
+        campaign_per_side:  96,        // 连级（合计 192）
+        slice_per_side_min: 9,
+        slice_per_side_max: 18,
+        // 编制（T1）
+        fire_team:          4,         // 组长 / 步枪 / 机枪 / 榴弹
+        squad:              9,         // 班长 + 2 火力组
+        platoon:            29,        // 3 班 + 排部 2
+        company:            90,        // 3 排 + 连部 3
+        max_vehicles:       32,
+        max_tanks_per_side: 6,
+        max_players:        4,
+        // 单位速度基准（mm/s；其他姿态为系数）
+        speed_walk_mmps:    1500,      // 1.5 m/s（所有移速系数的分母）
+        speed_sprint_mmps:  3000,
+        speed_crouch_mmps:   800,
+        speed_prone_mmps:    350,
+        speed_crawl_mmps:    225,      // 伤员爬行 0.22 m/s
+        speed_drag_mmps:     800,      // 拖伤员
+        speed_stretcher_mmps:1300,     // 两人抬
+        speed_stretcher_solo_mmps: 700,// 一人拖
+        speed_truck_mmps:    8000,
+        speed_truck_road_mmps: 11000,
+    ),
+
+    // ───────────────────── 4. 士兵 AI 实现方式（T0）───────────────────────
+    ai: Ai(
+        architecture: "htn_utility_hfsm",   // 冻结：HTN 分解 + 效用评分 + 分层状态机
+        forbid: ["behavior_tree", "goap", "ml", "rl", "llm"],
+        layers: 3,
+        require_reason: true,               // 每个决策必须输出结构化 Reason
+        // 个性维度（0..65535 概率定点）
+        personality_dims: ["nerve", "discipline", "aggression", "initiative",
+                           "marksmanship", "fitness", "experience"],
+        prng: "pcg32",                      // 分流：(level_seed, system_id, entity_id, tick)
+    ),
+
+    // ─────────────────────── 5. 确定性与定点（T0）────────────────────────
+    numeric: Numeric(
+        strategy: "fixed_point",            // 方案 A（M0 末 go/no-go）
+        pos_type: "i32_mm",
+        angle_type: "u16",
+        scalar_type: "i32_q16_16",
+        prob_type: "u16",
+        trig_table_entries: 4096,
+        trig_interpolation: "linear",
+        allow_libm: false,                  // 禁止 libm（跨编译器 1ulp 差异会毁掉 lockstep）
+        allow_float_in_sim: false,          // CI grep 强制
+    ),
+
+    // ────────────────────────── 6. 掩体系统（T1）────────────────────────
+    cover: Cover(
+        search_radius_mm:   18000,          // 18 m
+        candidates_full:    12,
+        candidates_reduced: 6,
+        slot_capacity_mm:   800,            // 每人 0.8 m 肩宽
+        graph_edge_mm:      8000,           // 掩体图连边 ≤ 8 m
+        graph_edge_max_threat: 0.60,
+        coverage_base_deg:  60,
+        coverage_width_deg: 30,             // coverage = clamp(60 + 30*(width/2m), 60, 110)
+        coverage_max_deg:   110,
+        flank_margin_deg:   25,             // 超出 coverage/2 + 25° → angular_factor = 0
+        flank_dist_mm:      3000,           // 绕墙近距特判：<3m 且夹角 >120° → 失效
+        // 身体采样点（mm，相对脚底）——与命中判定共用，改动牵动整个战斗系统
+        samples_stand_mm:   [1700, 1350, 1000, 550],
+        samples_crouch_mm:  [1150, 850, 550],
+        samples_prone_mm:   [450, 300, 150],
+        samples_crawl_mm:   [350, 200],
+        samples_peek_mm:    [1300, 1000, 700],
+        samples_peekover_mm:[1500, 1250],
+        peek_offset_mm:     450,            // 侧向探身 0.45 m
+    ),
+
+    // ──────────────────────── 7. 感知与压制（T2）────────────────────────
+    perception: Perception(
+        fov_half_deg:       110,
+        fov_half_vert_deg:  55,
+        fov_center_deg:     60,             // 中心 60° 内识别速度 ×2
+        range_day_mm:       180000,
+        range_night_mm:     70000,
+        range_nvg_mm:       120000,
+        range_muzzle_mm:    300000,
+        attention_budget:   3,              // 每周期最多"认真看"3 个目标
+        attention_other:    0.25,           // 其余目标识别速率系数
+        detect_confirm:     1.0,
+        detect_suspect:     0.3,            // 不开火依据
+        // 听觉：衰减半径（mm）
+        hear_silenced_mm:   25000,
+        hear_pistol_mm:     120000,
+        hear_rifle_mm:      350000,
+        hear_explosion_mm:  700000,
+        hear_footstep_mm:   30000,
+        hear_footstep_slow_mm: 8000,
+        hear_vehicle_mm:    500000,
+        hear_fpv_mm:        60000,
+        hear_shout_mm:      90000,
+        hear_collapse_mm:   900000,
+        hear_wall_factor:   0.55,           // 每穿一道墙
+        // 记忆衰减（tick）
+        mem_active_ticks:   90,             // 3 s，误差 ≤ 2 m
+        mem_recent_ticks:   360,            // 12 s，误差 ≤ 6 m
+        mem_stale_ticks:    1350,           // 45 s，误差 ≤ 25 m，之后删除
+        // 无线电
+        radio_period_ticks: 60,             // 每 2 s 一条
+        radio_delay_min_ms: 300,
+        radio_delay_max_ms: 800,
+        squad_contact_cap:  12,
+        // 压制
+        suppression_decay_ticks: 120,       // τ = 4 s
+        supp_near_miss_min: 0.30,           // 1.5 m
+        supp_near_miss_max: 0.55,           // 0.3 m
+        supp_near_miss_mm:  1500,
+        supp_hit_nearby:    0.22,
+        supp_explosion:     0.60,
+        supp_ally_down:     0.25,
+        supp_aimed_per_s:   0.15,
+        supp_hesitant:      0.30,
+        supp_pinned:        0.60,
+        // 威胁场
+        threat_cell_mm:     8000,           // 8 m → 128 × 128
+        threat_decay_ticks: 180,            // τ = 6 s
+        threat_casualty_decay_ticks: 1800,  // τ = 60 s
+        killzone_threshold: 0.75,
+        killzone_min_len_mm: 15000,         // > 15 m 才否决通行
+    ),
+
+    // ─────────────────────────── 8. 战斗（T2）───────────────────────────
+    combat: Combat(
+        hp_max:             100,
+        dmg_head:           2.6,
+        dmg_chest:          1.0,
+        dmg_gut:            0.85,
+        dmg_limb:           0.45,
+        mag_rifle:          30,
+        mags_rifle:         6,
+        mag_mg:             200,
+        mags_mg_spare:      100,
+        mag_sniper:         5,
+        mags_sniper:        5,
+        mag_pistol:         15,
+        mags_pistol:        2,
+        reload_tactical_ms: 2600,
+        reload_empty_ms:    3200,
+        ammo_green:         0.60,
+        ammo_amber:         0.25,
+        ammo_red:           0.05,
+        tracer_every:       3,
+        max_projectiles:    4096,
+        ricochet_force_deg: 70,             // >70° 强制跳弹
+        ricochet_chance_deg:60,             // >60° 且 eff > pen → 跳弹
+        // 姿态系数（移速 / 误差）
+        coef_stand:         (1.00, 1.00),
+        coef_crouch:        (0.55, 0.75),
+        coef_prone:         (0.23, 0.55),
+        coef_crawl:         (0.15, 1.60),
+        coef_peek:          (0.00, 0.95),
+        coef_peekover:      (0.00, 1.10),
+        coef_sprint:        (2.00, 2.60),
+    ),
+
+    // ──────────────────────── 9. 伤员链路（T2）─────────────────────────
+    wounded: Wounded(
+        bleed_ms_min:       45000,
+        bleed_ms_max:       90000,
+        bleed_ms_default:   60000,
+        vitality_max:       100,
+        vitality_loss:      25,
+        vitality_jitter:    8,
+        critical_window_ms: 30000,          // bleed 归零后的 CPR 窗口
+        cpr_ms:             8000,
+        cpr_success:        0.60,
+        aid_buddy_ms:       10000,
+        aid_buddy_hp:       0.35,
+        aid_medic_ms:       5000,
+        aid_medic_hp:       0.55,
+        aid_self_ms:        20000,
+        aid_self_hp:        0.20,
+        ifak_per_soldier:   1,
+        medkit_per_medic:   3,
+        stretcher_teams:    2,
+        stretcher_crew:     2,
+        hospital_beds:      4,
+        hospital_beds_up:   8,
+        hospital_queue_max: 8,
+        treat_ms:           20000,
+        medic_protect_penalty: 0.35,        // 目标选择效用惩罚
+        medic_protect_lose_ms: 60000,       // 开火后全阵营失去保护的时长
+    ),
+
+    // ────────────────────── 10. 俘虏与情报（T2）────────────────────────
+    pow: Pow(
+        surrender_supp:     0.75,
+        surrender_supp_ms:  3000,
+        surrender_ally_dist_mm: 60000,
+        surrender_path_threat: 0.70,
+        surrender_escape_threat: 0.80,
+        surrender_envelop_deg: 240,
+        surrender_morale:   0.25,
+        surrender_range_mm: 30000,
+        fake_surrender:     0.05,
+        handcuff_ms:        2000,
+        escort_speed_mmps:  800,
+        interrogate_min_ms: 3000,
+        interrogate_max_ms: 8000,
+        intel_types:        8,
+        intel_ttl_s:        [30, 60, 150, 45, 90, 120, 90, 300],
+        turncoat_loyalty:   0.60,
+        turncoat_mags:      2,
+        cell_leak_ms:       45000,          // 地道牢房反复审问
+        cell_leak_radius_mm:60000,
+    ),
+
+    // ───────────────────────── 11. 载具（T1/T2）────────────────────────
+    vehicles: Vehicles(
+        armor_zones:        9,
+        pen_formula: "eff = base / cos(theta)^1.1",
+        ammo_cookoff:       0.08,
+        fpv_hp:             15,
+        fpv_cruise_mmps:    22000,
+        fpv_dive_mmps:      40000,
+        fpv_noise_mm:       60000,
+        fpv_fov_deg:        60,
+        fpv_range_mm:       3000000,
+        fpv_endurance_s:    480,
+        fpv_operator_slow:  0.50,
+        dive_prone:         0.55,
+        dive_crouch:        0.35,
+        dive_stand:         0.10,
+        dive_damage_mult:   0.35,
+    ),
+
+    // ────────────────────── 12. 基地与补给（T1/T2）─────────────────────
+    base: Base(
+        fob_max:            8,
+        pop_base:           40,
+        pop_per_fob:        20,
+        fob_hp:             1200,
+        fob_storage:        500,
+        fob_storage_init:   300,
+        fob_build_radius_mm:60000,
+        fob_intel_radius_mm:200000,
+        fob_capture_radius_mm: 25000,
+        capture_ms:         30000,
+        reinforce_ms:       45000,          // 兵营每 45 s 补 1 人
+        reinforce_cost:     8,
+        truck_capacity:     100,
+        truck_dead_ms_min:  60000,
+        truck_dead_ms_max:  120000,
+        starve_ms:          [0, 30000, 60000, 120000, 180000],
+        tunnel_emerge_ms:   1200,
+    ),
+
+    // ──────────────────────── 13. 相机与 UI（T1）───────────────────────
+    ui: Ui(
+        cam_pitch_min_deg:  25,
+        cam_pitch_max_deg:  70,
+        cam_pitch_default:  45,
+        cam_dist_min_mm:    12000,
+        cam_dist_max_mm:    150000,
+        cam_dist_default_mm:45000,
+        cam_fov_deg:        45,
+        cam_pan_speed:      1.2,            // × distance
+        max_control_groups: 10,
+        order_delay_ms:     400,
+        order_hop_ms:      200,
+        bubble_cooldown_ms: 6000,
+        bubble_show_ms:     2000,
+        bubble_max_voices:  3,
+        locales: ["zh_CN", "en"],
+    ),
+
+    // ────────────────────────── 14. 网络（T0）─────────────────────────
+    net: Net(
+        model: "lockstep",
+        input_delay_ticks:  6,              // 200 ms
+        input_delay_min:    4,
+        input_delay_max:    10,
+        checksum_period:    30,
+        desync_dump_ticks:  60,             // 分歧时保存前后 60 tick
+        snapshot_period:    1800,
+        max_players:        4,
+        reconnect_target_s: 10,
+    ),
+
+    // ─────────────────────── 15. 性能预算（T1）─────────────────────────
+    perf: Perf(
+        min_machine: "M1 8GB unified",
+        min_res: "1080p",
+        min_fps: 60,
+        min_units: 400,
+        high_machine: "M4 Pro",
+        high_res: "1440p",
+        high_fps: 120,
+        high_units: 800,
+        tick_p50_ms: 6.0,
+        tick_p99_ms: 11.0,
+        render_cpu_ms: 3.0,
+        gpu_ms: 5.0,
+        mem_sim_mb: 384,
+        mem_geo_mb: 1536,
+        mem_tex_mb: 1024,
+        mem_audio_mb: 256,
+        mem_total_mb: 3584,
+        res_scale_floor: 0.75,
+        lod_full_mm: 80000,
+        lod_reduced_mm: 250000,
+    ),
+
+    // ─────────────────────── 16. 格式版本（T0）─────────────────────────
+    formats: Formats(
+        level: "v1",
+        replay: "v1",
+        save: "v1",
+        constants_schema: 1,
+        record_constants_hash: true,        // 回放头记录参数哈希：调参后旧回放自动失效
+    ),
+)

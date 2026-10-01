@@ -7,6 +7,7 @@
 
 | 文档 | 内容 |
 | --- | --- |
+| [05-frozen-parameters.md](05-frozen-parameters.md) | **参数冻结表（动工前必读）**：按改动代价分级的全部跨系统常量、AI 实现方式裁定、未冻结参数清单 |
 | [00-overview.md](00-overview.md) | 设计总纲：支柱、范围与非目标、参考素材拆解、玩法循环、术语表 |
 | [10-architecture.md](10-architecture.md) | 技术选型与 macOS/ARM 方案、仓库结构、确定性模拟核心、渲染与性能预算、网络、CI |
 | [20-cover-perception.md](20-cover-perception.md) | 掩体系统（真实几何派生）、视线/听觉/记忆/无线电、压制、威胁场与杀伤区 |
@@ -16,7 +17,7 @@
 
 ## 阅读顺序
 
-1. 先看 `00-overview.md` 确认目标与边界；
+1. 先看 `00-overview.md` 确认目标与边界，再读 **`05-frozen-parameters.md`**（所有 T0 常量在此定死，避免后期返工）；
 2. 技术负责人看 `10-architecture.md`（选型与 macOS 方案在此定稿）；
 3. 系统实现按 `20 → 30 → 40` 顺序，每份文档末尾都有"实现清单（DoD）"；
 4. 排期与验收看 `90-roadmap-acceptance.md`。
@@ -25,4 +26,5 @@
 
 - 版本：v0.1（初稿，待评审）
 - 已定稿：**目标平台（macOS arm64）**、**掩体必须来自真实几何**、**模拟与表现解耦**
-- 待决策：见 `90-roadmap-acceptance.md` 的"开放问题"（引擎绑定语言 C++ / Rust、定点 vs 浮点、首切片范围）
+- 已拍板：**D-1 Rust**、**D-2 定点**、D-3…D-8 全部裁定（见 `05-frozen-parameters.md` §17）；推翻 D-1/D-2 只能在本周内提出（之后属 T0 返工）
+- 参数单一数据源：`sim/data/constants.ron`，由 `tools/check_constants.py` 做 38 项一致性自检（CI 强制）

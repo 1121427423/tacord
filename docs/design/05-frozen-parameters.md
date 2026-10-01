@@ -304,7 +304,16 @@ sim_core/src/generated/constants.rs   ← 代码只用这个，编译期常量
         └─ CI: 校验 constants.ron 与本文档表格一致（tools/check_constants.py，解析 markdown 表与 ron 比对）
 ```
 
-`tools/check_constants.py` 会解析本文件的表格，与 `constants.ron` 逐项比对，**不一致直接 CI 失败**。这样"文档与代码不同步"这个经典返工源被机器拦住。
+`tools/check_constants.py`（**已实现，38 项自检全部通过**）做四类检查，**任一失败即 CI 红**：
+
+| 类别 | 检查内容 |
+| --- | --- |
+| A 派生量 | `grid_dim = size_mm / column_size_mm`、`chunk_grid = grid_dim / chunk_dim_cells`、四者均为 2 的幂 |
+| B 时间分频 | 所有 AI 周期必须整除 `SIM_HZ`；快照周期为整秒；三种单局时长换算正确 |
+| C 规模与预算 | 编制自洽（班 = 2×火力组+1 等）；柱数据内存估算 < sim 预算；tick p99 < tick 周期；威胁场网格整除世界尺寸 |
+| D 文档 ↔ ron | 8 个 T0 常量（地图尺寸 / 频率 / 上限 / 编制 / 网络模型 / 输入延迟 / 定点策略 / AI 架构）在两处同时存在且一致 |
+
+> 这套自检在第一次运行时就抓到一个真实错误：`size_mm` 被误写成 `1048576`（2²⁰ mm ≈ 1048.6 m），与文档的 1024 m 不符。这正是它存在的意义——**让机器拦住"文档与代码不同步"这个经典返工源**。
 
 ---
 
