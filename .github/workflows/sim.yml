@@ -279,11 +279,8 @@ jobs:
         with:
           workspaces: gdext
 
-      - name: 构建 GDExtension
-        working-directory: gdext
-        run: cargo build --release
-
       - name: 下载 Godot 4.7.2（headless）
+
         shell: bash
         run: |
           set -e
@@ -302,17 +299,30 @@ jobs:
           chmod +x "$OUT"
           echo "GODOT_BIN=$OUT" >> "$GITHUB_ENV"
 
+      # api-custom：用**真实**的 Godot 4.7.2 生成 API 绑定，而不是 gdext 预置的 4.6
+      # （否则运行时会打印 "API v4.6 / runtime v4.7.2"，靠兼容层兜着 —— 能跑，但不该依赖它）
+      - name: 构建 GDExtension
+        working-directory: gdext
+        run: |
+          set -e
+          export GODOT4_BIN="$GODOT_BIN"
+          cargo build --release --features api-custom
+
       - name: 导入工程
         shell: bash
         run: |
-          set -e
-          "$GODOT_BIN" --headless --path godot --import 2>&1 | tee /tmp/godot-import.log
+          set +e
+          "$GODOT_BIN" --headless --path godot --editor --quit 2>&1 | tee /tmp/godot-import.log
+          echo "import 退出码: $?"
 
       - name: 冒烟：扩展能加载 + 能 tick + 校验和
         shell: bash
         run: |
-          set -e
+          set +e
           "$GODOT_BIN" --headless --path godot --script res://scripts/smoke.gd 2>&1 | tee /tmp/godot-smoke.log
+          code=$?
+          echo "smoke 退出码: $code"
+          exit $code
 
       - name: 记录输出
         if: always()

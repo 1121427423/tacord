@@ -12,7 +12,9 @@ crate-type = ["cdylib"]
 [workspace]
 
 [dependencies]
-godot = "0.5.5"   # gdext；若其预置 API 与 Godot 4.7.2 不匹配，CI 会报，届时改用 api-custom
+# gdext 预置的 API 是 4.6，而我们用 Godot 4.7.2 ⇒ CI 用 `--features api-custom`
+# （配 GODOT4_BIN 指向真实二进制）生成精确绑定；本地没有 Godot 时用默认的预置 API 也能编译。
+godot = "0.5.5"
 sim_core = { path = "../sim/crates/sim_core" }
 sim_math = { path = "../sim/crates/sim_math" }
 
