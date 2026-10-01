@@ -283,6 +283,7 @@ fn isqrt_i64(n: i64) -> i64 {
 #[cfg(test)]
 mod tests {
     use super::{isqrt_i64, truncate_ray};
+    use crate::{Mm, Vec3};
 
     fn len_of(a: Vec3, b: Vec3) -> i64 {
         let dx = i64::from(b.x.0) - i64::from(a.x.0);
