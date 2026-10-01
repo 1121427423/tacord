@@ -862,6 +862,7 @@ mod tests {
     use crate::world::Segment;
 
     /// 建一个平地世界，在中间放一堵东西向的墙，返回 (world, hf)。
+    /// dim 必须是 chunk（32）的整数倍，否则 `World::new` 会 panic。
     fn world_with_wall(dim: u32, wall_z: i64, height_mm: i32) -> (World, HeightField) {
         let mut w = World::new_flat(dim, 32, -8_000);
         for x in 2..(dim as i64 - 2) {
@@ -878,7 +879,7 @@ mod tests {
 
     #[test]
     fn wall_generates_slots_on_both_sides() {
-        let (w, hf) = world_with_wall(16, 8, 1_500);
+        let (w, hf) = world_with_wall(32, 16, 1_500);
         let mut f = CoverField::new();
         f.rebuild_all(&w, &hf);
         assert!(!f.is_empty(), "墙两侧都应该生成槽");
@@ -886,9 +887,9 @@ mod tests {
         let mut south = 0;
         for s in f.slots.iter() {
             assert_eq!(s.height_mm, 1_500);
-            if s.cz < 8 {
+            if s.cz < 16 {
                 north += 1;
-            } else if s.cz > 8 {
+            } else if s.cz > 16 {
                 south += 1;
             }
         }
@@ -897,12 +898,12 @@ mod tests {
 
     #[test]
     fn low_wall_vs_high_wall_classification() {
-        let (w, hf) = world_with_wall(16, 8, 800); // 0.8 m → 矮墙
+        let (w, hf) = world_with_wall(32, 16, 800); // 0.8 m → 矮墙
         let mut f = CoverField::new();
         f.rebuild_all(&w, &hf);
         assert!(f.slots.iter().all(|s| s.kind == CoverKind::LowWall));
 
-        let (w2, hf2) = world_with_wall(16, 8, 1_500); // 1.5 m → 高墙
+        let (w2, hf2) = world_with_wall(32, 16, 1_500); // 1.5 m → 高墙
         let mut f2 = CoverField::new();
         f2.rebuild_all(&w2, &hf2);
         assert!(f2.slots.iter().all(|s| s.kind == CoverKind::HighWall));
@@ -932,14 +933,14 @@ mod tests {
 
     #[test]
     fn blocking_high_when_behind_wall() {
-        let (w, hf) = world_with_wall(16, 8, 1_500);
+        let (w, hf) = world_with_wall(32, 16, 1_500);
         let mut f = CoverField::new();
         f.rebuild_all(&w, &hf);
         // 找一个墙北侧、正对墙的槽
         let idx = f
             .slots
             .iter()
-            .position(|s| s.cz == 7 && s.cx == 8)
+            .position(|s| s.cz == 15 && s.cx == 16)
             .expect("墙北侧应当有槽");
         let slot = f.slots[idx];
         // 威胁在墙的另一侧（南边 10 m）

@@ -8,9 +8,7 @@
 //! 注意：这里可以用浮点与 `std::time`（不进 sim），但**任何影响模拟结果的输入都必须来自
 //! 确定性 PRNG**，否则回放会分叉。
 
-use sim_core::cover::{
-    blocking_at, pick_cover, CoverField, CoverKind, Posture, Threat,
-};
+use sim_core::cover::{blocking_at, pick_cover, CoverField, Posture, Threat};
 use sim_core::nav::{nearest_walkable, step_toward, FlowField, HeightField, NavParams};
 use sim_core::ray::{blocked, RayMode};
 use sim_core::world::{mat, Segment, World};
