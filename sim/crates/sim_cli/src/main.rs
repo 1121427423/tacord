@@ -76,6 +76,71 @@ fn build_world(rng: &mut Pcg32, dim_cells: u32) -> World {
     w
 }
 
+/// 街区场景：成片建筑 + 院墙 + 残骸 —— M1 演示与掩体验收用。
+///
+/// 为什么不复用 `build_world`：那个生成器造的是**孤立单柱**（为射线 bench 服务的密度），
+/// 里面没有成片的墙 ⇒ 所有掩体槽宽度都只有 1 柱（0.5 m），
+/// 20 m 外一根柱子根本挡不住人 —— 拿它做掩体验收会得出"掩体没用"的错误结论。
+fn build_city(rng: &mut Pcg32, dim_cells: u32) -> World {
+    let mut w = World::new_flat(dim_cells, 32, -8000);
+    let dim = dim_cells as i64;
+    let put = |w: &mut World, x: i64, z: i64, s: Segment| {
+        if x >= 0 && z >= 0 && x < dim && z < dim {
+            w.push_segment(x as u32, z as u32, s);
+        }
+    };
+
+    // 建筑：矩形块（4..13 柱 ≈ 2..6.5 m 宽），高 3..7.5 m；1/3 带窗洞
+    let blocks = (dim / 16).max(4);
+    for _ in 0..blocks {
+        let bw = 4 + rng.next_range(9) as i64;
+        let bd = 4 + rng.next_range(9) as i64;
+        let x0 = rng.next_range(dim_cells) as i64;
+        let z0 = rng.next_range(dim_cells) as i64;
+        let h = 3000 + rng.next_range(4) as i32 * 1500;
+        if rng.next_range(3) == 0 {
+            for z in z0..(z0 + bd) {
+                for x in x0..(x0 + bw) {
+                    put(&mut w, x, z, Segment::new(0, 1100, mat::BRICK, 400));
+                    put(&mut w, x, z, Segment::new(1900, h, mat::BRICK, 400));
+                }
+            }
+        } else {
+            for z in z0..(z0 + bd) {
+                for x in x0..(x0 + bw) {
+                    put(&mut w, x, z, Segment::new(0, h, mat::CONCRETE, 700));
+                }
+            }
+        }
+    }
+
+    // 院墙：成排矮墙（0.9..1.3 m），是"蹲下全藏、起身探头"的主力掩体
+    let walls = (dim / 24).max(3);
+    for _ in 0..walls {
+        let len = 6 + rng.next_range(14) as i64;
+        let x0 = rng.next_range(dim_cells) as i64;
+        let z0 = rng.next_range(dim_cells) as i64;
+        let horizontal = rng.next_range(2) == 0;
+        let h = 900 + rng.next_range(3) as i32 * 200;
+        for k in 0..len {
+            let (x, z) = if horizontal { (x0 + k, z0) } else { (x0, z0 + k) };
+            put(&mut w, x, z, Segment::new(0, h, mat::BRICK, 220));
+        }
+    }
+
+    // 车辆残骸：2×2 柱、1.2 m 金属（会被打穿）
+    for _ in 0..(dim / 32).max(2) {
+        let x = rng.next_range(dim_cells) as i64;
+        let z = rng.next_range(dim_cells) as i64;
+        for dz in 0..2 {
+            for dx in 0..2 {
+                put(&mut w, x + dx, z + dz, Segment::new(0, 1200, mat::WRECK, 150));
+            }
+        }
+    }
+    w
+}
+
 struct Unit {
     pos: Vec3,
     vel: (i32, i32),
@@ -545,7 +610,7 @@ fn cmd_cover(args: &[String]) {
     let step_mm = 50i64; // 1.5 m/s ÷ 30 Hz
 
     let mut rng = Pcg32::new(seed, 11);
-    let world = build_world(&mut rng, dim);
+    let world = build_city(&mut rng, dim);
 
     let t0 = std::time::Instant::now();
     let mut hf = HeightField::new(dim);
@@ -601,19 +666,20 @@ fn cmd_cover(args: &[String]) {
     let mut scrape: Vec<u32> = Vec::new();
     let t2 = std::time::Instant::now();
     for _ in 0..trials {
-        // 随机士兵位置（可站立）
+        // 随机士兵位置：**地面层**（楼顶也是可站立的，但站在楼顶没有掩体可躲，
+        // 那种 trial 考的不是掩体系统）
         let (ux, uz) = loop {
             let x = rng.next_range(dim) as i64;
             let z = rng.next_range(dim) as i64;
-            if hf.walkable(x, z) {
+            if hf.walk_top(x, z) == Some(0) {
                 break (x, z);
             }
         };
-        // 随机敌人：8..40 m 之外，且可站
+        // 随机敌人：8..40 m 之外，同样在地面层
         let (ex, ez) = loop {
             let x = rng.next_range(dim) as i64;
             let z = rng.next_range(dim) as i64;
-            if !hf.walkable(x, z) {
+            if hf.walk_top(x, z) != Some(0) {
                 continue;
             }
             let d2 = (x - ux) * (x - ux) + (z - uz) * (z - uz);
