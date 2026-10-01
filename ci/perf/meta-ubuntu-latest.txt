@@ -1,5 +1,5 @@
 os: ubuntu-latest
 arch: x86_64
-cpu: AMD EPYC 9V74 80-Core Processor
-commit: 770f4b41884ac09fd4e57d62e47b1bcca373db60
-date: Thu Oct  1 18:05:41 UTC 2026
+cpu: AMD EPYC 7763 64-Core Processor
+commit: eb321f96144b838af9fced977d91925130f0365e
+date: Thu Oct  1 18:12:31 UTC 2026
