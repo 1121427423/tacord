@@ -8,8 +8,8 @@
 | crate | 状态 | 内容 |
 | --- | --- | --- |
 | `sim_math` | ✅ M0.1 | 确定性定点数学：`Mm` / `Ang` / `Q16` / `Prob` / `Vec2`、`sin/cos/atan2`（烘焙查找表 + 整数插值）、整数 `sqrt`、`Pcg32`（按 system/entity/tick 分流） |
-| `sim_core` | ✅ M0.2 | 体素柱世界（0.5 m 柱 + chunk CSR，段间允许空隙 ⇒ 悬挑/桥下/窗洞）、破坏与挖掘同一管线、脏队列与摊还重建、**体素 DDA 射线 `ray::blocked` / `ray::cast`**（掩体评分、感知 LOS、弹道命中判定共用同一个函数） |
-| `sim_cli` | ✅ M0.2 | `bench`（性能基线，支持 `--maxdist` 按用途限长）、`worldcheck`（射线自检 + 破坏后校验和变化 + 脏队列） |
+| `sim_core` | ✅ M0.2–M0.3 | 体素柱世界（0.5 m 柱 + chunk CSR，段间允许空隙 ⇒ 悬挑/桥下/窗洞）、破坏与挖掘同一管线、脏队列与摊还重建、**体素 DDA 射线 `ray::blocked` / `ray::cast`**（掩体评分、感知 LOS、弹道命中判定共用同一个函数）、**导航 `nav::HeightField` + `nav::FlowField`**（确定性 Dijkstra，8 邻域不切角，`extra` 留给 M2 威胁场叠加） |
+| `sim_cli` | ✅ M0.2–M0.3 | `bench`（性能基线，`--maxdist` 按用途限长）、`nav`（400 单位沿流场寻路 + 炸墙重算演示）、`worldcheck`（射线自检 + 破坏后校验和变化 + 脏队列） |
 
 ## 硬性约束
 
@@ -32,7 +32,8 @@ python3 tools/check_constants.py       # 常量自检（64 项）
 cd sim
 cargo run --release -q -p sim_cli -- worldcheck --world 64
 cargo run --release -q -p sim_cli -- bench --units 400 --ticks 100000 --rays 4 --world 256 --seed 1
-# 性能基线（含方法与已知坑）见 docs/perf/baseline.md
+cargo run --release -q -p sim_cli -- nav --units 400 --ticks 6000 --world 256 --breach 1500 --seed 1
+# 性能基线（环境、方法、三平台对比与已知坑）见 docs/perf/baseline.md
 ```
 
 > **沙箱开发机没有 Rust 工具链**（`sh.rustup.rs` 被网络策略拦截、无 root 装不了 deb）。

@@ -62,6 +62,7 @@ jobs:
         run: |
           cargo run --release -q -p sim_cli -- worldcheck --world 64 2>&1 | tee /tmp/ci-smoke.log
           cargo run --release -q -p sim_cli -- bench --units 400 --ticks 20000 --rays 4 --world 256 --seed 1 2>&1 | tee -a /tmp/ci-smoke.log
+          cargo run --release -q -p sim_cli -- nav --units 400 --ticks 2000 --world 256 --breach 500 --seed 1 2>&1 | tee -a /tmp/ci-smoke.log
 
       - name: 记录输出（失败时另存编译/测试日志）
         if: always()

@@ -2,11 +2,13 @@
 //!
 //! 子命令：
 //! - `bench`：性能基线（G1 门槛的输入）
+//! - `nav`：400 个单位沿流场寻路（M0 的验收演示），含"炸开墙 → 重算 → 新通路"
 //! - `worldcheck`：世界构建 + 射线自检 + 校验和（CI 冒烟用）
 //!
 //! 注意：这里可以用浮点与 `std::time`（不进 sim），但**任何影响模拟结果的输入都必须来自
 //! 确定性 PRNG**，否则回放会分叉。
 
+use sim_core::nav::{nearest_walkable, FlowField, HeightField, NavParams};
 use sim_core::ray::{blocked, RayMode};
 use sim_core::world::{mat, Segment, World};
 use sim_math::{Mm, Pcg32, Vec3};
@@ -18,10 +20,12 @@ fn print_help() {
         "用法：sim_cli <子命令> [选项]\n\
          \n\
          bench        性能基线：--units --ticks --rays --world --maxdist --seed\n\
+         nav          400 单位沿流场寻路：--units --ticks --world --rebuild --breach --seed\n\
          worldcheck   世界构建 + 射线自检 + 校验和\n\
          \n\
          --maxdist 0 表示不限长（最坏情况）；掩体评分用 30000、感知用 80000。
-         示例：sim_cli bench --units 400 --ticks 20000 --rays 4 --world 256 --maxdist 30000 --seed 1"
+         示例：sim_cli bench --units 400 --ticks 20000 --rays 4 --world 256 --maxdist 30000 --seed 1\n\
+        示例：sim_cli nav --units 400 --ticks 6000 --world 256 --rebuild 15 --breach 1500 --seed 1"
     );
 }
 
@@ -38,6 +42,7 @@ fn main() {
     let cmd = args.get(1).map(|s| s.as_str()).unwrap_or("");
     match cmd {
         "bench" => cmd_bench(&args),
+        "nav" => cmd_nav(&args),
         "worldcheck" => cmd_worldcheck(&args),
         _ => print_help(),
     }
@@ -178,6 +183,225 @@ fn cmd_bench(args: &[String]) {
              pct(0.99), 100.0 * pct(0.99) / 11000.0);
     println!("世界校验和  : 0x{:016X}", world.checksum());
     println!("（注意：这是纯射线负载的基线，尚未包含 AI 决策与掩体评分）");
+}
+
+/// 朝目标点走一步（纯整数：距离用整数开方，比例用整除）。
+fn step_toward(pos: (i64, i64), target: (i64, i64), max_step: i64) -> (i64, i64) {
+    let dx = target.0 - pos.0;
+    let dz = target.1 - pos.1;
+    let d2 = dx * dx + dz * dz;
+    let step2 = max_step * max_step;
+    if d2 <= step2 {
+        return target;
+    }
+    let d = isqrt_i64(d2).max(1);
+    (pos.0 + dx * max_step / d, pos.1 + dz * max_step / d)
+}
+
+/// FNV-1a：把单位位置压成一个校验和（跨平台逐位比对用，不进 sim 核心）。
+fn checksum_positions(units: &[NavUnit]) -> u64 {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for u in units {
+        for v in [u.pos.0, u.pos.1] {
+            for b in v.to_le_bytes() {
+                h ^= b as u64;
+                h = h.wrapping_mul(0x100_0000_01b3);
+            }
+        }
+    }
+    h
+}
+
+struct NavUnit {
+    pos: (i64, i64),
+    arrived_at: Option<u64>,
+}
+
+/// `nav`：400 个单位共用一个流场寻路 —— 这是 M0 的验收演示
+/// （"sim_cli 跑 400 单位在体素世界寻路"）。
+fn cmd_nav(args: &[String]) {
+    let units_n = arg(args, "units", 400) as usize;
+    let ticks = arg(args, "ticks", 6000) as u64;
+    let dim = arg(args, "world", 256) as u32;
+    let rebuild_every = arg(args, "rebuild", 15) as u64; // 流场重算周期（tick）
+    let breach_at = arg(args, "breach", 0) as u64; // >0：在该 tick 炸开一堵墙
+    let seed = arg(args, "seed", 1);
+    let p = NavParams::default();
+    let speed_mm_per_tick = 1500 / 30; // 步行 1.5 m/s（constants.ron 的 speed_walk_mmps）
+
+    let mut rng = Pcg32::new(seed, 11);
+    let mut world = build_world(&mut rng, dim);
+
+    let t0 = std::time::Instant::now();
+    let mut hf = HeightField::new(dim);
+    hf.rebuild_all(&world, &p);
+    let build_us = t0.elapsed().as_micros();
+
+    let dim_i = dim as i64;
+    let mut walkable_cells = 0u64;
+    for cz in 0..dim {
+        for cx in 0..dim {
+            if hf.walkable(cx as i64, cz as i64) {
+                walkable_cells += 1;
+            }
+        }
+    }
+
+    // 目标：对角（站不住就退化到最近可站立柱）
+    let goal = nearest_walkable(&hf, dim_i - 2, dim_i - 2, 8).expect("地图上没有可站立的柱");
+    let mut ff = FlowField::new(dim);
+    let t1 = std::time::Instant::now();
+    ff.compute(&hf, goal, &p, None);
+    let first_field_us = t1.elapsed().as_micros();
+    let reachable_before = ff.reached_cells();
+
+    // 生成单位：在左上角区域随机撒在"可达"的柱上
+    let mut units: Vec<NavUnit> = Vec::with_capacity(units_n);
+    let spawn_span = (dim_i / 8).max(4);
+    let mut guard = 0u32;
+    while units.len() < units_n && guard < units_n as u32 * 64 {
+        guard += 1;
+        let cx = (rng.next_range(spawn_span as u32) as i64).min(dim_i - 1);
+        let cz = (rng.next_range(spawn_span as u32) as i64).min(dim_i - 1);
+        if !hf.walkable(cx, cz) || !ff.reachable(cx, cz) {
+            continue;
+        }
+        units.push(NavUnit {
+            pos: (cx * CELL + CELL / 2, cz * CELL + CELL / 2),
+            arrived_at: None,
+        });
+    }
+    let spawned = units.len();
+
+    let mut samples: Vec<u64> = Vec::with_capacity(ticks as usize);
+    let mut rebuild_us: Vec<u64> = Vec::new();
+    let mut stuck_ticks: u64 = 0;
+    let mut breached_at: Option<(u32, u32)> = None;
+    let mut reachable_after = reachable_before;
+
+    for t in 0..ticks {
+        // 破坏演示：炸开一堵墙 → 高度场局部重建 → 流场重算 → 出现新通路
+        if breach_at > 0 && t == breach_at {
+            if let Some((cx, cz, idx)) = find_wall_segment(&world, dim) {
+                if world.damage(cx, cz, idx, 6000) {
+                    let (cx, cz) = (cx as i64, cz as i64);
+                    hf.rebuild_area(&world, cx - 1, cz - 1, cx + 2, cz + 2, &p);
+                    ff.compute(&hf, goal, &p, None);
+                    reachable_after = ff.reached_cells();
+                    breached_at = Some((cx as u32, cz as u32));
+                }
+            }
+        }
+
+        // 流场按周期重算（班组层 2 Hz）；成本与单位数无关
+        if rebuild_every > 0 && t % rebuild_every == 0 && t > 0 {
+            let r0 = std::time::Instant::now();
+            ff.compute(&hf, goal, &p, None);
+            rebuild_us.push(r0.elapsed().as_micros() as u64);
+        }
+
+        let t_start = std::time::Instant::now();
+        for u in units.iter_mut() {
+            if u.arrived_at.is_some() {
+                continue;
+            }
+            let (cx, cz) = (u.pos.0 / CELL, u.pos.1 / CELL);
+            if (cx, cz) == goal {
+                u.arrived_at = Some(t);
+                continue;
+            }
+            match ff.next_cell(cx, cz) {
+                Some((nx, nz)) => {
+                    let target = (nx * CELL + CELL / 2, nz * CELL + CELL / 2);
+                    u.pos = step_toward(u.pos, target, speed_mm_per_tick);
+                }
+                None => {
+                    stuck_ticks += 1; // 被围死（或流场半径外）
+                }
+            }
+        }
+        samples.push(t_start.elapsed().as_micros() as u64);
+    }
+
+    samples.sort_unstable();
+    let pct = |p: f64| -> f64 {
+        let i = ((samples.len() as f64) * p) as usize;
+        samples[i.min(samples.len() - 1)] as f64
+    };
+    rebuild_us.sort_unstable();
+    let rb = |p: f64| -> f64 {
+        if rebuild_us.is_empty() {
+            return 0.0;
+        }
+        let i = ((rebuild_us.len() as f64) * p) as usize;
+        rebuild_us[i.min(rebuild_us.len() - 1)] as f64
+    };
+
+    let arrived = units.iter().filter(|u| u.arrived_at.is_some()).count();
+    let arrive_sum: u64 = units
+        .iter()
+        .filter_map(|u| u.arrived_at)
+        .sum();
+    let arrive_max = units.iter().filter_map(|u| u.arrived_at).max().unwrap_or(0);
+
+    println!("── sim_cli nav ──────────────────────────────");
+    println!("世界        : {} 柱（{} m），{} 段", dim, dim_i * CELL / 1000, world.segment_count());
+    println!("可站立柱    : {} / {}（{:.1}%）", walkable_cells,
+             dim_i * dim_i, 100.0 * walkable_cells as f64 / (dim_i * dim_i) as f64);
+    println!("目标柱      : {:?}；流场覆盖 {} 柱", goal, reachable_before);
+    println!("高度场构建  : {} µs（全量）", build_us);
+    println!("流场首次计算: {} µs；之后每 {} tick 重算一次：p50 {:.0} µs | p99 {:.0} µs（共 {} 次）",
+             first_field_us, rebuild_every, rb(0.50), rb(0.99), rebuild_us.len());
+    println!("单位        : {}（生成 {}；步行 {} mm/tick）", spawned, units_n, speed_mm_per_tick);
+    println!("每 tick 移动: 平均 {:.1} µs | p50 {:.0} | p90 {:.0} | p99 {:.0} | max {}",
+             samples.iter().sum::<u64>() as f64 / samples.len() as f64,
+             pct(0.50), pct(0.90), pct(0.99), samples[samples.len() - 1]);
+    println!("预算对照    : p99 {:.0} µs / 11000 µs（每 tick 预算）= {:.2}%",
+             pct(0.99), 100.0 * pct(0.99) / 11000.0);
+    println!("到达        : {} / {}，平均 {:.1} s，最长 {:.1} s",
+             arrived, spawned,
+             if arrived > 0 { arrive_sum as f64 / arrived as f64 / 30.0 } else { 0.0 },
+             arrive_max as f64 / 30.0);
+    println!("卡住        : {} 单位·tick（流场不可达；正常时应为 0）", stuck_ticks);
+    match breached_at {
+        Some((cx, cz)) => println!("破坏演示    : tick {} 炸开 ({}, {}) → 流场覆盖 {} → {} 柱（新通路）",
+                                   breach_at, cx, cz, reachable_before, reachable_after),
+        None => println!("破坏演示    : 未触发（--breach 0）"),
+    }
+    println!("位置校验和  : 0x{:016X}（跨平台逐位比对用）", checksum_positions(&units));
+}
+
+/// 找一堵"能炸开且炸开有意义"的墙：混凝土、顶面在 2~3 m、且靠近地图中部。
+fn find_wall_segment(world: &World, dim: u32) -> Option<(u32, u32, u32)> {
+    let lo = dim / 2 - dim / 8;
+    let hi = dim / 2 + dim / 8;
+    for cx in lo..hi {
+        for cz in 0..dim {
+            let segs = world.segments(cx, cz);
+            for (i, s) in segs.iter().enumerate() {
+                if s.material == mat::CONCRETE && s.top_mm >= 2000 && s.top_mm <= 3000 {
+                    return Some((cx, cz, i as u32));
+                }
+            }
+        }
+    }
+    None
+}
+
+#[cfg(test)]
+mod nav_tests {
+    use super::step_toward;
+
+    #[test]
+    fn step_toward_moves_at_most_one_step() {
+        assert_eq!(step_toward((0, 0), (0, 0), 50), (0, 0));
+        assert_eq!(step_toward((0, 0), (10, 0), 50), (10, 0), "距离小于步长时直接到达");
+        let p = step_toward((0, 0), (1000, 0), 50);
+        assert_eq!(p, (50, 0));
+        // 斜向：每轴分量都不超过步长
+        let p = step_toward((0, 0), (1000, 1000), 50);
+        assert!(p.0 <= 50 && p.1 <= 50 && p.0 >= 35 && p.1 >= 35, "{:?}", p);
+    }
 }
 
 fn cmd_worldcheck(args: &[String]) {
