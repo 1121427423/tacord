@@ -63,6 +63,14 @@ jobs:
           cargo run --release -q -p sim_cli -- worldcheck --world 64 2>&1 | tee /tmp/ci-smoke.log
           cargo run --release -q -p sim_cli -- bench --units 400 --ticks 20000 --rays 4 --world 256 --seed 1 2>&1 | tee -a /tmp/ci-smoke.log
           cargo run --release -q -p sim_cli -- nav --units 400 --ticks 2000 --world 256 --breach 500 --seed 1 2>&1 | tee -a /tmp/ci-smoke.log
+          cargo run --release -q -p sim_cli -- cover --world 256 --trials 100 --seed 1 2>&1 | tee -a /tmp/ci-smoke.log
+          # 反脚本化验收（§20.1.8）：随机遭遇里 3 秒内 blocking ≥ 0.7 的成功率必须 ≥ 95%
+          pct=$(grep -o 'cover_rate_pct=[0-9.]*' /tmp/ci-smoke.log | tail -1 | cut -d= -f2)
+          echo "掩体反脚本化成功率: ${pct}%"
+          awk -v p="${pct:-0}" 'BEGIN{exit !(p+0 >= 95)}' || {
+            echo "::error::掩体反脚本化验收失败：${pct}% < 95%（见 ci-smoke.log）"
+            exit 1
+          }
 
       - name: 记录输出（失败时另存编译/测试日志）
         if: always()
@@ -191,6 +199,7 @@ jobs:
           OS="${{ matrix.os }}"
           cargo run --release -q -p sim_cli -- worldcheck --world 64 > "worldcheck-${OS}.txt" 2>&1
           cargo run --release -q -p sim_cli -- bench --units 400 --ticks 20000 --rays 4 --world 256 --seed 1 > "bench-${OS}.txt" 2>&1
+          cargo run --release -q -p sim_cli -- cover --world 256 --trials 100 --seed 1 > "cover-${OS}.txt" 2>&1
           {
             echo "os: ${OS}"
             echo "arch: $(uname -m)"
@@ -200,6 +209,7 @@ jobs:
           } > "meta-${OS}.txt"
           echo "--- worldcheck ---"; cat "worldcheck-${OS}.txt"
           echo "--- bench ---";      cat "bench-${OS}.txt"
+          echo "--- cover ---";      cat "cover-${OS}.txt"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -223,7 +233,7 @@ jobs:
         run: |
           set -e
           fail=0
-          for kind in worldcheck bench; do
+          for kind in worldcheck bench cover; do
             echo "=== ${kind} ==="
             base=""
             for f in artifacts/sim-*/${kind}-*.txt; do

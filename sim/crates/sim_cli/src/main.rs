@@ -630,8 +630,10 @@ fn cmd_cover(args: &[String]) {
             confidence: 65_535,
         };
         let mut pos = (ux * CELL + CELL / 2, uz * CELL + CELL / 2);
+        let mut goal: Option<(i64, i64)> = None;
         for tick in 0..ticks_3s {
-            if tick % cover_period == 0 {
+            // 5 Hz 重新选槽（constants.ron 的 time.cover_period），中间继续朝目标走
+            if goal.is_none() || tick % cover_period == 0 {
                 if let Some(c) = pick_cover(
                     &world,
                     &field,
@@ -643,25 +645,12 @@ fn cmd_cover(args: &[String]) {
                     &mut scrape,
                 ) {
                     if let Some(s) = field.slot(c.slot) {
-                        pos = steer_to(&hf, &p, pos, (s.center_x_mm(), s.center_z_mm()), step_mm);
+                        goal = Some((s.center_x_mm(), s.center_z_mm()));
                     }
                 }
-            } else {
-                // 没到重评估周期也继续朝上一次的目标走（简化：每 tick 重选目标）
-                if let Some(c) = pick_cover(
-                    &world,
-                    &field,
-                    pos.0,
-                    pos.1,
-                    Posture::Crouch,
-                    &[threat],
-                    12,
-                    &mut scrape,
-                ) {
-                    if let Some(s) = field.slot(c.slot) {
-                        pos = steer_to(&hf, &p, pos, (s.center_x_mm(), s.center_z_mm()), step_mm);
-                    }
-                }
+            }
+            if let Some(g) = goal {
+                pos = steer_to(&hf, &p, pos, g, step_mm);
             }
         }
         evaluated += 1;
@@ -683,5 +672,7 @@ fn cmd_cover(args: &[String]) {
         "  3 秒内 blocking ≥ 0.7: {reached}/{evaluated} = {pct:.1}%   （目标 ≥ 95%）"
     );
     println!("  每 trial 平均 {} µs", eval_us / evaluated.max(1) as u128);
+    // 给 CI 用的机器可读行（反脚本化验收门禁读这一行）
+    println!("cover_rate_pct={pct:.1}");
     println!("───────────────────────────────────────────────");
 }
