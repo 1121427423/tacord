@@ -61,8 +61,11 @@ pub const SLOT_RESERVE_TICKS: u32 = 30;
 /// 只按距离算的话，15 m 外那个"完美掩体"会赢过脚边的矮墙，
 /// 于是士兵在 3 秒验收窗口里一直在开阔地跑 —— 实测成功率只有 7%。
 pub const REACH_HORIZON_TICKS: i64 = 90;
-/// 步行速度（mm/tick）：1.5 m/s ÷ 30 Hz，与 `constants.ron` 的 `speed_walk_mmps` 一致。
-pub const WALK_MM_PER_TICK: i64 = 50;
+/// "冲向掩体"的速度（mm/tick）：`speed_sprint_mmps = 3000` ÷ 30 Hz。
+///
+/// 用冲刺而不是步行：挨打时冲进掩体是真实行为（constants.ron 里 sprint 就是给这个用的），
+/// 而且只有在这个速度下"3 秒到达"才是个有意义的约束。
+pub const RUSH_MM_PER_TICK: i64 = 100;
 
 // 评分权重（ai_weights.ron 的 M1 子集，Q16 口径：1.0 = 65536）
 impl CoverKind {
@@ -840,8 +843,27 @@ pub fn pick_cover(
     if cands.is_empty() {
         return None;
     }
+    // "走得到的优先"：脚边有掩体就别横穿 18 m 开阔地。
+    // 没有走得到的（比如刚落地在广场中央），才退回到全部候选里挑。
+    let reachable: Vec<u32> = cands
+        .iter()
+        .copied()
+        .filter(|&i| {
+            let s = &field.slots[i as usize];
+            let dx = s.center_x_mm() - from_x_mm;
+            let dz = s.center_z_mm() - from_z_mm;
+            isqrt_i64(dx * dx + dz * dz) / RUSH_MM_PER_TICK < REACH_HORIZON_TICKS
+        })
+        .collect();
+    let pool: &[u32] = if reachable.is_empty() {
+        &cands
+    } else {
+        &reachable
+    };
+
     // 按"离得近 + 墙高"排序取前 K（便宜的启发式，之后才做射线）
-    cands.sort_by_key(|&i| {
+    let mut pool_sorted: Vec<u32> = pool.to_vec();
+    pool_sorted.sort_by_key(|&i| {
         let s = &field.slots[i as usize];
         let dx = s.center_x_mm() - from_x_mm;
         let dz = s.center_z_mm() - from_z_mm;
@@ -849,8 +871,8 @@ pub fn pick_cover(
         // 距离优先，同距离下高的墙优先（负号 = 大者优先）
         (d2 / 1_000_000, -s.height_mm as i64)
     });
-    let k = max_candidates.min(cands.len());
-    let cands = &cands[..k];
+    let k = max_candidates.min(pool_sorted.len());
+    let cands = &pool_sorted[..k];
 
     let one = [primary.unwrap_or(Threat { x_mm: 0, y_mm: 0, z_mm: 0, confidence: 0 })];
     let primary_slice: &[Threat] = if primary.is_some() { &one } else { &[] };
@@ -910,7 +932,7 @@ fn score_slot(
     let dx = slot.center_x_mm() - from_x_mm;
     let dz = slot.center_z_mm() - from_z_mm;
     let d = isqrt_i64(dx * dx + dz * dz);
-    let travel_ticks = d / WALK_MM_PER_TICK;
+    let travel_ticks = d / RUSH_MM_PER_TICK;
     let reach = if travel_ticks >= REACH_HORIZON_TICKS {
         0
     } else {

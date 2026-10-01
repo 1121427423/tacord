@@ -607,7 +607,7 @@ fn cmd_cover(args: &[String]) {
     let p = NavParams::default();
     let cover_period = 6u64; // 5 Hz（constants.ron 的 time.cover_period）
     let ticks_3s = 90u64;
-    let step_mm = 50i64; // 1.5 m/s ÷ 30 Hz
+    let step_mm = 100i64; // 冲向掩体：speed_sprint_mmps 3000 ÷ 30 Hz
 
     let mut rng = Pcg32::new(seed, 11);
     let world = build_city(&mut rng, dim);
