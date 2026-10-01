@@ -27,18 +27,18 @@ Initialize godot-rust (API v4.7.2.stable.official, runtime v4.7.2.stable.officia
 handle_crash: Program crashed with signal 11
 Engine version: Godot Engine v4.7.2.stable.official (ed1daf0bf001b61586d9930840f2f1394092c079)
 Dumping the backtrace. Please include this when reporting the bug on: https://github.com/godotengine/godot/issues
-Load address: 100200000
+Load address: 100f50000
 
-[1] 1889516a4 (libsystem_platform.dylib+36a4) - _sigtramp + 56
-[2] 1023b8dbc (main+21b8dbc) - SDL_GetPerformanceFrequency + 4162848
-[3] 1023983c0 (main+21983c0) - SDL_GetPerformanceFrequency + 4029220
-[4] 1023d969c (main+21d969c) - SDL_GetPerformanceFrequency + 4296192
-[5] 104f8c37c (main+4d8c37c) - ZSTD_decompressStream_simpleArgs + 6538008
-[6] 104f8c664 (main+4d8c664) - ZSTD_decompressStream_simpleArgs + 6538752
-[7] 10097294c (main+77294c) - main + 155224
-[8] 1008ea578 (main+6ea578) - mvk::SPIRVToMSLConverter::convert(mvk::SPIRVToMSLConversionConfiguration&, mvk::SPIRVToMSLConversionResult&, bool, bool, bool)
-[9] 10094cea4 (main+74cea4) - main (in Godot) + 944
-[10] 188576b98 (dyld+6b98) - start + 6076
+[1] 18ebc96a4 (libsystem_platform.dylib+36a4) - _sigtramp + 56
+[2] 103108dbc (main+21b8dbc) - SDL_GetPerformanceFrequency + 4162848
+[3] 1030e83c0 (main+21983c0) - SDL_GetPerformanceFrequency + 4029220
+[4] 10312969c (main+21d969c) - SDL_GetPerformanceFrequency + 4296192
+[5] 105cdc37c (main+4d8c37c) - ZSTD_decompressStream_simpleArgs + 6538008
+[6] 105cdc664 (main+4d8c664) - ZSTD_decompressStream_simpleArgs + 6538752
+[7] 1016c294c (main+77294c) - main + 155224
+[8] 10163a578 (main+6ea578) - mvk::SPIRVToMSLConverter::convert(mvk::SPIRVToMSLConversionConfiguration&, mvk::SPIRVToMSLConversionResult&, bool, bool, bool)
+[9] 10169cea4 (main+74cea4) - main (in Godot) + 944
+[10] 18e7eeb98 (dyld+6b98) - start + 6076
 -- END OF C++ BACKTRACE --
 ================================================================
-tools/ci_timeout.sh: line 26:  4417 Abort trap: 6           perl -e 'alarm shift; exec @ARGV' "$secs" "$@"
+tools/ci_timeout.sh: line 26:  2727 Abort trap: 6           perl -e 'alarm shift; exec @ARGV' "$secs" "$@"
