@@ -1,0 +1,23 @@
+; tacord · Godot 工程（M0：薄绑定 + 400 个小方块）
+; 渲染器用 gl_compatibility：M0 只验证"sim 能驱动渲染"，不引入 Metal/前向渲染的差异
+config_version=5
+
+[application]
+
+config/name="tacord"
+run/main_scene="res://scenes/main.tscn"
+config/features=PackedStringArray("4.7")
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+
+[physics]
+
+common/physics_ticks_per_second=30

@@ -624,6 +624,24 @@ fn mix(seed: u64, system: u16, entity: u32, tick: u32) -> u64 {
 
 // ═══════════════════════════════════ 测试 ═══════════════════════════════════
 
+/// 整数平方根（牛顿法，`n < 0` 返回 0）。
+///
+/// sim 里凡是需要"长度/距离"的地方都用它：不需要开方时优先比较平方，
+/// 但"按比例缩放向量"（步进、射线截断）必须拿到真实长度。
+#[inline]
+pub fn isqrt_i64(n: i64) -> i64 {
+    if n <= 0 {
+        return 0;
+    }
+    let mut x = n;
+    let mut y = (x + 1) / 2;
+    while y < x {
+        x = y;
+        y = (x + n / x) / 2;
+    }
+    x
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -880,5 +898,21 @@ mod tests {
         );
         assert_near(Prob::from_permille(250).raw() as i32, 16383, 2, "25%");
         assert_eq!(Prob::from_permille(1000), Prob::ALWAYS);
+    }
+}
+
+#[cfg(test)]
+mod isqrt_tests {
+    use super::isqrt_i64;
+
+    #[test]
+    fn isqrt_matches_known_values() {
+        assert_eq!(isqrt_i64(0), 0);
+        assert_eq!(isqrt_i64(-5), 0);
+        assert_eq!(isqrt_i64(1), 1);
+        assert_eq!(isqrt_i64(15), 3);
+        assert_eq!(isqrt_i64(16), 4);
+        assert_eq!(isqrt_i64(1_000_000), 1000);
+        assert_eq!(isqrt_i64(1_000_000_000_000), 1_000_000);
     }
 }

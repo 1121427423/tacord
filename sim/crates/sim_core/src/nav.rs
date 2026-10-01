@@ -11,6 +11,7 @@
 //! 这里**故意不使用** `rayon` 并行：并行 Dijkstra 的结果依赖归约顺序，会毁掉 lockstep。
 
 use crate::world::World;
+use sim_math::isqrt_i64;
 use core::cmp::Reverse;
 use std::collections::BinaryHeap;
 
@@ -358,6 +359,21 @@ impl FlowField {
     }
 }
 
+/// 从 `pos` 朝 `target` 走一步，最多走 `max_step_mm`（全整数：长度用整数开方，缩放用整除）。
+///
+/// 距离 ≤ 步长时直接到达（不会过冲抖动）。这是"单位沿流场走"的位移函数，
+/// 命令行工具与 Godot 绑定共用同一个 —— 两处走同一条路，表现层才不会和 sim 分叉。
+#[inline]
+pub fn step_toward(pos: (i64, i64), target: (i64, i64), max_step_mm: i64) -> (i64, i64) {
+    let dx = target.0 - pos.0;
+    let dz = target.1 - pos.1;
+    if dx * dx + dz * dz <= max_step_mm * max_step_mm {
+        return target;
+    }
+    let d = isqrt_i64(dx * dx + dz * dz).max(1);
+    (pos.0 + dx * max_step_mm / d, pos.1 + dz * max_step_mm / d)
+}
+
 /// 目标点落在不可站立的柱上（墙里 / 空中）时，找最近的可站立柱（切比雪夫搜索）。
 ///
 /// 半径用**柱**计：目标通常只偏一两格，全图搜索在这里没有意义。
@@ -634,5 +650,17 @@ mod tests {
         assert!(ff.reachable(2, 4), "半径内");
         assert!(!ff.reachable(0, 0), "半径外应不可达");
         assert_eq!(ff.reached_cells(), 25, "以 (4,4) 为中心半径 2 的正方形 = 5×5");
+    }
+
+    #[test]
+    fn step_toward_moves_at_most_one_step() {
+        assert_eq!(step_toward((0, 0), (0, 0), 50), (0, 0));
+        assert_eq!(step_toward((0, 0), (10, 0), 50), (10, 0), "距离小于步长时直接到达");
+        assert_eq!(step_toward((0, 0), (1000, 0), 50), (50, 0));
+        // 斜向：每轴分量都不超过步长，且方向不变
+        let p = step_toward((0, 0), (1000, 1000), 50);
+        assert!(p.0 <= 50 && p.1 <= 50 && p.0 >= 35 && p.1 >= 35, "{:?}", p);
+        // 负方向
+        assert_eq!(step_toward((0, 0), (-1000, 0), 50), (-50, 0));
     }
 }

@@ -1,0 +1,20 @@
+[package]
+name = "tacord_gdext"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "tacord 的 Godot 薄绑定（GDExtension）：只搬运与驱动，规则逻辑全在 sim_core"
+
+[lib]
+crate-type = ["cdylib"]
+
+# 独立 workspace：绝不能并入 sim/（A6 边界：sim 不得依赖 Godot）
+[workspace]
+
+[dependencies]
+godot = "0.5.5"   # gdext；若其预置 API 与 Godot 4.7.2 不匹配，CI 会报，届时改用 api-custom
+sim_core = { path = "../sim/crates/sim_core" }
+sim_math = { path = "../sim/crates/sim_math" }
+
+[profile.release]
+opt-level = 3

@@ -8,10 +8,10 @@
 //! 注意：这里可以用浮点与 `std::time`（不进 sim），但**任何影响模拟结果的输入都必须来自
 //! 确定性 PRNG**，否则回放会分叉。
 
-use sim_core::nav::{nearest_walkable, FlowField, HeightField, NavParams};
+use sim_core::nav::{nearest_walkable, step_toward, FlowField, HeightField, NavParams};
 use sim_core::ray::{blocked, RayMode};
 use sim_core::world::{mat, Segment, World};
-use sim_math::{Mm, Pcg32, Vec3};
+use sim_math::{isqrt_i64, Mm, Pcg32, Vec3};
 
 const CELL: i64 = 500;
 
@@ -183,19 +183,6 @@ fn cmd_bench(args: &[String]) {
              pct(0.99), 100.0 * pct(0.99) / 11000.0);
     println!("世界校验和  : 0x{:016X}", world.checksum());
     println!("（注意：这是纯射线负载的基线，尚未包含 AI 决策与掩体评分）");
-}
-
-/// 朝目标点走一步（纯整数：距离用整数开方，比例用整除）。
-fn step_toward(pos: (i64, i64), target: (i64, i64), max_step: i64) -> (i64, i64) {
-    let dx = target.0 - pos.0;
-    let dz = target.1 - pos.1;
-    let d2 = dx * dx + dz * dz;
-    let step2 = max_step * max_step;
-    if d2 <= step2 {
-        return target;
-    }
-    let d = isqrt_i64(d2).max(1);
-    (pos.0 + dx * max_step / d, pos.1 + dz * max_step / d)
 }
 
 /// FNV-1a：把单位位置压成一个校验和（跨平台逐位比对用，不进 sim 核心）。
@@ -388,21 +375,6 @@ fn find_wall_segment(world: &World, dim: u32) -> Option<(u32, u32, u32)> {
     None
 }
 
-#[cfg(test)]
-mod nav_tests {
-    use super::step_toward;
-
-    #[test]
-    fn step_toward_moves_at_most_one_step() {
-        assert_eq!(step_toward((0, 0), (0, 0), 50), (0, 0));
-        assert_eq!(step_toward((0, 0), (10, 0), 50), (10, 0), "距离小于步长时直接到达");
-        let p = step_toward((0, 0), (1000, 0), 50);
-        assert_eq!(p, (50, 0));
-        // 斜向：每轴分量都不超过步长
-        let p = step_toward((0, 0), (1000, 1000), 50);
-        assert!(p.0 <= 50 && p.1 <= 50 && p.0 >= 35 && p.1 >= 35, "{:?}", p);
-    }
-}
 
 fn cmd_worldcheck(args: &[String]) {
     let dim = arg(args, "world", 64) as u32;
@@ -490,20 +462,6 @@ fn truncate_ray(from: Vec3, to: Vec3, maxdist_mm: i32) -> Vec3 {
     )
 }
 
-/// 整数平方根（牛顿法）。只用于 bench 的长度截断，不进 sim 核心（sim 核心不用浮点）。
-fn isqrt_i64(n: i64) -> i64 {
-    if n <= 0 {
-        return 0;
-    }
-    let mut x = n;
-    let mut y = (x + 1) / 2;
-    while y < x {
-        x = y;
-        y = (x + n / x) / 2;
-    }
-    x
-}
-
 #[cfg(test)]
 mod tests {
     use super::{isqrt_i64, truncate_ray};
@@ -537,13 +495,4 @@ mod tests {
         assert_eq!(truncate_ray(from, to, 0), to);
     }
 
-    #[test]
-    fn isqrt_matches_known_values() {
-        assert_eq!(isqrt_i64(0), 0);
-        assert_eq!(isqrt_i64(1), 1);
-        assert_eq!(isqrt_i64(15), 3);
-        assert_eq!(isqrt_i64(16), 4);
-        assert_eq!(isqrt_i64(1_000_000), 1000);
-        assert_eq!(isqrt_i64(1_000_000_000_000), 1_000_000);
-    }
 }
