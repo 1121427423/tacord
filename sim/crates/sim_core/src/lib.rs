@@ -9,9 +9,11 @@
 #![deny(unsafe_code)]
 #![deny(clippy::float_arithmetic)]
 
+pub mod nav;
 pub mod ray;
 pub mod world;
 
+pub use nav::{FlowField, HeightField, NavParams};
 pub use ray::{blocked, cast, hit_point, RayHit, RayMode};
 pub use world::{Material, Segment, World};
 

@@ -135,6 +135,26 @@ Constants(
         peek_offset_mm:     450,            // 侧向探身 0.45 m
     ),
 
+    // ───────────────────── 6.1 导航（M0.3 引入，T1）─────────────────────
+    nav: Nav(
+        // 姿态高度（头顶，mm）—— 必须与 cover.samples_*_mm 的最大值自洽（check_constants 校验）
+        height_stand_mm:    1800,           // 采样点最高 1700 + 余量
+        height_crouch_mm:   1200,           // 采样点最高 1150
+        height_prone_mm:    500,            // 采样点最高 450
+        clearance_mm:       1900,           // 站立所需垂直净空 = height_stand + 100
+        shoulder_width_mm:  800,            // 与 cover.slot_capacity_mm 是同一条约束
+        // 通行：阶梯近似（R4）—— 斜面用阶梯表达，美术不得做 >30° 的行走斜面
+        step_up_mm:         400,            // 能直接跨上（≈ 一级楼梯）
+        step_down_mm:       700,            // 能直接走下
+        max_slope_deg:      30,             // 阶梯近似上限（美术约束）
+        // 流场：一个目标一个场，班组层频率重算，与威胁场同一张栅格叠加代价（M2）
+        rebuild_ticks:      15,             // 2 Hz = 班组周期；必须是 30Hz 的整数分频
+        radius_mm:          128000,         // 单个流场的作用半径（避免对 419 万柱做 Dijkstra）
+        cost_orthogonal:    10000,          // 正交一步 = 1.0（Q16 口径）
+        cost_diagonal:      14142,          // 对角一步 = √2
+        unreachable:        4294967295,     // u32::MAX，与真实代价绝不冲突
+    ),
+
     // ──────────────────────── 7. 感知与压制（T2）────────────────────────
     perception: Perception(
         fov_half_deg:       110,

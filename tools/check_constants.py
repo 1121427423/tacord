@@ -169,6 +169,51 @@ def main() -> int:
     check(p99 is not None and float(p99) < 1000 / (hz or 30),
           "tick p99 预算 < tick 周期", f"{p99} ms vs {1000 / (hz or 30):.1f} ms")
 
+    # ── C2. 导航（M0.3，T1）────────────────────────────────────────────
+    h_stand = as_int(ron.get("height_stand_mm"))
+    h_crouch = as_int(ron.get("height_crouch_mm"))
+    h_prone = as_int(ron.get("height_prone_mm"))
+    clearance = as_int(ron.get("clearance_mm"))
+    shoulder = as_int(ron.get("shoulder_width_mm"))
+    slot = as_int(ron.get("slot_capacity_mm"))
+    step_up = as_int(ron.get("step_up_mm"))
+    step_down = as_int(ron.get("step_down_mm"))
+    slope = as_int(ron.get("max_slope_deg"))
+    nav_rebuild = as_int(ron.get("rebuild_ticks"))
+    nav_radius = as_int(ron.get("radius_mm"))
+    c_ortho = as_int(ron.get("cost_orthogonal"))
+    c_diag = as_int(ron.get("cost_diagonal"))
+    unreach = as_int(ron.get("unreachable"))
+
+    check(h_prone is not None and h_crouch is not None and h_stand is not None
+          and h_prone < h_crouch < h_stand,
+          "nav 姿态高度单调：卧 < 蹲 < 站", f"{h_prone} / {h_crouch} / {h_stand}")
+    check(clearance is not None and h_stand is not None
+          and h_stand < clearance <= h_stand + 200,
+          "nav.clearance_mm = 站高 + 小余量(≤200mm)", f"{clearance} vs {h_stand}")
+    check(shoulder is not None and slot is not None and shoulder == slot,
+          "nav.shoulder_width_mm = cover.slot_capacity_mm（同一条约束）",
+          f"{shoulder} / {slot}")
+    check(step_up is not None and h_crouch is not None and step_up < h_crouch,
+          "nav.step_up_mm < 蹲姿身高（能跨上的台阶不该高过蹲姿）", f"{step_up} / {h_crouch}")
+    check(step_up is not None and step_down is not None and step_up <= step_down,
+          "nav.step_up_mm ≤ step_down_mm", f"{step_up} / {step_down}")
+    check(slope == 30, "nav.max_slope_deg = 30（R4 阶梯近似的美术约束）", f"{slope}")
+    check(nav_rebuild is not None and hz and hz % nav_rebuild == 0,
+          "nav.rebuild_ticks 是 30Hz 的整数分频", f"{nav_rebuild}")
+    check(nav_radius is not None and size is not None and nav_radius <= size,
+          "nav.radius_mm ≤ 地图边长", f"{nav_radius} / {size}")
+    check(c_ortho is not None and c_diag is not None
+          and abs(c_diag - round(c_ortho * 2 ** 0.5)) <= 1,
+          "nav.cost_diagonal = cost_orthogonal × √2", f"{c_diag} vs {round((c_ortho or 0) * 2 ** 0.5)}")
+    check(unreach == 4294967295, "nav.unreachable = u32::MAX", f"{unreach}")
+    # 与掩体采样点自洽：最高采样点必须低于该姿态的头顶高度
+    for key, top in (("samples_stand_mm", h_stand), ("samples_crouch_mm", h_crouch),
+                     ("samples_prone_mm", h_prone)):
+        vals = ints_in(ron.get(key))
+        check(bool(vals) and top is not None and max(vals) < top,
+              f"nav 头顶高度 > cover.{key} 的最大值", f"{max(vals) if vals else '?'} vs {top}")
+
     # 威胁场网格：cell 必须整除世界尺寸
     tcell = as_int(ron.get("threat_cell_mm"))
     check(tcell and size and size % tcell == 0,

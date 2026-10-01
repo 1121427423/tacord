@@ -105,6 +105,13 @@ impl Material {
     pub const fn is_air(&self) -> bool {
         !self.blocks_sight && !self.blocks_bullet && !self.blocks_move
     }
+
+    /// 能否**站在上面**（导航用）。铁丝网 `blocks_move` = true（挡人），
+    /// 但它不是站立面 —— 否则会出现"士兵走在铁丝网顶上"。
+    #[inline]
+    pub const fn standable(&self) -> bool {
+        self.blocks_sight && self.blocks_bullet && self.blocks_move
+    }
 }
 
 /// 材质表索引（顺序必须与 `World::default_materials()` 一致）。
@@ -324,6 +331,20 @@ impl World {
             .map(|s| s.top_mm)
             .max()
             .unwrap_or(i32::MIN)
+    }
+
+    /// 该柱在 `[y0_mm, y1_mm)` 区间内是否有任何实体（半开区间）。
+    ///
+    /// 用途：导航的"站立净空"判定、掩体槽的"头顶是否被压住"、生成器的合法性检查。
+    /// 半开区间的意义：相邻段 `[0,100)` 与 `[100,200)` 在 y=100 处**不算**重叠
+    /// （否则紧贴的两段会被误判为"没有净空"）。
+    pub fn overlaps(&self, cx: u32, cz: u32, y0_mm: i32, y1_mm: i32) -> bool {
+        if y1_mm <= y0_mm {
+            return false;
+        }
+        self.segments(cx, cz)
+            .iter()
+            .any(|s| s.bottom_mm < y1_mm && y0_mm < s.top_mm)
     }
 
     fn mark_dirty(&mut self, ci: usize) {
