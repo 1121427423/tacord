@@ -254,7 +254,8 @@ impl CoverField {
     pub fn rebuild_area(&mut self, w: &World, hf: &HeightField, x0: i64, z0: i64, x1: i64, z1: i64) {
         // M1 实现：剔除旧槽 + 重新生成该区域 + 重排 + 重建哈希。
         // 破坏管线（M1 后半）会按 chunk 调它，频率远低于 1 Hz，O(区域) 可接受。
-        self.slots.retain(|s| s.cx < x0 || s.cx > x1 || s.cz < z0 || s.cz > z1);
+        self.slots
+            .retain(|s| (s.cx as i64) < x0 || (s.cx as i64) > x1 || (s.cz as i64) < z0 || (s.cz as i64) > z1);
         let dim = self.dim;
         for cz in z0.max(0)..=z1.min(dim - 1) {
             for cx in x0.max(0)..=x1.min(dim - 1) {
@@ -379,20 +380,24 @@ impl CoverField {
 
     fn rehash(&mut self) {
         let n = self.buckets_per_side * self.buckets_per_side;
-        self.bucket_ofs = vec![0u32; n + 1];
+        // 计数与填充都用局部变量：迭代 self.slots 的同时改 self.bucket_ofs 会触发 E0502
+        let mut counts = vec![0u32; n];
         for s in self.slots.iter() {
-            self.bucket_ofs[self.bucket_index(s.cx as i64, s.cz as i64) + 1] += 1;
+            counts[self.bucket_index(s.cx as i64, s.cz as i64)] += 1;
         }
+        let mut ofs = vec![0u32; n + 1];
         for i in 0..n {
-            self.bucket_ofs[i + 1] += self.bucket_ofs[i];
+            ofs[i + 1] = ofs[i] + counts[i];
         }
-        let mut cursor = self.bucket_ofs.clone();
-        self.bucket_items = vec![0u32; self.slots.len()];
+        let mut cursor = ofs.clone();
+        let mut items = vec![0u32; self.slots.len()];
         for (i, s) in self.slots.iter().enumerate() {
             let b = self.bucket_index(s.cx as i64, s.cz as i64);
-            self.bucket_items[cursor[b] as usize] = i as u32;
+            items[cursor[b] as usize] = i as u32;
             cursor[b] += 1;
         }
+        self.bucket_ofs = ofs;
+        self.bucket_items = items;
     }
 
     /// 半径内的槽（粗筛，不排序）。结果写入 `out`（清空后填充）。
@@ -602,7 +607,7 @@ pub fn blocking_aggregate(
         let dist = isqrt_i64(dx * dx + dz * dz).max(1);
         // 距离权重：近的威胁更该防（1/(1 + d/40m)，Q16）
         let dw = (65_536i64 * 40_000) / (40_000 + dist);
-        let mut weight = (t.confidence as i64 * dw) >> 16;
+        let weight = (t.confidence as i64 * dw) >> 16;
         if weight <= 0 {
             continue;
         }
@@ -632,7 +637,7 @@ pub fn blocking_aggregate(
 }
 
 fn isqrt_i64(n: i64) -> i64 {
-    sim_math::isqrt_i64(n as u64) as i64
+    sim_math::isqrt_i64(n)
 }
 
 /// 在**任意位置**（不一定站在槽里）评估遮挡度 —— 验收与调试用。
