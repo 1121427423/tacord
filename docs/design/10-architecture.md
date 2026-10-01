@@ -361,6 +361,69 @@ TunnelGraph {
 | 冒烟 | macOS runner 上启动 → 加载关卡 → 跑 30 秒 → 退出码 0 → 日志无 `ERROR` |
 | 玩法验证 | 每周一次"可玩性评审"，用 §90 的量化指标打分 |
 
+## 10.12 踩坑记录（Godot 绑定 / Web 导出）
+
+这一节的每一条都是**静默失败**：编译能过、CI 能过，只有跑起来才发现不对。
+排查成本都在 30 分钟以上，所以逐条记下来。CI 里已加对应 lint / 断言防止复发。
+
+### 10.12.1 Godot 的 ConfigFile 里 `#` 不是注释
+
+`.gdextension`、`export_presets.cfg`、`project.godot` 都是 ConfigFile，
+由 `core/variant/variant_parser.cpp: parse_tag_assign_eof()` 解析：
+
+- 只有 `;` 是注释标记，`#` **不是**；
+- 换行只做 `line++`，**不清空**正在累积的 key。
+
+于是写在 `[libraries]` 段里的 `# 中文注释` 会被整段拼进**下一个** key：
+
+```
+# 路径必须在 res:// 内部……
+linux.x86_64 = "res://bin/libtacord_gdext.so"
+```
+
+解析出的 key 实际是 `"# 路径必须在 res:// 内部……linux.x86_64"`，而 GDExtension 的库选择规则是
+「标签全是 feature 且标签数最多者胜出」（`gdextension_library_loader.cpp: find_extension_library`），
+于是 Linux 上一个 key 都匹配不到，报
+`No GDExtension library found for current OS and architecture (linux.x86_64)` ——
+**但 macOS 是正常的**（它的 key 恰好排在注释之后），所以这是个"只坏一半"的坑。
+
+`export_presets.cfg` 同样中招：`variant/extensions_support` 被注释污染 →
+导出时**根本没开 GDExtension 支持**，产物里没有侧模块，也**没有任何报错**。
+
+**规则：这些文件里一个 `#` 都不要写，注释一律用 `;`。** CI 有 lint 拦截。
+
+### 10.12.2 库路径必须在 `res://` 内部
+
+`.gdextension` 里写 `res://../gdext/target/release/xxx.so` 桌面端能跑（Godot 允许跳出项目目录），
+但 `--export-release` **不会**把项目外的文件拷进产物，Web 导出必然缺 wasm。
+统一放到 `res://bin/`（该目录已在 `godot/.gitignore` 里，不入库）。
+
+### 10.12.3 nightly 的 `-Z emscripten-wasm-eh` 已被移除
+
+网上教程（含 gdext book 的 Export to Web 一章）都让加：
+
+```toml
+"-Z", "emscripten-wasm-eh=false",
+```
+
+2026 年的 nightly 已经不认这个选项，直接 `error: unknown unstable option`。
+`gdext/.cargo/config.toml` 里只保留 `SIDE_MODULE=2` / `default-visibility=hidden` /
+`link-native-libraries=no` / `-enable-emscripten-cxx-exceptions=0`。
+
+### 10.12.4 Godot 导出失败时退出码仍是 0
+
+`--export-release` 失败（缺文件、模板不对）时进程退出码是 **0**，
+只看退出码会让 CI 误报成功。判定必须同时看：
+
+1. 日志里有没有 `Project export for preset "xxx" failed`；
+2. 产物清单齐不齐（`index.html` / `index.wasm` / `index.pck` / `<扩展名>.wasm`）。
+
+### 10.12.5 Actions 的 stdout 在沙箱里读不到
+
+沙箱下载不了 Actions 日志（zip 0 字节、`gh run view --log` EOF）。
+所以 CI 里的每一步都要把诊断信息 `tee` 到文件，再经 contents API 推到 `ci/artifacts` 分支。
+**只 `echo` 到 stdout 的诊断等于没写。**
+
 ## 10.11 实现清单（DoD，架构层）
 
 - [x] `sim_math` 定点库 + 查表三角 + 定点随机（**M0.1 已完成**：45 项单测，release + debug(溢出检查) 双构建通过；表 `tools/gen_trig.py` 烘焙入库）
