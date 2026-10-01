@@ -329,14 +329,26 @@ jobs:
         shell: bash
         run: |
           set +e
-          echo "--- 冒烟前的状态 ---"
-          pwd
-          ls -la godot/bin
-          cat godot/tacord.gdextension
-          "$GODOT_BIN" --headless --path godot --script res://scripts/smoke.gd 2>&1 | tee /tmp/godot-smoke.log
-          code=$?
-          echo "smoke 退出码: $code"
-          exit $code
+          # 所有诊断都要写进 /tmp/godot-smoke.log —— Actions 的 stdout 在沙箱里读不到
+          code=0
+          {
+            date -u
+            echo "run_id=$GITHUB_RUN_ID runner=$RUNNER_OS $RUNNER_ARCH"
+            uname -m
+            pwd
+            echo "--- godot/bin ---"
+            ls -la godot/bin
+            echo "--- tacord.gdextension ---"
+            cat godot/tacord.gdextension
+            echo "--- Godot 认为的 feature ---"
+            "$GODOT_BIN" --headless --path godot --script res://scripts/features.gd
+            echo "--- smoke ---"
+            "$GODOT_BIN" --headless --path godot --script res://scripts/smoke.gd
+            code=$?
+            echo "smoke 退出码: $code"
+            echo "$code" > /tmp/smoke-code
+          } 2>&1 | tee /tmp/godot-smoke.log
+          exit "$(cat /tmp/smoke-code)"
 
       - name: 记录输出
         if: always()
