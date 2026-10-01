@@ -322,7 +322,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          timeout 300 "$GODOT_BIN" --headless --path godot --editor --quit 2>&1 | tee /tmp/godot-import.log
+          bash tools/ci_timeout.sh 300 "$GODOT_BIN" --headless --path godot --editor --quit 2>&1 | tee /tmp/godot-import.log
           echo "import 退出码: $?"
 
       - name: 冒烟：扩展能加载 + 能 tick + 校验和
@@ -341,9 +341,9 @@ jobs:
             echo "--- tacord.gdextension ---"
             cat godot/tacord.gdextension
             echo "--- Godot 认为的 feature ---"
-            timeout 120 "$GODOT_BIN" --headless --path godot --script res://scripts/features.gd
+            bash tools/ci_timeout.sh 120 "$GODOT_BIN" --headless --path godot --script res://scripts/features.gd
             echo "--- smoke ---"
-            timeout 180 "$GODOT_BIN" --headless --path godot --script res://scripts/smoke.gd
+            bash tools/ci_timeout.sh 180 "$GODOT_BIN" --headless --path godot --script res://scripts/smoke.gd
             code=$?
             echo "smoke 退出码: $code"
             echo "$code" > /tmp/smoke-code
@@ -358,7 +358,7 @@ jobs:
           set +e
           code=0
           {
-            timeout 180 "$GODOT_BIN" --headless --path godot --script res://scripts/scene_smoke.gd
+            bash tools/ci_timeout.sh 180 "$GODOT_BIN" --headless --path godot --script res://scripts/scene_smoke.gd
             code=$?
             echo "scene 退出码: $code"
             echo "$code" > /tmp/scene-code
@@ -475,7 +475,7 @@ jobs:
         run: |
           set +e
           mkdir -p godot/dist
-          timeout 900 "$GODOT_BIN" --headless --path godot --export-release "Web" 2>&1 | tee /tmp/web-export.log
+          bash tools/ci_timeout.sh 900 "$GODOT_BIN" --headless --path godot --export-release "Web" 2>&1 | tee /tmp/web-export.log
           echo "--- 产物 ---"
           ls -la godot/dist
           # Godot 导出失败时**退出码仍然是 0**，只能靠"产物是否齐全 + 日志里有没有 failed"来判定
