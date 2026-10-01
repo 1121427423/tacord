@@ -304,14 +304,19 @@ jobs:
       - name: 构建 GDExtension
         working-directory: gdext
         run: |
-          set -e
+          set +e
           export GODOT4_BIN="$GODOT_BIN"
-          cargo build --release --features api-custom 2>&1 | tee /tmp/godot-build.log
-          # 库必须落到 res:// 内部（godot/bin/），否则导出时不会被打包进产物
-          mkdir -p ../godot/bin
-          cp target/release/libtacord_gdext.so    ../godot/bin/ 2>/dev/null || true
-          cp target/release/libtacord_gdext.dylib ../godot/bin/ 2>/dev/null || true
-          ls -la ../godot/bin
+          {
+            cargo build --release --features api-custom
+            echo "--- 产物 ---"
+            find target/release -maxdepth 1 -name "libtacord_gdext*" -o -maxdepth 1 -name "*.so" -o -maxdepth 1 -name "*.dylib" | head
+            # 库必须落到 res:// 内部（godot/bin/），否则导出时不会被打包进产物
+            mkdir -p ../godot/bin
+            cp -v target/release/libtacord_gdext.so    ../godot/bin/
+            cp -v target/release/libtacord_gdext.dylib ../godot/bin/
+            echo "--- godot/bin ---"
+            ls -la ../godot/bin
+          } 2>&1 | tee /tmp/godot-build.log
 
       - name: 导入工程
         shell: bash
@@ -412,11 +417,15 @@ jobs:
         run: |
           set -e
           export GODOT4_BIN="$GODOT_BIN"
-          cargo +nightly build -Zbuild-std --target wasm32-unknown-emscripten --release \
-            --features web-nothreads 2>&1 | tee /tmp/web-build.log
-          mkdir -p ../godot/bin
-          cp target/wasm32-unknown-emscripten/release/tacord_gdext.wasm ../godot/bin/
-          ls -la ../godot/bin
+          {
+            cargo +nightly build -Zbuild-std --target wasm32-unknown-emscripten --release \
+              --features web-nothreads
+            echo "--- wasm 产物 ---"
+            find target/wasm32-unknown-emscripten/release -maxdepth 1 -name "*.wasm" | head
+            mkdir -p ../godot/bin
+            cp -v target/wasm32-unknown-emscripten/release/tacord_gdext.wasm ../godot/bin/
+            ls -la ../godot/bin
+          } 2>&1 | tee /tmp/web-build.log
 
       - name: 导出 Web
         run: |
@@ -447,6 +456,25 @@ jobs:
           git add -A
           git commit -m "web build ${GITHUB_SHA:0:8}" || echo "no changes"
           git push -f origin ci/web-preview
+          # 日志存回 ci/artifacts，便于排查（沙箱读不到 Actions 日志）
+          cd "${GITHUB_WORKSPACE}"
+          git checkout -f "${GITHUB_SHA}" 2>/dev/null || true
+          put_file() {
+            [ -f "$2" ] || return 0
+            content=$(base64 < "$2" | tr -d '\n')
+            sha=$(gh api "repos/${GITHUB_REPOSITORY}/contents/$1?ref=ci/artifacts" --jq .sha 2>/dev/null)
+            if [ -n "$sha" ]; then
+              gh api -X PUT "repos/${GITHUB_REPOSITORY}/contents/$1" \
+                -f message="ci: $1 (${GITHUB_SHA:0:8})" -f content="$content" \
+                -f branch=ci/artifacts -f sha="$sha" > /dev/null
+            else
+              gh api -X PUT "repos/${GITHUB_REPOSITORY}/contents/$1" \
+                -f message="ci: $1 (${GITHUB_SHA:0:8})" -f content="$content" \
+                -f branch=ci/artifacts > /dev/null
+            fi
+          }
+          put_file ci/perf/web-build.log /tmp/web-build.log
+          put_file ci/perf/web-export.log /tmp/web-export.log
           exit 0
 
   # ─────────────────────────── 静态检查与参数 ───────────────────────────
