@@ -1,16 +1,6 @@
-ERROR: Can't open dynamic library, file not found: '/home/runner/work/tacord/tacord/godot/../gdext/target/release/libtacord_gdext.so'.
-   at: open_dynamic_library (drivers/unix/os_unix.cpp:1063)
-ERROR: GDExtension dynamic library not found: 'res://tacord.gdextension'.
-   at: open_library (core/extension/gdextension.cpp:810)
-ERROR: Error loading extension: 'res://tacord.gdextension'.
-   at: load_extensions (core/extension/gdextension_manager.cpp:333)
+Initialize godot-rust (API v4.7.2.stable.official, runtime v4.7.2.stable.official, safeguards balanced)
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
-SCRIPT ERROR: Parse Error: Could not find type "SimRoot" in the current scope.
-          at: GDScript::reload (res://scripts/smoke.gd:12)
-SCRIPT ERROR: Parse Error: Cannot infer the type of "cs0" variable because the value doesn't have a set type.
-          at: GDScript::reload (res://scripts/smoke.gd:15)
-SCRIPT ERROR: Parse Error: Cannot infer the type of "pos0" variable because the value doesn't have a set type.
-          at: GDScript::reload (res://scripts/smoke.gd:18)
-ERROR: Failed to load script "res://scripts/smoke.gd" with error "Parse error".
-   at: load (modules/gdscript/gdscript_resource_format.cpp:46)
+[smoke] units=400 dim=64 tick=300 world_checksum=0x-2cee6ebc143f203c pos_checksum=0x3f2f61446b0811bd pos0=(11.096, 0.0, 10.996)
+[smoke] PASS
+[tacord] units=400 segments=4128 checksum=0x-2cee6ebc143f203c
