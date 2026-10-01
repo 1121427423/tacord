@@ -521,6 +521,17 @@ jobs:
         continue-on-error: true
         run: cargo clippy --all-targets
 
+      # Godot 的 ConfigFile（.gdextension / export_presets.cfg / project.godot）用 VariantParser 解析：
+      # 只有 ";" 是注释，"#" 不是；而且换行不清空正在累积的 key，
+      # 于是 "# 中文注释" 会被整段拼进下一个 key —— 表现为"配置明明写了却不生效"，极难排查。
+      - name: Godot 配置里不许有 "#" 注释
+        run: |
+          if grep -rnE "^[[:space:]]*#" godot/tacord.gdextension godot/export_presets.cfg godot/project.godot; then
+            echo "::error::Godot 的 ConfigFile 不支持 # 注释（会被拼进下一个 key），改用 ; 或直接删掉"
+            exit 1
+          fi
+          echo "✅ .gdextension / export_presets.cfg / project.godot 里没有 # 注释"
+
   constants:
     name: 参数与查找表一致性
     runs-on: ubuntu-latest

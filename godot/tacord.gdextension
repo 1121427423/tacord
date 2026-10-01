@@ -6,11 +6,21 @@ reloadable = true
 
 [libraries]
 
-# 路径必须在 res:// **内部**：导出时 Godot 要把这些文件一起拷进产物，
-# 放在项目外（res://../…）桌面端能跑，但导出（尤其 Web）会漏文件。
+; 注意：这个文件是 ConfigFile 格式，而 Godot 的 ConfigFile 只认 ";" 注释 —— "#" 不是注释。
+; 更坑的是换行不清空正在累积的 key，所以 "# 中文注释" 会被整段拼进下一个 key：
+;   曾经写成 `# 路径必须在 res:// 内部` 注释，结果 key 变成
+;   "# 路径必须在 res:// 内部……linux.x86_64"，Linux 上就再也匹配不到库了
+;   （macOS 恰好因为注释被上一个 key 吃掉而幸免 —— 极其隐蔽）。
+; 结论：这个文件里一个 "#" 都不要写。CI 有 lint 会拦。
+
+; 路径必须在 res:// **内部**：导出时 Godot 要把这些文件一起拷进产物，
+; 放在项目外（res://../…）桌面端能跑，但导出（尤其 Web）会漏文件。
 linux.x86_64 = "res://bin/libtacord_gdext.so"
+linux.arm64 = "res://bin/libtacord_gdext.so"
 macos.arm64 = "res://bin/libtacord_gdext.dylib"
+macos.x86_64 = "res://bin/libtacord_gdext.dylib"
 windows.x86_64 = "res://bin/tacord_gdext.dll"
-# Web：单线程侧模块（与 export_presets.cfg 里的 "Thread Support = off" 对应）
+
+; Web：单线程侧模块（与 export_presets.cfg 里的 variant/thread_support=false 对应）
 web.debug.wasm32 = "res://bin/tacord_gdext.wasm"
 web.release.wasm32 = "res://bin/tacord_gdext.wasm"
