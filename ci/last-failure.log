@@ -1,41 +1,9 @@
-commit: 8a2315c641710a829f1f4f1e1a4768e2117ca323
+commit: fd20d494547e3de8bba65bea19d8ae918d5bda8d
 branch: arena/01a0f7c2-tacord
-date: Thu Oct  1 20:35:16 UTC 2026
+date: Thu Oct  1 20:39:14 UTC 2026
 job status: failure
 
 === cargo build (short) ===
-[1m[92m   Compiling[0m sim_cli v0.1.0 (/home/runner/work/tacord/tacord/sim/crates/sim_cli)
-crates/sim_cli/src/main.rs:28:41: [1m[91merror[0m: expected `,`, found `"（§20.1.8 反脚本化）\n\: expected `,`
-                \n\
-                --maxdist 0 表示不限长（最坏情况）；掩体评分用 30000、感知用 80000。
-                示例：sim_cli bench --units 400 --ticks 20000 --rays 4 --world 256 --maxdist 30000 --seed 1\n\
-               示例：sim_cli nav --units 400 --ticks 6000 --world 256 --rebuild 15 --breach 1500 --seed 1\n\
-               示例：sim_cli cover --world 256 --trials 200 --seed 1"`
-crates/sim_cli/src/main.rs:12:42: [1m[33mwarning[0m: unused import: `CoverKind`
-[1m[33mwarning[0m: `sim_cli` (bin "sim_cli") generated 1 warning
-[1m[91merror[0m: could not compile `sim_cli` (bin "sim_cli") due to 1 previous error; 1 warning emitted
-
-=== cargo test (nocapture) ===
-[1m[92m   Compiling[0m sim_cli v0.1.0 (/home/runner/work/tacord/tacord/sim/crates/sim_cli)
-[1m[92m   Compiling[0m sim_core v0.1.0 (/home/runner/work/tacord/tacord/sim/crates/sim_core)
-[1m[92m   Compiling[0m sim_math v0.1.0 (/home/runner/work/tacord/tacord/sim/crates/sim_math)
-[1m[91merror[0m[1m: expected `,`, found `"（§20.1.8 反脚本化）\n\[0m
-       [1m         \n\[0m
-       [1m         --maxdist 0 表示不限长（最坏情况）；掩体评分用 30000、感知用 80000。[0m
-       [1m         示例：sim_cli bench --units 400 --ticks 20000 --rays 4 --world 256 --maxdist 30000 --seed 1\n\[0m
-       [1m        示例：sim_cli nav --units 400 --ticks 6000 --world 256 --rebuild 15 --breach 1500 --seed 1\n\[0m
-       [1m        示例：sim_cli cover --world 256 --trials 200 --seed 1"`[0m
-  [1m[94m--> [0mcrates/sim_cli/src/main.rs:28:41
-   [1m[94m|[0m
-[1m[94m28[0m [1m[94m|[0m            cover        掩体派生 + "挨打会不会自己找掩体"（§20.1.8 反脚本化）\n\
-   [1m[94m|[0m [1m[91m _______________________________________________________^[0m
-[1m[94m29[0m [1m[94m|[0m [1m[91m|[0m          \n\
-[1m[94m30[0m [1m[94m|[0m [1m[91m|[0m          --maxdist 0 表示不限长（最坏情况）；掩体评分用 30000、感知用 80000。
-[1m[94m31[0m [1m[94m|[0m [1m[91m|[0m          示例：sim_cli bench --units 400 --ticks 20000 --rays 4 --world 256 --maxdist 30000 --seed 1\n\
-[1m[94m32[0m [1m[94m|[0m [1m[91m|[0m         示例：sim_cli nav --units 400 --ticks 6000 --world 256 --rebuild 15 --breach 1500 --seed 1\n\
-[1m[94m33[0m [1m[94m|[0m [1m[91m|[0m         示例：sim_cli cover --world 256 --trials 200 --seed 1"
-   [1m[94m|[0m [1m[91m|______________________________________________________________^[0m [1m[91mexpected `,`[0m
-
 [1m[33mwarning[0m[1m: unused import: `CoverKind`[0m
   [1m[94m--> [0mcrates/sim_cli/src/main.rs:12:42
    [1m[94m|[0m
@@ -44,6 +12,82 @@ crates/sim_cli/src/main.rs:12:42: [1m[33mwarning[0m: unused import: `CoverKin
    [1m[94m|[0m
    [1m[94m= [0m[1mnote[0m: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
 
-[1m[33mwarning[0m: `sim_cli` (bin "sim_cli" test) generated 1 warning
-[1m[91merror[0m: could not compile `sim_cli` (bin "sim_cli" test) due to 1 previous error; 1 warning emitted
-[1m[33mwarning[0m: build failed, waiting for other jobs to finish...
+[1m[33mwarning[0m: `sim_cli` (bin "sim_cli") generated 1 warning (run `cargo fix --bin "sim_cli" -p sim_cli` to apply 1 suggestion)
+[1m[92m    Finished[0m `release` profile [optimized] target(s) in 0.00s
+
+=== cargo test (nocapture) ===
+[1m[33mwarning[0m[1m: unused import: `CoverKind`[0m
+  [1m[94m--> [0mcrates/sim_cli/src/main.rs:12:42
+   [1m[94m|[0m
+[1m[94m12[0m [1m[94m|[0m     blocking_at, pick_cover, CoverField, CoverKind, Posture, Threat,
+   [1m[94m|[0m                                          [1m[33m^^^^^^^^^[0m
+   [1m[94m|[0m
+   [1m[94m= [0m[1mnote[0m: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+[1m[33mwarning[0m: `sim_cli` (bin "sim_cli" test) generated 1 warning (run `cargo fix --bin "sim_cli" -p sim_cli --tests` to apply 1 suggestion)
+[1m[92m    Finished[0m `release` profile [optimized] target(s) in 0.00s
+[1m[92m     Running[0m unittests src/main.rs (target/release/deps/sim_cli-1320e17642fdad2e)
+
+running 1 test
+test tests::truncate_shortens_to_the_limit_without_collapsing ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[92m     Running[0m unittests src/lib.rs (target/release/deps/sim_core-14091a5ac2bac8ee)
+
+running 34 tests
+
+thread 'cover::tests::blocking_high_when_behind_wall' (2713) panicked at crates/sim_core/src/world.rs:174:9:
+dim 必须是 chunk 的整数倍
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread 'cover::tests::low_wall_vs_high_wall_classification' (2714) panicked at crates/sim_core/src/world.rs:174:9:
+dim 必须是 chunk 的整数倍
+test cover::tests::angular_factor_front_is_full_and_back_is_zero ... ok
+
+thread 'cover::tests::wall_generates_slots_on_both_sides' (2715) panicked at crates/sim_core/src/world.rs:174:9:
+dim 必须是 chunk 的整数倍
+test cover::tests::blocking_high_when_behind_wall ... FAILED
+test cover::tests::low_wall_vs_high_wall_classification ... FAILED
+test nav::tests::bridge_deck_is_walkable_but_you_cannot_climb_it ... ok
+test cover::tests::wall_generates_slots_on_both_sides ... FAILED
+test nav::tests::compute_is_deterministic ... ok
+test nav::tests::destruction_opens_a_path ... ok
+test nav::tests::flat_ground_is_walkable_everywhere ... ok
+test nav::tests::flow_field_shortest_path_on_flat_ground ... ok
+test nav::tests::flow_field_routes_around_a_wall ... ok
+test nav::tests::no_corner_cutting ... ok
+test nav::tests::radius_limits_the_field ... ok
+test nav::tests::step_toward_moves_at_most_one_step ... ok
+test nav::tests::step_up_and_down_limits ... ok
+test nav::tests::unreachable_target_yields_empty_field ... ok
+test nav::tests::void_columns_are_unwalkable ... ok
+test nav::tests::wall_top_is_standable_but_unreachable_on_foot ... ok
+test nav::tests::wire_blocks_the_column_and_is_not_a_surface ... ok
+test ray::tests::corners_are_not_tunneled_through ... ok
+test ray::tests::destroyed_wall_stops_blocking ... ok
+test ray::tests::directed_cases ... ok
+test ray::tests::hit_point_lies_between_endpoints ... ok
+test ray::tests::overhang_gap_is_walkable_and_shootable ... ok
+test ray::tests::is_deterministic_across_repeated_runs ... ok
+test ray::tests::wire_blocks_move_but_not_sight_or_bullets ... ok
+test tests::floor_div_matches_floor_semantics ... ok
+test world::tests::checksum_is_deterministic_and_order_sensitive ... ok
+test world::tests::damage_destroys_and_marks_dirty ... ok
+test world::tests::flat_world_has_ground_everywhere ... ok
+test world::tests::material_flags_are_independent ... ok
+test world::tests::max_segments_per_column_enforced ... ok
+test world::tests::out_of_bounds_is_empty_not_panic ... ok
+test world::tests::segments_stay_sorted_and_allow_gaps ... ok
+test world::tests::take_dirty_respects_max_for_amortized_rebuild ... ok
+
+failures:
+
+failures:
+    cover::tests::blocking_high_when_behind_wall
+    cover::tests::low_wall_vs_high_wall_classification
+    cover::tests::wall_generates_slots_on_both_sides
+
+test result: FAILED. 31 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[1m[91merror[0m: test failed, to rerun pass `-p sim_core --lib`
