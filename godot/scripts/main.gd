@@ -66,7 +66,7 @@ func _build_cubes() -> void:
 	box.size = cube_size
 	var mat := StandardMaterial3D.new()
 	# unlit：有光没光都看得见，避免"没配光源"表现成黑屏
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNLIT
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.albedo_color = Color(0.30, 0.85, 1.0)
 	box.material = mat
 
@@ -105,7 +105,7 @@ func _build_ground() -> void:
 	g.rotation_degrees = Vector3(-90.0, 0.0, 0.0)
 	g.position = Vector3(half * 0.5, -0.02, half * 0.5)
 	var m := StandardMaterial3D.new()
-	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNLIT
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	m.albedo_color = Color(0.17, 0.19, 0.24)
 	g.material_override = m
 	add_child(g)
