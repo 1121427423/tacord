@@ -13,9 +13,10 @@ ERROR: GDExtension dynamic library not found: 'res://tacord.gdextension'.
 [  83% ] [90m[1mfirst_scan_filesystem[22m | Starting file scan...[39m[0m
 [92m[ DONE ][39m [1mfirst_scan_filesystem[22m
 [0m
-[   0% ] [90m[1mupdate_scripts_classes[22m | Started Registering global classes... (2 steps)[39m[0m
+[   0% ] [90m[1mupdate_scripts_classes[22m | Started Registering global classes... (3 steps)[39m[0m
 [   0% ] [90m[1mupdate_scripts_classes[22m | [39m[0m
-[  33% ] [90m[1mupdate_scripts_classes[22m | [39m[0m
+[  25% ] [90m[1mupdate_scripts_classes[22m | [39m[0m
+[  50% ] [90m[1mupdate_scripts_classes[22m | [39m[0m
 [92m[ DONE ][39m [1mupdate_scripts_classes[22m
 [0m
 ERROR: No GDExtension library found for current OS and architecture (linux.x86_64) in configuration file: res://tacord.gdextension
@@ -30,16 +31,18 @@ ERROR: Failed to load script "res://scripts/main.gd" with error "Parse error".
 ERROR: Cannot get class 'SimRoot'.
    at: _instantiate_internal (core/object/class_db.cpp:587)
 [   1% ] [90m[1msavepack[22m | Storing File: res://.godot/exported/133200997/export-3ad5c15c4f3250da0cc7c1af1770d85f-main.scn[39m[0m
-[  26% ] [90m[1msavepack[22m | Storing File: res://scripts/main.gdc[39m[0m
-[  50% ] [90m[1msavepack[22m | Storing File: res://scripts/smoke.gdc[39m[0m
-[  74% ] [90m[1msavepack[22m | Storing File: res://tacord.gdextension[39m[0m
-[  74% ] [90m[1msavepack[22m | Storing File: res://scenes/main.tscn.remap[39m[0m
-[  74% ] [90m[1msavepack[22m | Storing File: res://scripts/main.gd.remap[39m[0m
-[  74% ] [90m[1msavepack[22m | Storing File: res://scripts/smoke.gd.remap[39m[0m
-[  74% ] [90m[1msavepack[22m | Storing File: res://.godot/global_script_class_cache.cfg[39m[0m
-[  74% ] [90m[1msavepack[22m | Storing File: res://.godot/extension_list.cfg[39m[0m
-[  74% ] [90m[1msavepack[22m | Storing File: res://.godot/uid_cache.bin[39m[0m
-[  74% ] [90m[1msavepack[22m | Storing File: res://project.binary[39m[0m
+[  21% ] [90m[1msavepack[22m | Storing File: res://scripts/features.gdc[39m[0m
+[  40% ] [90m[1msavepack[22m | Storing File: res://scripts/main.gdc[39m[0m
+[  60% ] [90m[1msavepack[22m | Storing File: res://scripts/smoke.gdc[39m[0m
+[  79% ] [90m[1msavepack[22m | Storing File: res://tacord.gdextension[39m[0m
+[  79% ] [90m[1msavepack[22m | Storing File: res://scenes/main.tscn.remap[39m[0m
+[  79% ] [90m[1msavepack[22m | Storing File: res://scripts/features.gd.remap[39m[0m
+[  79% ] [90m[1msavepack[22m | Storing File: res://scripts/main.gd.remap[39m[0m
+[  79% ] [90m[1msavepack[22m | Storing File: res://scripts/smoke.gd.remap[39m[0m
+[  79% ] [90m[1msavepack[22m | Storing File: res://.godot/global_script_class_cache.cfg[39m[0m
+[  79% ] [90m[1msavepack[22m | Storing File: res://.godot/extension_list.cfg[39m[0m
+[  79% ] [90m[1msavepack[22m | Storing File: res://.godot/uid_cache.bin[39m[0m
+[  79% ] [90m[1msavepack[22m | Storing File: res://project.binary[39m[0m
 [92m[ DONE ][39m [1msavepack[22m
 [0m
 SCRIPT ERROR: Parse Error: Could not find type "SimRoot" in the current scope.
