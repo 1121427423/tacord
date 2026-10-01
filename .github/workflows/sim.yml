@@ -306,7 +306,7 @@ jobs:
         run: |
           set -e
           export GODOT4_BIN="$GODOT_BIN"
-          cargo build --release --features api-custom
+          cargo build --release --features api-custom 2>&1 | tee /tmp/godot-build.log
 
       - name: 导入工程
         shell: bash
@@ -346,6 +346,7 @@ jobs:
           }
           put_file "ci/perf/godot-smoke-${{ matrix.os }}.log" /tmp/godot-smoke.log
           put_file "ci/perf/godot-import-${{ matrix.os }}.log" /tmp/godot-import.log
+          put_file "ci/perf/godot-build-${{ matrix.os }}.log" /tmp/godot-build.log
           exit 0
 
   # ─────────────────────────── 静态检查与参数 ───────────────────────────
