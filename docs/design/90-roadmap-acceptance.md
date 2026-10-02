@@ -238,7 +238,30 @@ M0.2（`sim_core` 体素世界 + 破坏管线 + 体素 DDA 射线 + `sim_cli ben
 - [x] **M1-A 接进 Godot 场景**：400 个单位"挨打就找掩体"在浏览器里看得见
       （sim 侧验收 96% → 引擎内 64² 城 523 槽 / 1401 段墙，300 tick 内峰值 135/400 进掩体，
       ubuntu + macos-15 headless 冒烟全绿），带 `[web]` 的构建已部署
-- [ ] **浏览器里人工确认 Web 版（M1-A）**（已自动验过一遍，见下一条，仍建议人眼过一次）：打开 <https://1121427423.github.io/tacord/>
+- [ ] **浏览器里人工确认 Web 版（M1-A）**（自动验过三轮，见下；仍建议人眼过一次）
+
+### 20.1.9 Web 版的三层问题（都是 headless CI 看不见的）
+
+按发现顺序，每一层都只能靠真浏览器截图/控制台发现：
+
+1. **侧模块根本没加载** —— `WebAssembly.instantiate(): Import #35 "env" "__cpp_exception":
+   tag import requires a WebAssembly.Tag`。证据是 canvas 停在 300×150 的 HTML 默认尺寸。
+2. **相机在 43 m 外** —— 32 m 的城只占画面 8%（截图 91% 是纯黑），
+   看着和"没画面"一模一样。
+3. **士兵全画成纯白** —— MultiMesh 的 `use_colors` 只管把颜色送到 GPU，
+   材质这边还得 `vertex_color_use_as_albedo = true` 才会去读。
+   （顺带一个坑：士兵每帧改写 transform，而 MultiMesh 的包围盒默认只在
+   分配时算一次 ⇒ 必须显式给 `custom_aabb`，否则整批被视锥裁掉。）
+
+**判据（已固化进 `tools/web_smoke.mjs`，CI 里自动跑）**：
+控制台有 `[tacord]`（扩展起来了）+ 非黑像素 ≥5% + 平均亮度 ≥6/255
++ 30 秒内变化像素 ≥0.2%（画面是活的）+ 无 requestfailed。
+只看"截图有多少字节"是不够的：纯黑画面也能压出几 KB。
+
+**教训**：渲染问题 headless 一个都测不出来，单测和校验和再全也没用。
+凡是要给人看的改动，都得走一遍真浏览器，而且要看**像素统计**，不能只看
+"没报错"。软件渲染（SwiftShader）帧率是个位数，判"活着"的观察窗口
+要给到 30 秒。：打开 <https://1121427423.github.io/tacord/>
       （CI 已部署，提交信息带 `[web]` 触发重新部署）；
       要求：HUD 有 tick / units / fps / world 与 cover 校验和、城（灰盒子）看得见、
       400 个方块在动，机枪开火时方块由亮蓝转橙再转绿（冲掩体 → 藏好并趴下/蹲下）。
