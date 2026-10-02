@@ -130,9 +130,36 @@ try {
       `[smoke] 6 秒内变化的像素 ${mv.toFixed(2)}%` +
         (changed ? `（变化处平均色 rgb(${Math.round(sr / changed)},${Math.round(sg / changed)},${Math.round(sb / changed)})）` : ''),
     );
-    note(`[smoke] 动的东西占比 ${mv.toFixed(2)}%（低于 0.2% = 画面是死的）`);
     changedPct = mv;
     movingColor = changed ? [sr / changed, sg / changed, sb / changed] : null;
+
+    // 变化像素落在画面的哪个位置：只看总数分不清"士兵在动"和"HUD 的数字在跳"。
+    // HUD 在左上角 1/8 见方；士兵散布在整个城上。
+    const G = 8;
+    const grid = Array.from({ length: G }, () => new Array(G).fill(0));
+    const gridTot = Array.from({ length: G }, () => new Array(G).fill(0));
+    const white = Array.from({ length: G }, () => new Array(G).fill(0));
+    for (let y = 0; y < a.height; y += 2) {
+      for (let x = 0; x < a.width; x += 2) {
+        const i = (y * a.width + x) * 4;
+        const gy = Math.floor((y / a.height) * G);
+        const gx = Math.floor((x / a.width) * G);
+        gridTot[gy][gx]++;
+        const dr = Math.abs(a.data[i] - b.data[i]);
+        const dg = Math.abs(a.data[i + 1] - b.data[i + 1]);
+        const db = Math.abs(a.data[i + 2] - b.data[i + 2]);
+        if (dr + dg + db > 40) grid[gy][gx]++;
+        const r = b.data[i];
+        const g2 = b.data[i + 1];
+        const b2 = b.data[i + 2];
+        if (r > 200 && g2 > 200 && b2 > 200) white[gy][gx]++;
+      }
+    }
+    const pct = (m) => m.map((row, y) => row.map((v, x) => ((v * 100) / gridTot[y][x]).toFixed(0).padStart(3)));
+    note('[smoke] 变化像素分布（%，8×8 网格；左上角是 HUD）：');
+    for (const row of pct(grid)) note('   ' + row.join(' '));
+    note('[smoke] 接近纯白的像素分布（%，士兵方块是 unlit 白 + instance color）：');
+    for (const row of pct(white)) note('   ' + row.join(' '));
   }
 
   const problems = [];
