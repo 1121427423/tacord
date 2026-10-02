@@ -1,9 +1,9 @@
 [smoke] 打开 http://127.0.0.1:8080/index.html
-[error] Failed to load resource: the server responded with a status of 404 (File not found)
-[error] Failed to load resource: the server responded with a status of 404 (File not found)
-[smoke] sim 起来=false（等了 90.1s）
-[smoke] 页面上没有 canvas！
-[smoke] 截图 17962 字节
-::error::控制台里没有 [tacord] —— 扩展没起来或主场景没跑
-::error::截图只有 17962 字节：几乎肯定是纯黑/空白画面
-[smoke] FAIL
+[log] Initialize godot-rust (API v4.7.2.stable.official, runtime v4.7.2.stable.official, safeguards balanced)
+[log] Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+[log] OpenGL API OpenGL ES 3.0 (WebGL 2.0 (OpenGL ES 3.0 Chromium)) - Compatibility - Using Device: WebKit - WebKit WebGL
+[log] Build configuration: Emscripten 4.0.20, single-threaded, GDExtension support.
+[log] [tacord] units=400 segments=5497 dim_cells=64 cover_slots=523 checksum=0x27dc657ce3fe2bd8
+[smoke] sim 起来=true（等了 2.0s）
+[smoke] 截图 34092 字节
+[smoke] PASS
