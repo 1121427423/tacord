@@ -12,7 +12,7 @@ use sim_core::cover::{
     bearing_dir, blocking_aggregate, blocking_at, cover_cell, cover_half_angle_deg, pick_cover,
     CoverField, Threat, COVER_DEAD_BLOCK, COVER_OK_BLOCK,
 };
-use sim_core::engage::{engage_dry_count, EngageSim};
+use sim_core::{engage_dry_count, EngageSim};
 use sim_core::gen::build_city;
 use sim_core::CELL_MM;
 use sim_core::nav::{nearest_walkable, step_toward, FlowField, HeightField, NavParams};
@@ -1005,7 +1005,7 @@ fn cmd_engage(args: &[String]) {
     }
     let step_ms = t1.elapsed().as_millis();
     let per_tick_us = if ticks > 0 {
-        (step_ms * 1000) / ticks.max(1)
+        (step_ms * 1000) / u128::from(ticks.max(1))
     } else {
         0
     };
