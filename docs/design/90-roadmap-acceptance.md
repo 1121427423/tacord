@@ -247,6 +247,14 @@ M0.2（`sim_core` 体素世界 + 破坏管线 + 体素 DDA 射线 + `sim_cli ben
       M1-A 换成 `sim_core::gen::build_city` 之后世界校验和变成 `0x27DC657CE3FE2BD8`；
       位置校验和每次跑都随场景状态变，**只用于"Web 与桌面同一 tick 是否一致"的比对，
       不再当作固定值门槛**（要固定值就用 `world_checksum` 与 `cover_checksum`）
+- [x] **Web 版真正的黑屏原因（查了三个月，一直误判成"相机没配好"）**：
+      侧模块 `tacord_gdext.wasm` 在浏览器里根本没加载起来 ——
+      `WebAssembly.instantiate(): Import #35 "env" "__cpp_exception": tag import requires a WebAssembly.Tag`。
+      rustc 1.93 起 emscripten 目标默认打开 WASM 异常处理，侧模块于是去 import 一个 tag，
+      而 Godot 的 main module 不导出它 ⇒ 引擎压根没起来（canvas 还停在 300×150 的默认尺寸）。
+      修法：`gdext/.cargo/config.toml` 加 `-Z emscripten-wasm-eh=false`。
+      **教训**：headless CI 不渲染，这类问题只能靠真浏览器抓 —— 已加
+      `[browsersmoke]` 触发的"真 Chrome + SwiftShader 打开已部署页面 + 截图"的 CI job
 - [ ] macOS arm64 导出产物（A5 ad-hoc 签名）—— 用户已同意**排在 Web 之后**
 - [ ] `tools/check_geo.py`：可掩体/可破坏渲染物件必须关联柱段（R4，M3）
 - [ ] 把 A8 相机无关性测试写进 `.github/workflows/sim.yml`（R1，M0.2）

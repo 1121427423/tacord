@@ -599,7 +599,12 @@ jobs:
   # 产物上传后本地 `gh run download` 就能看图。
   web-smoke:
     name: 真浏览器看一眼（Chrome + SwiftShader）
-    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[browsersmoke]')
+    # needs web + always()：提交信息里只有 [browsersmoke] 时 web job 会被跳过，
+    # 那就看**已经在 Pages 上跑着的那份**；两个标记都带时，先导出再看新的那份。
+    needs: web
+    if: >-
+      always() && github.event_name == 'push'
+      && contains(github.event.head_commit.message, '[browsersmoke]')
     runs-on: ubuntu-latest
     steps:
       - name: 取工具与脚本
