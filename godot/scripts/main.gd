@@ -25,12 +25,12 @@ extends Node3D
 const CELL_M := 0.5  # 与 sim 的 CELL_MM = 500 对应
 
 @export var auto_advance := true
-@export var cube_width := 0.4
+@export var cube_width := 0.6
 
 # 姿态高度（米）：站 / 蹲 / 趴
-const H_STAND := 0.9
-const H_CROUCH := 0.6
-const H_PRONE := 0.3
+const H_STAND := 1.3
+const H_CROUCH := 0.8
+const H_PRONE := 0.4
 
 const C_PATROL := Color(0.30, 0.85, 1.00)
 const C_RUSH := Color(1.00, 0.62, 0.20)
@@ -103,6 +103,11 @@ func _build_cubes() -> void:
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.use_colors = true   # 每个士兵按状态上色（不开这个 set_instance_color 是空操作）
 	mm.mesh = box
+	# **必须**给 custom_aabb：士兵每帧都被改写 transform，而 MultiMesh 的包围盒
+	# 默认只在分配时算一次 —— 不写死一个覆盖全图的盒子，整批实例会被视锥裁掉，
+	# 表现是"城在、人一个都看不见"，而且 headless 里完全看不出来。
+	var span := float(sim.dim_cells()) * CELL_M
+	mm.custom_aabb = AABB(Vector3(-8.0, -8.0, -8.0), Vector3(span + 16.0, 32.0, span + 16.0))
 	mm.instance_count = sim.unit_count()
 	_mm = MultiMeshInstance3D.new()
 	_mm.multimesh = mm
@@ -122,7 +127,9 @@ func _build_walls() -> void:
 	var box := BoxMesh.new()
 	box.size = Vector3.ONE
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.66, 0.63, 0.58)
+	# 别再往上调：0.66 的 albedo 乘上高度提亮（最高 0.92）再乘光照，
+	# 顶面会直接烧成纯白 —— 截图里和 unlit 的士兵混成一片，谁是谁都分不出来
+	mat.albedo_color = Color(0.50, 0.48, 0.44)
 	mat.roughness = 0.95
 	box.material = mat
 
@@ -172,7 +179,7 @@ func _build_environment() -> void:
 	e.background_color = Color(0.06, 0.08, 0.11)
 	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	e.ambient_light_color = Color(0.45, 0.50, 0.60)
-	e.ambient_light_energy = 0.9
+	e.ambient_light_energy = 0.8
 	env.environment = e
 	add_child(env)
 
@@ -184,7 +191,7 @@ func _build_environment() -> void:
 	# 会报 "Invalid assignment of property or key"。
 	# 不开阴影：400 人 + 上千个盒子，Web 上为这点观感不值。
 	var sun := DirectionalLight3D.new()
-	sun.light_energy = 1.2
+	sun.light_energy = 1.0
 	sun.rotation_degrees = Vector3(-45.0, 35.0, 0.0)
 	add_child(sun)
 
@@ -218,10 +225,22 @@ func _build_hud() -> void:
 	add_child(layer)
 
 
+var _frames := 0
+
+
 func _process(delta: float) -> void:
 	if sim != null and auto_advance:
 		sim.advance(delta)
 	_sync()
+	# 每 2 秒往控制台打一行实况。为什么需要：headless 不渲染，浏览器里也看不到
+	# Actions 的 stdout —— 出了"画面看着不对"这种事，只能靠这一行判断
+	# 到底是 sim 没跑、跑得慢、还是渲染的问题（fps 与 tick 分开看就知道）。
+	_frames += 1
+	if _frames % 60 == 0 and sim != null:
+		print("[tacord] 实况 frame=", _frames, " tick=", sim.tick_count(),
+				" fps=", snappedf(Engine.get_frames_per_second(), 0.1),
+				" in_cover=", sim.in_cover_count(), "/", sim.unit_count(),
+				" pos0=", str(sim.unit_position(0)))
 
 
 func _sync() -> void:
