@@ -1,12 +1,12 @@
-Fri Oct  2 12:47:44 UTC 2026
-run_id=37008804011 runner=Linux X64
+Fri Oct  2 13:01:43 UTC 2026
+run_id=37010245173 runner=Linux X64
 x86_64
 /home/runner/work/tacord/tacord
 --- godot/bin ---
-total 5108
-drwxr-xr-x 2 runner runner    4096 Oct  2 12:47 .
-drwxr-xr-x 6 runner runner    4096 Oct  2 12:47 ..
--rwxr-xr-x 1 runner runner 5218504 Oct  2 12:47 libtacord_gdext.so
+total 5188
+drwxr-xr-x 2 runner runner    4096 Oct  2 13:01 .
+drwxr-xr-x 6 runner runner    4096 Oct  2 13:01 ..
+-rwxr-xr-x 1 runner runner 5303064 Oct  2 13:01 libtacord_gdext.so
 --- tacord.gdextension ---
 [configuration]
 
@@ -69,7 +69,8 @@ Initialize godot-rust (API v4.7.2.stable.official, runtime v4.7.2.stable.officia
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
 [tacord] units=400 segments=5497 dim_cells=64 cover_slots=523 checksum=0x27dc657ce3fe2bd8
-[smoke] units=400 dim=64 tick=300 world_checksum=0x27dc657ce3fe2bd8 pos_checksum=0x4625a972faed8d01 pos0=(14.47, 0.0, 29.007)
-[smoke] M1-A：掩体槽=523 点射=2 同时在掩体里最多=135 此刻=5 cover_checksum=0x9073084462868b23
+[smoke] units=400 dim=64 tick=300 world_checksum=0x27dc657ce3fe2bd8 pos_checksum=0xada9be7be0698e2f pos0=(19.395, 0.0, 15.996)
+[smoke] M1-A：掩体槽=523 点射=3364 同时在掩体里最多=113 此刻=104 cover_checksum=0x9073084462868b23
+[smoke] M1-B：开火=3364 命中=355 近失=2205 倒地=173 被压制=173 红队=54 蓝队=173
 [smoke] PASS
 smoke 退出码: 0
