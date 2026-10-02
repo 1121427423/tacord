@@ -22,5 +22,9 @@ Initialize godot-rust (API v4.7.2.stable.official, runtime v4.7.2.stable.officia
 [  16% ] [90m[1mloading_editor_layout[22m | Loading docks...[39m[0m
 [92m[ DONE ][39m [1mloading_editor_layout[22m
 [0m
-timeout: the monitored command dumped core
-tools/ci_timeout.sh: line 26:  2549 Aborted                 timeout "$secs" "$@"
+SCRIPT ERROR: Parse Error: Cannot find member "SHADING_MODE_UNLIT" in base "BaseMaterial3D".
+          at: GDScript::reload (res://scripts/main.gd:69)
+SCRIPT ERROR: Parse Error: Cannot find member "SHADING_MODE_UNLIT" in base "BaseMaterial3D".
+          at: GDScript::reload (res://scripts/main.gd:108)
+ERROR: Failed to load script "res://scripts/main.gd" with error "Parse error".
+   at: load (modules/gdscript/gdscript_resource_format.cpp:46)
