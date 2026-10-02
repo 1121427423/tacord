@@ -79,7 +79,13 @@ func _setup_sim() -> void:
 func _place_camera() -> void:
 	var half := float(sim.dim_cells()) * CELL_M * 0.5
 	var center := Vector3(half, 0.0, half)
-	_camera.position = center + Vector3(0.0, half * 1.6, half * 2.2)
+	# 俯视 3/4 视角。之前是 center + (0, half*1.6, half*2.2)，离城 43 m ——
+	# 32 m 的城只占画面 8%（浏览器截图里 91% 是黑的），看着像"没画面"。
+	# 现在按"把整座城塞进画面"反推：垂直 FOV 45°、16:9 ⇒ 水平视野 ≈ 72°，
+	# 可见宽度 ≈ 2·d·tan(36°)；要让 32 m 的城占到七成，d ≈ 半幅 × 2.1。
+	_camera.fov = 45.0
+	var d := half * 2.1
+	_camera.position = center + Vector3(0.0, d * 0.62, d * 0.78)   # ≈ 38° 俯角
 	_camera.look_at(center, Vector3.UP)
 	_camera.far = 500.0
 
@@ -192,7 +198,8 @@ func _build_ground() -> void:
 	g.rotation_degrees = Vector3(-90.0, 0.0, 0.0)
 	g.position = Vector3(half * 0.5, -0.02, half * 0.5)
 	var m := StandardMaterial3D.new()
-	m.albedo_color = Color(0.16, 0.17, 0.20)
+	# 别调太暗：0.16 的 albedo 经环境光照之后几乎是纯黑，和城外的背景色分不开
+	m.albedo_color = Color(0.26, 0.27, 0.30)
 	m.roughness = 1.0
 	g.material_override = m
 	add_child(g)

@@ -15,6 +15,7 @@
 // 且**截图不能小得离谱**（纯黑 PNG 只有几 KB）。
 import fs from 'node:fs';
 import puppeteer from 'puppeteer';
+import { PNG } from 'pngjs';
 
 const URL = process.env.WEB_URL || 'http://127.0.0.1:8080/index.html';
 const WAIT_MS = Number(process.env.WAIT_MS || 90_000);
@@ -78,9 +79,29 @@ try {
   const size = fs.existsSync('/tmp/web-shot.png') ? fs.statSync('/tmp/web-shot.png').size : 0;
   note(`[smoke] 截图 ${size} 字节`);
 
+  // 光看字节数不够：纯黑画面的 PNG 也能压出几 KB。直接数像素 ——
+  // "画面里有多少比例不是黑的"才是"Web 展示正确"的硬指标。
+  let lit = 0;
+  let sum = 0;
+  let total = 0;
+  if (fs.existsSync('/tmp/web-shot.png')) {
+    const png = PNG.sync.read(fs.readFileSync('/tmp/web-shot.png'));
+    for (let i = 0; i < png.data.length; i += 4 * 7) {
+      const b = (png.data[i] + png.data[i + 1] + png.data[i + 2]) / 3;
+      if (b > 24) lit++;
+      sum += b;
+      total++;
+    }
+  }
+  const litPct = total ? (lit * 100) / total : 0;
+  const mean = total ? sum / total : 0;
+  note(`[smoke] 非黑像素 ${litPct.toFixed(1)}%  平均亮度 ${mean.toFixed(1)}/255`);
+
   const problems = [];
   if (!booted) problems.push('控制台里没有 [tacord] —— 扩展没起来或主场景没跑');
   if (size < 20_000) problems.push(`截图只有 ${size} 字节：几乎肯定是纯黑/空白画面`);
+  if (litPct < 5.0) problems.push(`画面里只有 ${litPct.toFixed(1)}% 不是黑的（相机没对上？场景空的？）`);
+  if (mean < 6.0) problems.push(`平均亮度只有 ${mean.toFixed(1)}/255（整屏几乎全黑）`);
   if (logs.some((l) => l.includes('requestfailed'))) problems.push('有请求失败（wasm 没送到？）');
 
   if (problems.length) {

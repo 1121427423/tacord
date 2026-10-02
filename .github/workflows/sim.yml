@@ -642,7 +642,7 @@ jobs:
           curl -sS -o /dev/null -w "index.html -> %{http_code}\n" http://127.0.0.1:8080/index.html
 
       - name: 装 puppeteer（自带 Chrome）
-        run: npm init -y >/dev/null 2>&1; npm i puppeteer --no-audit --no-fund 2>&1 | tail -3
+        run: npm init -y >/dev/null 2>&1; npm i puppeteer pngjs --no-audit --no-fund 2>&1 | tail -3
 
       - name: 跑浏览器冒烟
         run: node tools/web_smoke.mjs
