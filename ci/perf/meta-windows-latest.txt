@@ -1,5 +1,5 @@
 os: windows-latest
 arch: x86_64
-cpu: AMD EPYC 7763 64-Core Processor                
-commit: fce58bb415c570dd1ec898f65d57b3ffba14f739
-date: Fri Oct  2 07:22:15 UTC 2026
+cpu: Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz
+commit: 1c84ce85dbb762a7a4ff3ca1d78f73f6724d1cf6
+date: Fri Oct  2 07:30:48 UTC 2026
