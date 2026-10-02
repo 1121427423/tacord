@@ -5,23 +5,23 @@
 [log] Build configuration: Emscripten 4.0.20, single-threaded, GDExtension support.
 [log] [tacord] units=400 segments=5497 dim_cells=64 cover_slots=523 checksum=0x27dc657ce3fe2bd8
 [smoke] sim 起来=true（等了 2.0s）
-[log] [tacord] 实况 frame=60 tick=235 fps=1.0 in_cover=133/400 状态 巡逻/冲/藏=260/7/133 poscs=0xe987fb8771af465 pos0=(17.525, 0.0, 27.975) mm0=(17.525, 0.65, 27.975)
-[smoke] 截图 45198 字节
-[smoke] 非黑像素 52.5%  平均亮度 81.9/255
-[smoke] 30 秒内变化的像素 0.39%（变化处平均色 rgb(178,115,113)）
+[log] [tacord] 实况 frame=60 tick=464 fps=1.0 in_cover=101/400 状态 巡逻/冲/藏=291/8/101 poscs=0xd888c55a084f1a1b pos0=(19.395, 0.0, 15.996) mm0=(19.395, 0.15, 15.996)
+[smoke] 截图 49572 字节
+[smoke] 非黑像素 51.9%  平均亮度 80.3/255
+[smoke] 30 秒内变化的像素 0.39%（变化处平均色 rgb(123,128,135)）
 [smoke] 变化像素分布（%，8×8 网格；左上角是 HUD）：
-     8   3   0   0   0   0   0   0
-     6   4   0   0   0   0   0   0
+     4   2   0   0   0   0   0   0
+    10  11   0   0   0   0   0   0
      0   0   0   0   0   0   0   0
-     0   0   0   1   5   0   0   0
-     0   0   0   0   2   0   0   0
+     0   0   0   0   0   0   0   0
+     0   0   0   0   0   0   0   0
      0   0   0   0   0   0   0   0
      0   0   0   0   0   0   0   0
      0   0   0   0   0   0   0   0
 [smoke] 接近纯白的像素分布（%，士兵方块是 unlit 白 + instance color）：
-    11   6   0   0   0   0   0   0
+     8   3   0   0   0   0   0   0
+    10   9   0   0   0   0   0   0
     11   8   0   0   0   0   0   0
-     4   3   0   0   0   0   0   0
      0   0   0   0   0   0   0   0
      0   0   0   0   0   0   0   0
      0   0   0   0   0   0   0   0
