@@ -8,8 +8,10 @@
 //! 注意：这里可以用浮点与 `std::time`（不进 sim），但**任何影响模拟结果的输入都必须来自
 //! 确定性 PRNG**，否则回放会分叉。
 
+use sim_core::CELL_MM;
 use sim_core::cover::{
-    bearing_dir, blocking_at, cover_cell, cover_half_angle_deg, pick_cover, CoverField, Threat,
+    bearing_dir, blocking_aggregate, blocking_at, cover_cell, cover_half_angle_deg, pick_cover,
+    CoverField, Threat,
 };
 use sim_core::nav::{nearest_walkable, step_toward, FlowField, HeightField, NavParams};
 use sim_core::ray::{blocked, RayMode};
@@ -864,7 +866,7 @@ fn cmd_cover(args: &[String]) {
     println!("flank_rate_pct={flank_pct:.1}");
 
     // ── §20.1.8 第 3 条：墙被炸掉 → 0.5 秒内判定失效（blocking < 0.2）──
-    let (kill_ok, kill_n) = verify_cover_destroyed(&world, &hf, &field, &mut rng, trials);
+    let (kill_ok, kill_n, kill_res) = verify_cover_destroyed(&world, &hf, &field, &mut rng, trials);
     let kill_pct = if kill_n > 0 {
         kill_ok as f64 * 100.0 / kill_n as f64
     } else {
@@ -872,7 +874,10 @@ fn cmd_cover(args: &[String]) {
     };
     println!();
     println!("掩体被打掉就失效（§20.1.8-3）: {kill_n} 次");
-    println!("  炸掉墙后 blocking < 0.2: {kill_ok}/{kill_n} = {kill_pct:.1}%   （目标 100%）");
+    println!("  炸掉墙后 0.5 s 内判定失效: {kill_ok}/{kill_n} = {kill_pct:.1}%   （目标 100%）");
+    if kill_res > 0 {
+        println!("    （其中 {kill_res} 次打掉后仍被别的墙挡着：场景里还有遮挡，不计入判据）");
+    }
     println!("destroy_rate_pct={kill_pct:.1}");
     println!("───────────────────────────────────────────────");
 }
@@ -949,21 +954,33 @@ fn verify_flank_abandon(
     (ok, n)
 }
 
-/// §20.1.8-3：把掩体打掉，0.5 秒（15 tick）内该位置必须判定为失效（blocking < 0.2）。
+/// §20.1.8-3：掩体被打掉 → 0.5 秒（15 tick）内该位置判定为失效（blocking < 0.2）。
 ///
-/// 顺带验证 `CoverField::rebuild_area` 这条增量重建路径（平时没人走）。
-/// 每个 trial 都在自己的副本上销毁，不污染后面的验证。
+/// 判据分三层，缺一不可：
+/// 1. **掩体场认账**：`CoverField::rebuild_area` 之后，这处掩体要么从场里消失，要么
+///    退化到挡不住 —— 否则"墙没了 AI 还蹲在那儿"没人抓得到。
+/// 2. **几何失效**：挡住这条视线的只有这堵墙时，打掉之后 `blocking_at < 0.2`。
+///    视线上还有别的楼的（巷战里常见）单独记为"残余"，不作门禁 —— 那是场景，
+///    不是掩体系统。
+/// 3. **局部重建不能误伤**：一次 3×3 增量重建只许动掉个位数槽位。把整个场清空
+///    也算"更新了"，但不能算过。
+///
+/// 顺带第一次跑通 `rebuild_area` 这条增量重建路径（M1 前半没人走它）。
+/// 威胁放在 2.5 m 而不是 8 m：8 m 的射线上隔着别的楼，"墙没了但还是被别的墙
+/// 挡着"是场景问题，会淹没真正要测的信号。
 fn verify_cover_destroyed(
     world_in: &World,
     hf_in: &HeightField,
     field_in: &CoverField,
     rng: &mut Pcg32,
     trials: u32,
-) -> (u32, u32) {
+) -> (u32, u32, u32) {
     let p = NavParams::default();
+    let before_len = field_in.len() as i64;
     let mut ok = 0u32;
     let mut n = 0u32;
-    for _ in 0..trials.min(20) {
+    let mut residual = 0u32; // 打掉之后"别的墙"还在挡的次数（只统计，不作门禁）
+    for _ in 0..trials.min(40) {
         if field_in.is_empty() {
             break;
         }
@@ -971,14 +988,22 @@ fn verify_cover_destroyed(
         let mut hf = hf_in.clone();
         let mut field = field_in.clone();
 
-        let idx = rng.next_range(field.len() as u32) as usize;
-        let slot = match field.slot(idx as u32) {
+        let slot = match field.slot(rng.next_range(field.len() as u32)) {
             Some(s) => *s,
             None => continue,
         };
+        // 掩体所在柱（槽在它旁边，法线指向它）
+        let (wx, wz) = cover_cell(&slot);
+        let dim = world.dim_cells as i64;
+        if wx < 1 || wz < 1 || wx + 1 >= dim || wz + 1 >= dim {
+            continue;
+        }
+        if world.segments(wx as u32, wz as u32).len() <= 1 {
+            continue; // 没有可打的实体（战壕/坑之类），这条 trial 没意义
+        }
         let (sx, sz) = (slot.center_x_mm(), slot.center_z_mm());
         let (fx, fz) = bearing_dir(slot.normal);
-        let d = 8_000i64;
+        let d = 2_500i64;
         let front = Threat {
             x_mm: (sx + (fx.0 as i64 * d >> 16)) as i32,
             y_mm: 0,
@@ -989,8 +1014,29 @@ fn verify_cover_destroyed(
         if blocking_at(&world, &hf, sx, sz, None, &[front]).0 < 45_875 {
             continue;
         }
-        // 打掉掩体那根柱的所有非地面段（地面是第一段，留着）
-        let (wx, wz) = cover_cell(&slot);
+        // 这条 2.5 m 视线上，除了要打的那格，还有没有别的墙？
+        let mut others = 0i32;
+        for step in 1..=25i64 {
+            let dd = step * 100;
+            let px = sx + ((fx.0 as i64 * dd) >> 16);
+            let pz = sz + ((fz.0 as i64 * dd) >> 16);
+            let cx = px / CELL_MM;
+            let cz = pz / CELL_MM;
+            if cx == wx && cz == wz {
+                continue;
+            }
+            if cx < 0 || cz < 0 || cx >= dim || cz >= dim {
+                continue;
+            }
+            if world
+                .segments(cx as u32, cz as u32)
+                .iter()
+                .any(|s| s.top_mm > 400)
+            {
+                others += 1;
+            }
+        }
+        // 打掉：这根柱的非地面段全清（地面是第一段，留着 —— 人还得站得住）
         while world.segments(wx as u32, wz as u32).len() > 1 {
             let last = (world.segments(wx as u32, wz as u32).len() - 1) as u32;
             world.remove_segment(wx as u32, wz as u32, last);
@@ -998,10 +1044,30 @@ fn verify_cover_destroyed(
         hf.rebuild_area(&world, wx - 1, wz - 1, wx + 1, wz + 1, &p);
         field.rebuild_area(&world, &hf, wx - 1, wz - 1, wx + 1, wz + 1);
         n += 1;
-        // 0.5 s 的判据：重建是同步的，所以"多久失效"取决于重评估周期（5 Hz = 6 tick < 15 tick）
-        if blocking_at(&world, &hf, sx, sz, None, &[front]).0 < 13_107 {
+
+        // 判据 1：场里这处掩体没了，或退化到挡不住
+        let still = field
+            .slots
+            .iter()
+            .find(|s| s.cx == slot.cx && s.cz == slot.cz && s.normal == slot.normal)
+            .copied();
+        let field_ok = match still {
+            None => true,
+            Some(s) => blocking_aggregate(&world, &s, None, &[front]).0 < 13_107,
+        };
+        // 判据 2：一次局部重建只该动掉个位数槽位
+        let after_len = field.len() as i64;
+        let len_ok = after_len <= before_len && before_len - after_len <= 16;
+        // 判据 3：0.5 s 的判据 —— 重建是同步的，所以"多久失效"取决于重评估周期
+        // （5 Hz = 6 tick < 15 tick）
+        let after = blocking_at(&world, &hf, sx, sz, None, &[front]).0;
+        let geo_ok = others == 0 && after < 13_107;
+        if others > 0 && after >= 13_107 {
+            residual += 1;
+        }
+        if field_ok && len_ok && (others > 0 || geo_ok) {
             ok += 1;
         }
     }
-    (ok, n)
+    (ok, n, residual)
 }
