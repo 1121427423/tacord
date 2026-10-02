@@ -42,9 +42,3 @@ ERROR: GDExtension dynamic library not found: 'res://tacord.gdextension'.
 [  82% ] [90m[1msavepack[22m | Storing File: res://project.binary[39m[0m
 [92m[ DONE ][39m [1msavepack[22m
 [0m
-ERROR: Failed to open 'res://bin/tacord_gdext.wasm'.
-   at: copy (core/io/dir_access.cpp:426)
-ERROR: Export: Could not write file: "tacord_gdext.wasm".
-   at: add_message (./editor/export/editor_export_platform.h:270)
-ERROR: Project export for preset "Web" failed.
-   at: _fs_changed (editor/editor_node.cpp:1417)
