@@ -653,6 +653,7 @@ jobs:
           name: web-smoke
           path: |
             /tmp/web-shot.png
+            /tmp/web-shot2.png
             /tmp/web-console.log
           if-no-files-found: warn
 
