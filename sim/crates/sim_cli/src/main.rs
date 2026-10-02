@@ -706,6 +706,10 @@ fn cmd_cover(args: &[String]) {
         ff.set_radius_cells(40); // 只算 20 m 内的场：全图 Dijkstra 太贵，掩体转移不需要
         let mut goal: Option<(i64, i64)> = None;
         for tick in 0..ticks_3s {
+            // 已经藏好了就原地不动（"别为了挪窝把脑袋露出去"）
+            if blocking_at(&world, &hf, pos.0, pos.1, None, &[threat]).0 >= 45_875 {
+                continue;
+            }
             // 5 Hz 重新选槽（constants.ron 的 time.cover_period），并重算到它的流场
             if goal.is_none() || tick % cover_period == 0 {
                 if let Some(c) = pick_cover(

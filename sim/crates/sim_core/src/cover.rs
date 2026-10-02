@@ -70,6 +70,13 @@ pub const REACH_HORIZON_TICKS: i64 = 60;
 /// 用冲刺而不是步行：挨打时冲进掩体是真实行为（constants.ron 里 sprint 就是给这个用的），
 /// 而且只有在这个速度下"3 秒到达"才是个有意义的约束。
 pub const RUSH_MM_PER_TICK: i64 = 100;
+/// "这处掩体够用了"的遮挡度门槛（0.7 × 65536）。
+///
+/// 用途：候选里只要有能挡住的，就**不再比较分数，直接挑最近的那一个**。
+/// 这是真人的行为 —— 挨打时是"冲进最近的能挡住的地方"，不是"全场最优解"。
+/// 少了这条，评分里 block 权重(1.0)远大于 reach(0.35)，
+/// 士兵会为了多 5% 的遮挡多跑 6 m（实测：因此 27% 的 trial 在 3 秒内没走到）。
+pub const COVER_OK_BLOCK: i32 = 45_875;
 
 // 评分权重（ai_weights.ron 的 M1 子集，Q16 口径：1.0 = 65536）
 impl CoverKind {
@@ -881,11 +888,34 @@ pub fn pick_cover(
     let one = [primary.unwrap_or(Threat { x_mm: 0, y_mm: 0, z_mm: 0, confidence: 0 })];
     let primary_slice: &[Threat] = if primary.is_some() { &one } else { &[] };
 
-    let mut best: Option<CoverChoice> = None;
+    // 第一轮：算出每个候选的遮挡度，找"够用的"（block ≥ COVER_OK_BLOCK）
+    let mut blocks: Vec<(u32, i32)> = Vec::with_capacity(cands.len()); // (槽, blocking)
     for &i in cands {
         let s = &field.slots[i as usize];
-        let b = blocking_aggregate(w, s, posture, primary_slice);
-        let sc = score_slot(w, field, s, from_x_mm, from_z_mm, b, primary_slice);
+        blocks.push((i, blocking_aggregate(w, s, posture, primary_slice).0));
+    }
+    // 够了就挑最近的：挨打时冲进最近的能挡住的地方，而不是全场最优
+    let ok_near = blocks
+        .iter()
+        .filter(|(_, b)| *b >= COVER_OK_BLOCK)
+        .min_by_key(|&(i, _)| {
+            let s = &field.slots[*i as usize];
+            let dx = s.center_x_mm() - from_x_mm;
+            let dz = s.center_z_mm() - from_z_mm;
+            dx * dx + dz * dz
+        })
+        .copied();
+    if let Some((i, b)) = ok_near {
+        return Some(CoverChoice {
+            slot: i,
+            score: Q16(b),
+        });
+    }
+
+    let mut best: Option<CoverChoice> = None;
+    for &(i, b) in blocks.iter() {
+        let s = &field.slots[i as usize];
+        let sc = score_slot(w, field, s, from_x_mm, from_z_mm, Q16(b), primary_slice);
         if best.map_or(true, |c| sc.0 > c.score.0) {
             best = Some(CoverChoice { slot: i, score: sc });
         }
