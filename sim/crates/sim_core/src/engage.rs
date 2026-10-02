@@ -360,6 +360,13 @@ pub struct Sim {
 
 impl Sim {
     pub fn new(dim_cells: u32, units_n: usize, seed: u64) -> Self {
+        // 先拦在门口：`World::new_flat` 的 chunk_cells 是 32，dim 不是 32 的整数倍
+        // 时会在很深的断言里炸，报错信息完全看不出是尺寸的问题。
+        assert!(
+            dim_cells > 0 && dim_cells % 32 == 0,
+            "dim_cells 必须是 32 的整数倍（world 的 chunk_cells = 32），收到 {}",
+            dim_cells
+        );
         let mut rng = Pcg32::new(seed, 11);
         let world = crate::gen::build_city(&mut rng, dim_cells);
         let p = NavParams::default();
@@ -1404,7 +1411,7 @@ mod tests {
     #[test]
     fn engagement_runs_and_produces_casualties() {
         // 32 人小图跑 600 tick：得有人开枪、有人被压制、有人倒下
-        let mut sim = Sim::new(48, 32, 7);
+        let mut sim = Sim::new(64, 32, 7);
         for _ in 0..1_200 {
             sim.step();
         }
@@ -1421,7 +1428,7 @@ mod tests {
     #[test]
     fn ammo_runs_out_and_positions_go_quiet() {
         // 弹药必须真的会打光：跑到最后应该有人在换弹或彻底没弹
-        let mut sim = Sim::new(48, 32, 11);
+        let mut sim = Sim::new(64, 32, 11);
         for _ in 0..3_000 {
             sim.step();
         }
