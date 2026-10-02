@@ -2,17 +2,8 @@
 [1m[92m     Locking[0m 25 packages to highest compatible versions
 [1m[92m   Compiling[0m sim_math v0.1.0 (/home/runner/work/tacord/tacord/sim/crates/sim_math)
 [1m[92m   Compiling[0m sim_core v0.1.0 (/home/runner/work/tacord/tacord/sim/crates/sim_core)
-[1m[33mwarning[0m[1m: unused variable: `team`[0m
-   [1m[94m--> [0m/home/runner/work/tacord/tacord/sim/crates/sim_core/src/engage.rs:629:89
-    [1m[94m|[0m
-[1m[94m629[0m [1m[94m|[0m     fn apply_near_miss(&mut self, ax: i64, ay: i64, az: i64, bx: i64, by: i64, bz: i64, team: u8) {
-    [1m[94m|[0m                                                                                         [1m[33m^^^^[0m [1m[33mhelp: if this is intentional, prefix it with an underscore: `_team`[0m
-    [1m[94m|[0m
-    [1m[94m= [0m[1mnote[0m: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
-
-[1m[33mwarning[0m: `sim_core` (lib) generated 1 warning (run `cargo fix --lib -p sim_core` to apply 1 suggestion)
 [1m[92m   Compiling[0m tacord_gdext v0.1.0 (/home/runner/work/tacord/tacord/gdext)
-[1m[92m    Finished[0m `release` profile [optimized] target(s) in 2.81s
+[1m[92m    Finished[0m `release` profile [optimized] target(s) in 4.20s
 --- 产物 ---
 target/release/libtacord_gdext.d
 target/release/libtacord_gdext.so
@@ -20,6 +11,6 @@ target/release/libtacord_gdext.so
 cp: cannot stat 'target/release/libtacord_gdext.dylib': No such file or directory
 --- godot/bin ---
 total 5108
-drwxr-xr-x 2 runner runner    4096 Oct  2 12:39 .
-drwxr-xr-x 5 runner runner    4096 Oct  2 12:39 ..
--rwxr-xr-x 1 runner runner 5218504 Oct  2 12:39 libtacord_gdext.so
+drwxr-xr-x 2 runner runner    4096 Oct  2 12:47 .
+drwxr-xr-x 5 runner runner    4096 Oct  2 12:47 ..
+-rwxr-xr-x 1 runner runner 5218504 Oct  2 12:47 libtacord_gdext.so
