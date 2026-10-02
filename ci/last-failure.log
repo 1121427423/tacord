@@ -1,6 +1,6 @@
-commit: 038c3d2950582106bb98f3e930f6205258edcf51
+commit: 34654b9aa056848ba16cdbc9adb26bcb948dd551
 branch: arena/01a0f7c2-tacord
-date: Fri Oct  2 12:26:08 UTC 2026
+date: Fri Oct  2 12:31:20 UTC 2026
 job status: failure
 
 === cargo build (short) ===
@@ -65,23 +65,15 @@ test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 
 running 39 tests
 test cover::tests::angular_factor_front_is_full_and_back_is_zero ... ok
-
-thread 'engage::tests::ammo_runs_out_and_positions_go_quiet' (2738) panicked at crates/sim_core/src/world.rs:174:9:
-dim 必须是 chunk 的整数倍
-note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
-test engage::tests::ammo_runs_out_and_positions_go_quiet ... FAILED
-
-thread 'engage::tests::engagement_runs_and_produces_casualties' (2739) panicked at crates/sim_core/src/world.rs:174:9:
-dim 必须是 chunk 的整数倍
-test engage::tests::engagement_runs_and_produces_casualties ... FAILED
+test cover::tests::blocking_high_when_behind_wall ... ok
+test cover::tests::wall_generates_slots_on_both_sides ... ok
 test engage::tests::isqrt_is_exact_enough ... ok
 test engage::tests::near_miss_distance_is_perpendicular ... ok
 test engage::tests::segment_hits_sphere_only_when_close ... ok
 test nav::tests::bridge_deck_is_walkable_but_you_cannot_climb_it ... ok
-test cover::tests::blocking_high_when_behind_wall ... ok
 test nav::tests::compute_is_deterministic ... ok
 test nav::tests::destruction_opens_a_path ... ok
-test cover::tests::wall_generates_slots_on_both_sides ... ok
+test cover::tests::low_wall_vs_high_wall_classification ... ok
 test nav::tests::flat_ground_is_walkable_everywhere ... ok
 test nav::tests::flow_field_routes_around_a_wall ... ok
 test nav::tests::flow_field_shortest_path_on_flat_ground ... ok
@@ -94,12 +86,12 @@ test nav::tests::void_columns_are_unwalkable ... ok
 test nav::tests::wall_top_is_standable_but_unreachable_on_foot ... ok
 test nav::tests::wire_blocks_the_column_and_is_not_a_surface ... ok
 test ray::tests::corners_are_not_tunneled_through ... ok
-test cover::tests::low_wall_vs_high_wall_classification ... ok
 test ray::tests::destroyed_wall_stops_blocking ... ok
 test ray::tests::directed_cases ... ok
 test ray::tests::hit_point_lies_between_endpoints ... ok
-test ray::tests::is_deterministic_across_repeated_runs ... ok
 test ray::tests::overhang_gap_is_walkable_and_shootable ... ok
+test ray::tests::is_deterministic_across_repeated_runs ... ok
+test tests::floor_div_matches_floor_semantics ... ok
 test ray::tests::wire_blocks_move_but_not_sight_or_bullets ... ok
 test world::tests::checksum_is_deterministic_and_order_sensitive ... ok
 test world::tests::damage_destroys_and_marks_dirty ... ok
@@ -109,14 +101,18 @@ test world::tests::max_segments_per_column_enforced ... ok
 test world::tests::out_of_bounds_is_empty_not_panic ... ok
 test world::tests::segments_stay_sorted_and_allow_gaps ... ok
 test world::tests::take_dirty_respects_max_for_amortized_rebuild ... ok
-test tests::floor_div_matches_floor_semantics ... ok
+
+thread 'engage::tests::engagement_runs_and_produces_casualties' (2702) panicked at crates/sim_core/src/engage.rs:1419:9:
+近失弹要能压制到人
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test engage::tests::engagement_runs_and_produces_casualties ... FAILED
+test engage::tests::ammo_runs_out_and_positions_go_quiet ... ok
 
 failures:
 
 failures:
-    engage::tests::ammo_runs_out_and_positions_go_quiet
     engage::tests::engagement_runs_and_produces_casualties
 
-test result: FAILED. 37 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: FAILED. 38 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
 
 [1m[91merror[0m: test failed, to rerun pass `-p sim_core --lib`
