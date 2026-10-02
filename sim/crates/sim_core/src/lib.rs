@@ -10,6 +10,7 @@
 #![deny(clippy::float_arithmetic)]
 
 pub mod cover;
+pub mod engage;
 pub mod gen;
 pub mod nav;
 pub mod ray;
@@ -18,6 +19,10 @@ pub mod world;
 pub use cover::{
     angular_factor, blocking_aggregate, blocking_at, coverage_angle_deg, CoverChoice, CoverField,
     CoverKind, CoverSlot, Posture, Threat,
+};
+pub use engage::{
+    engage_dry_count, Part, PostureCode, Projectile, Sim as EngageSim, Soldier, State, Stats,
+    Weapon, HP_MAX, SUPP_HESITANT_Q16, SUPP_PINNED_Q16,
 };
 pub use nav::{FlowField, HeightField, NavParams};
 pub use ray::{blocked, cast, hit_point, RayHit, RayMode};

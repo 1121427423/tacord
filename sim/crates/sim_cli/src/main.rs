@@ -12,6 +12,7 @@ use sim_core::cover::{
     bearing_dir, blocking_aggregate, blocking_at, cover_cell, cover_half_angle_deg, pick_cover,
     CoverField, Threat, COVER_DEAD_BLOCK, COVER_OK_BLOCK,
 };
+use sim_core::engage::{engage_dry_count, EngageSim};
 use sim_core::gen::build_city;
 use sim_core::CELL_MM;
 use sim_core::nav::{nearest_walkable, step_toward, FlowField, HeightField, NavParams};
@@ -29,11 +30,13 @@ fn print_help() {
          nav          400 单位沿流场寻路：--units --ticks --world --rebuild --breach --seed\n\
          worldcheck   世界构建 + 射线自检 + 校验和\n\
          cover        掩体派生 + 挨打会不会自己找掩体（§20.1.8 反脚本化）\n\
+         engage       两班对射：开火 / 命中 / 近失压制 / 弹药打光（§6.3）\n\
          \n\
          --maxdist 0 表示不限长（最坏情况）；掩体评分用 30000、感知用 80000。
          示例：sim_cli bench --units 400 --ticks 20000 --rays 4 --world 256 --maxdist 30000 --seed 1\n\
         示例：sim_cli nav --units 400 --ticks 6000 --world 256 --rebuild 15 --breach 1500 --seed 1\n\
-        示例：sim_cli cover --world 256 --trials 200 --seed 1"
+        示例：sim_cli cover --world 256 --trials 200 --seed 1\n\
+        示例：sim_cli engage --world 64 --units 400 --ticks 900 --seed 1"
     );
 }
 
@@ -53,6 +56,7 @@ fn main() {
         "nav" => cmd_nav(&args),
         "worldcheck" => cmd_worldcheck(&args),
         "cover" => cmd_cover(&args),
+        "engage" => cmd_engage(&args),
         _ => print_help(),
     }
 }
@@ -977,4 +981,81 @@ fn verify_cover_destroyed(
         }
     }
     (ok, n, residual)
+}
+
+/// M1-B 交战：两班对射，看"每一颗子弹都算数"这条支柱有没有真的落地。
+///
+/// 判据（也是 §10.12 的验收项，CI 会跑）：
+///   - 有人开枪、有人被压制（近失弹）
+///   - 有人被命中、有人倒下
+///   - 打久了弹药会真的见底（换弹 / 打光）
+fn cmd_engage(args: &[String]) {
+    let dim = arg(args, "world", 64) as u32;
+    let units = arg(args, "units", 400) as usize;
+    let ticks = arg(args, "ticks", 900) as u64;
+    let seed = arg(args, "seed", 1);
+
+    let t0 = std::time::Instant::now();
+    let mut sim = EngageSim::new(dim, units, seed);
+    let build_ms = t0.elapsed().as_millis();
+
+    let t1 = std::time::Instant::now();
+    for _ in 0..ticks {
+        sim.step();
+    }
+    let step_ms = t1.elapsed().as_millis();
+    let per_tick_us = if ticks > 0 {
+        (step_ms * 1000) / ticks.max(1)
+    } else {
+        0
+    };
+
+    let alive = sim.soldiers.iter().filter(|s| s.alive()).count();
+    let mag_sum: i64 = sim.soldiers.iter().map(|s| i64::from(s.ammo_mag)).sum();
+    let spare_sum: i64 = sim.soldiers.iter().map(|s| i64::from(s.ammo_spare)).sum();
+    let supp_sum: i64 = sim.soldiers.iter().map(|s| s.supp).sum();
+    let supp_avg = if sim.soldiers.is_empty() {
+        0
+    } else {
+        supp_sum / sim.soldiers.len() as i64
+    };
+
+    println!("世界        : {} 柱（{} m）", dim, dim as i64 * 500 / 1000);
+    println!("兵力        : {} 人（两班各半）  建图 {} ms", sim.soldiers.len(), build_ms);
+    println!("跑完 {} tick : {} ms（{} µs/tick）", ticks, step_ms, per_tick_us);
+    println!("开火        : {} 发", sim.stats.shots);
+    println!("命中        : {} 发（{}%）", sim.stats.hits,
+             if sim.stats.shots > 0 { sim.stats.hits * 100 / sim.stats.shots } else { 0 });
+    println!("近失弹      : {} 次（压制来源）", sim.stats.near_misses);
+    println!("倒地        : {} 人（存活 {}）", sim.stats.downs, alive);
+    println!("在掩体里    : {} 人", sim.in_cover_count());
+    println!("被钉住      : {} 人（supp ≥ 0.60）", sim.pinned_count());
+    println!("平均压制    : {}（Q16，65536 = 满）", supp_avg);
+    println!("弹药        : 弹匣内 {} 发 / 备弹 {} 发 / 彻底打光 {} 人",
+             mag_sum, spare_sum, engage_dry_count(&sim));
+    println!("校验和      : pos=0x{:X}", sim.pos_checksum());
+
+    let mut bad = 0usize;
+    if sim.stats.shots == 0 {
+        println!("✗ 没人开枪");
+        bad += 1;
+    }
+    if sim.stats.near_misses == 0 {
+        println!("✗ 没有近失弹 —— 压制是假的");
+        bad += 1;
+    }
+    if sim.stats.hits == 0 {
+        println!("✗ 一发都没打中 —— 命中判定没生效");
+        bad += 1;
+    }
+    if sim.stats.downs == 0 {
+        println!("✗ 打这么久没人倒下 —— 伤害没结算");
+        bad += 1;
+    }
+    if bad == 0 {
+        println!("✓ 交战链路通了：开火 → 命中 → 倒地 → 压制");
+    } else {
+        println!("✗ {} 项没通过", bad);
+        std::process::exit(1);
+    }
 }
