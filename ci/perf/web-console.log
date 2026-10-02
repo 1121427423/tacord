@@ -1,0 +1,7 @@
+[smoke] 打开 http://127.0.0.1:8080/index.html
+[pageerror] WebAssembly.instantiate(): Import #35 "env" "__cpp_exception": tag import requires a WebAssembly.Tag
+[smoke] sim 起来=false（等了 90.1s）
+[smoke] 截图 497 字节
+::error::控制台里没有 [tacord] —— 扩展没起来或主场景没跑
+::error::截图只有 497 字节：几乎肯定是纯黑/空白画面
+[smoke] FAIL
