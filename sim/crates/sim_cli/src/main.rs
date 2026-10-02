@@ -129,7 +129,7 @@ fn build_city(rng: &mut Pcg32, dim_cells: u32) -> World {
     }
 
     // 车辆残骸：2×2 柱、1.2 m 金属（会被打穿）
-    for _ in 0..(dim / 16).max(4) {
+    for _ in 0..(dim / 12).max(6) {
         let x = rng.next_range(dim_cells) as i64;
         let z = rng.next_range(dim_cells) as i64;
         for dz in 0..2 {
@@ -141,10 +141,10 @@ fn build_city(rng: &mut Pcg32, dim_cells: u32) -> World {
 
     // 散落瓦砾：0.5..0.9 m，只能卧倒利用 —— 专门用来填建筑之间的开阔地。
     // 少了这些，广场中央出生的士兵最近掩体在 10 m 外，3 秒根本到不了。
-    for _ in 0..(dim / 6) {
+    for _ in 0..(dim / 3) {
         let x = rng.next_range(dim_cells) as i64;
         let z = rng.next_range(dim_cells) as i64;
-        let h = 500 + rng.next_range(5) as i32 * 100;
+        let h = 500 + rng.next_range(7) as i32 * 100;
         let n = 1 + rng.next_range(3) as i64;
         for k in 0..n {
             put(
@@ -157,7 +157,7 @@ fn build_city(rng: &mut Pcg32, dim_cells: u32) -> World {
     }
 
     // 沙袋掩体：短墙 0.9 m
-    for _ in 0..(dim / 12).max(4) {
+    for _ in 0..(dim / 8).max(6) {
         let len = 2 + rng.next_range(4) as i64;
         let x0 = rng.next_range(dim_cells) as i64;
         let z0 = rng.next_range(dim_cells) as i64;
