@@ -129,13 +129,42 @@ fn build_city(rng: &mut Pcg32, dim_cells: u32) -> World {
     }
 
     // 车辆残骸：2×2 柱、1.2 m 金属（会被打穿）
-    for _ in 0..(dim / 32).max(2) {
+    for _ in 0..(dim / 16).max(4) {
         let x = rng.next_range(dim_cells) as i64;
         let z = rng.next_range(dim_cells) as i64;
         for dz in 0..2 {
             for dx in 0..2 {
                 put(&mut w, x + dx, z + dz, Segment::new(0, 1200, mat::WRECK, 150));
             }
+        }
+    }
+
+    // 散落瓦砾：0.5..0.9 m，只能卧倒利用 —— 专门用来填建筑之间的开阔地。
+    // 少了这些，广场中央出生的士兵最近掩体在 10 m 外，3 秒根本到不了。
+    for _ in 0..(dim / 6) {
+        let x = rng.next_range(dim_cells) as i64;
+        let z = rng.next_range(dim_cells) as i64;
+        let h = 500 + rng.next_range(5) as i32 * 100;
+        let n = 1 + rng.next_range(3) as i64;
+        for k in 0..n {
+            put(
+                &mut w,
+                x + (k % 2),
+                z + (k / 2),
+                Segment::new(0, h, mat::BRICK, 120),
+            );
+        }
+    }
+
+    // 沙袋掩体：短墙 0.9 m
+    for _ in 0..(dim / 12).max(4) {
+        let len = 2 + rng.next_range(4) as i64;
+        let x0 = rng.next_range(dim_cells) as i64;
+        let z0 = rng.next_range(dim_cells) as i64;
+        let horizontal = rng.next_range(2) == 0;
+        for k in 0..len {
+            let (x, z) = if horizontal { (x0 + k, z0) } else { (x0, z0 + k) };
+            put(&mut w, x, z, Segment::new(0, 900, mat::SANDBAG, 90));
         }
     }
     w
@@ -669,7 +698,10 @@ fn cmd_cover(args: &[String]) {
     let mut bsum_lost = 0i64;
     let mut dist_sum = 0i64;
     let mut moved_sum = 0i64;
+    let mut fail_nearest_sum = 0i64;
+    let mut fail_n = 0i64;
     let mut scrape: Vec<u32> = Vec::new();
+    let mut world_hint_scratch: Vec<u32> = Vec::new();
     let t2 = std::time::Instant::now();
     for _ in 0..trials {
         // 随机士兵位置：**地面层**（楼顶也是可站立的，但站在楼顶没有掩体可躲，
@@ -702,6 +734,19 @@ fn cmd_cover(args: &[String]) {
             confidence: 65_535,
         };
         let mut pos = (ux * CELL + CELL / 2, uz * CELL + CELL / 2);
+        // 出生点最近的可选掩体有多远（失败样本的诊断用）
+        world_hint_scratch.clear();
+        field.slots_near(pos.0, pos.1, 18_000, &mut world_hint_scratch);
+        let nearest0 = world_hint_scratch
+            .iter()
+            .map(|&i| {
+                let s = &field.slots[i as usize];
+                let dx = s.center_x_mm() - pos.0;
+                let dz = s.center_z_mm() - pos.1;
+                isqrt_i64(dx * dx + dz * dz)
+            })
+            .min()
+            .unwrap_or(i64::MAX);
         let mut ff = FlowField::new(dim);
         ff.set_radius_cells(40); // 只算 20 m 内的场：全图 Dijkstra 太贵，掩体转移不需要
         let mut goal: Option<(i64, i64)> = None;
@@ -761,6 +806,9 @@ fn cmd_cover(args: &[String]) {
             if did_arrive {
                 arrived_ok += 1;
             }
+        } else if nearest0 != i64::MAX {
+            fail_nearest_sum += nearest0;
+            fail_n += 1;
         }
     }
     let eval_us = t2.elapsed().as_micros();
@@ -790,6 +838,13 @@ fn cmd_cover(args: &[String]) {
         arrived,
         bsum_lost as f64 / 65_536.0 / n_lost as f64
     );
+    if fail_n > 0 {
+        println!(
+            "  失败样本出生点到最近掩体: 平均 {} mm（{} 个样本）",
+            fail_nearest_sum / fail_n,
+            fail_n
+        );
+    }
     println!("  每 trial 平均 {} µs", eval_us / evaluated.max(1) as u128);
     // 给 CI 用的机器可读行（反脚本化验收门禁读这一行）
     println!("cover_rate_pct={pct:.1}");
