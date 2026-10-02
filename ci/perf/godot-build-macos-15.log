@@ -3,7 +3,7 @@
 [1m[92m   Compiling[0m sim_math v0.1.0 (/Users/runner/work/tacord/tacord/sim/crates/sim_math)
 [1m[92m   Compiling[0m sim_core v0.1.0 (/Users/runner/work/tacord/tacord/sim/crates/sim_core)
 [1m[92m   Compiling[0m tacord_gdext v0.1.0 (/Users/runner/work/tacord/tacord/gdext)
-[1m[92m    Finished[0m `release` profile [optimized] target(s) in 8.79s
+[1m[92m    Finished[0m `release` profile [optimized] target(s) in 6.69s
 --- 产物 ---
 target/release/libtacord_gdext.dylib
 target/release/libtacord_gdext.d
