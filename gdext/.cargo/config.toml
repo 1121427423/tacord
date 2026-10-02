@@ -9,12 +9,19 @@
 [target.wasm32-unknown-emscripten]
 rustflags = [
     "-C", "link-args=-sSIDE_MODULE=2",                 # 编成侧模块，Godot 才能 dlopen
+    # panic=abort：**必须**。理由见下面那段（WASM 异常处理 / __cpp_exception tag）。
+    #   godot-rust 在 wasm 上本来也接不住 panic（panic 就是 Aborted），所以没有损失。
+    "-C", "panic=abort",
     # rustc 1.93 起，emscripten 目标**默认打开** WASM 异常处理（-fwasm-exceptions）。
     # 于是侧模块会 import 一个叫 "__cpp_exception" 的 **tag**，而 Godot 的 main module
     # 压根不导出它 ⇒ 浏览器里 WebAssembly.instantiate() 直接抛
     #   LinkError: Import #35 "env" "__cpp_exception": tag import requires a WebAssembly.Tag
-    # 表现就是"加载条走完，然后一片黑，控制台也不一定有人看"。必须显式关掉：
-    "-Z", "emscripten-wasm-eh=false",
+    # 表现就是"加载条走完，然后一片黑，控制台也不一定有人看"。
+    #
+    # godot-rust book 给的修法是 `-Z emscripten-wasm-eh=false`，但**2026-10 的 nightly
+    # 已经把这个 nightly 选项删了**（error: unknown unstable option: emscripten-wasm-eh）。
+    # 于是改用 panic=abort（见上）：不走 unwind，就不需要 wasm 异常处理，tag 也就没了。
+    # 构建命令配套要写 `-Zbuild-std=std,panic_abort`（std 也得按 abort 编译）。
     # 2025 年之前的老绕法（关掉 C++ 异常的代码生成）。现在两个都留：
     # 前者管 rustc 的默认开关，后者管 LLVM 后端。
     "-C", "llvm-args=-enable-emscripten-cxx-exceptions=0",

@@ -494,13 +494,25 @@ jobs:
           set -e
           export GODOT4_BIN="$GODOT_BIN"
           {
-            cargo +nightly build -Zbuild-std --target wasm32-unknown-emscripten --release \
-              --features web-nothreads
+            # build-std 要显式带上 panic_abort：std 也得按 abort 编译，
+          # 否则 std 里残留的 unwind 路径照样会把 __cpp_exception 这个 tag 引进来
+          # （表现：浏览器里 WebAssembly.instantiate() 直接 LinkError，引擎起不来）
+          cargo +nightly build -Zbuild-std=std,panic_abort --target wasm32-unknown-emscripten \
+              --release --features web-nothreads
             echo "--- wasm 产物 ---"
             find target/wasm32-unknown-emscripten/release -maxdepth 1 -name "*.wasm" | head
             mkdir -p ../godot/bin
             cp -v target/wasm32-unknown-emscripten/release/tacord_gdext.wasm ../godot/bin/
             ls -la ../godot/bin
+            # 侧模块不许 import __cpp_exception：浏览器里会直接 LinkError
+            # （Godot 的 main module 不导出这个 tag），而且**只有真浏览器才看得见**。
+            # 在这里就地拦一道，省掉"导出 20 分钟 → 打开页面才发现"。
+            echo "--- 侧模块导入检查 ---"
+            if grep -aq "__cpp_exception" ../godot/bin/tacord_gdext.wasm; then
+              echo "::error::侧模块还在 import __cpp_exception —— 浏览器里必然 LinkError"
+              exit 1
+            fi
+            echo "✓ 没有 __cpp_exception（WASM 异常处理已关掉）"
           } 2>&1 | tee /tmp/web-build.log
 
       - name: 导出 Web
