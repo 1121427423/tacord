@@ -3,14 +3,40 @@
 [1m[92m   Compiling[0m sim_math v0.1.0 (/Users/runner/work/tacord/tacord/sim/crates/sim_math)
 [1m[92m   Compiling[0m sim_core v0.1.0 (/Users/runner/work/tacord/tacord/sim/crates/sim_core)
 [1m[92m   Compiling[0m tacord_gdext v0.1.0 (/Users/runner/work/tacord/tacord/gdext)
-[1m[92m    Finished[0m `release` profile [optimized] target(s) in 8.21s
+[1m[91merror[E0277][0m[1m: the trait bound `f32: From<i32>` is not satisfied[0m
+   [1m[94m--> [0msrc/lib.rs:564:30
+    [1m[94m|[0m
+[1m[94m564[0m [1m[94m|[0m                     let y0 = f32::from(s.bottom_mm) / 1000.0;
+    [1m[94m|[0m                              [1m[91m^^^[0m [1m[91mthe trait `From<i32>` is not implemented for `f32`[0m
+    [1m[94m|[0m
+    [1m[94m= [0m[1mhelp[0m: `f32` implements trait `From<T>`:
+              From<bool>
+              From<f16>
+              From<i16>
+              From<i8>
+              From<u16>
+              From<u8>
+
+[1m[91merror[E0277][0m[1m: the trait bound `f32: From<i32>` is not satisfied[0m
+   [1m[94m--> [0msrc/lib.rs:565:30
+    [1m[94m|[0m
+[1m[94m565[0m [1m[94m|[0m                     let y1 = f32::from(s.top_mm) / 1000.0;
+    [1m[94m|[0m                              [1m[91m^^^[0m [1m[91mthe trait `From<i32>` is not implemented for `f32`[0m
+    [1m[94m|[0m
+    [1m[94m= [0m[1mhelp[0m: `f32` implements trait `From<T>`:
+              From<bool>
+              From<f16>
+              From<i16>
+              From<i8>
+              From<u16>
+              From<u8>
+
+[1mFor more information about this error, try `rustc --explain E0277`.[0m
+[1m[91merror[0m: could not compile `tacord_gdext` (lib) due to 2 previous errors
 --- 产物 ---
-target/release/libtacord_gdext.dylib
-target/release/libtacord_gdext.d
 cp: target/release/libtacord_gdext.so: No such file or directory
-target/release/libtacord_gdext.dylib -> ../godot/bin/libtacord_gdext.dylib
+cp: target/release/libtacord_gdext.dylib: No such file or directory
 --- godot/bin ---
-total 7848
-drwxr-xr-x  3 runner  staff       96 Oct  2 05:11 .
-drwxr-xr-x  9 runner  staff      288 Oct  2 05:11 ..
--rwxr-xr-x  1 runner  staff  4016544 Oct  2 05:11 libtacord_gdext.dylib
+total 0
+drwxr-xr-x  2 runner  staff   64 Oct  2 05:29 .
+drwxr-xr-x  9 runner  staff  288 Oct  2 05:29 ..
