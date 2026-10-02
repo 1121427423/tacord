@@ -9,7 +9,7 @@ SCRIPT ERROR: Invalid assignment of property or key 'light_intensity' with value
               [0] _build_environment (res://scripts/main.gd:179)
               [1] _ready (res://scripts/main.gd:53)
 [tacord] units=400 segments=5497 dim_cells=64 cover_slots=523 checksum=0x27dc657ce3fe2bd8
-[scene] 状态: tick=15 units=400 cubes=400 walls=1401 slots=523 in_cover=72 shots=1 pos=0x7A9596DCAFBABCC1
+[scene] 状态: tick=13 units=400 cubes=400 walls=1401 slots=523 in_cover=67 shots=1 pos=0xB53891B4CA6D3970
 [scene] DONE frames=30
 WARNING: 1 ObjectDB instance was leaked at exit (run with `--verbose` for details).
    at: cleanup (core/object/object.cpp:2536)
