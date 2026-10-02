@@ -1,5 +1,5 @@
 os: ubuntu-latest
 arch: x86_64
-cpu: AMD EPYC 9V45 96-Core Processor
-commit: ccc91ba8ca926d8381c5ad1a55692dfe78c33057
-date: Fri Oct  2 04:38:48 UTC 2026
+cpu: Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz
+commit: c1898a6f2fac466a5219edebd8c03ead480dacc0
+date: Fri Oct  2 04:44:58 UTC 2026
