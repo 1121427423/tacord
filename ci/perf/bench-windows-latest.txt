@@ -7,9 +7,9 @@
    [1m[96m= [0m[1m[97mnote[0m: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
 
 [1m[93mwarning[0m[1m[97m: function `steer_to` is never used[0m
-   [1m[96m--> [0mcrates\sim_cli\src\main.rs:571:4
+   [1m[96m--> [0mcrates\sim_cli\src\main.rs:600:4
     [1m[96m|[0m
-[1m[96m571[0m [1m[96m|[0m fn steer_to(
+[1m[96m600[0m [1m[96m|[0m fn steer_to(
     [1m[96m|[0m    [1m[93m^^^^^^^^[0m
     [1m[96m|[0m
     [1m[96m= [0m[1m[97mnote[0m: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
@@ -21,8 +21,8 @@ tick 数     : 20000
 射线/tick   : 4（合计 32000000）
 命中率      : 15.4%
 退化射线    : 0（截断把射线砍成 0 长度的数量，必须恒为 0）
-每 tick 耗时: 平均 3110.4 µs | p50 3081.6 | p90 3176.0 | p99 4386.4 | max 5966.5
-射线吞吐    : 514401 ray/s（0.51 M ray/s，单条 1.94 µs）
-预算对照    : p99 4386.4 µs / 11000 µs（每 tick 预算）= 39.88%
+每 tick 耗时: 平均 2991.3 µs | p50 2967.9 | p90 3058.6 | p99 3839.1 | max 5177.8
+射线吞吐    : 534886 ray/s（0.53 M ray/s，单条 1.87 µs）
+预算对照    : p99 3839.1 µs / 11000 µs（每 tick 预算）= 34.90%
 世界校验和  : 0xBCDB03CC976971A2
 （注意：这是纯射线负载的基线，尚未包含 AI 决策与掩体评分）
