@@ -1,6 +1,6 @@
-commit: ccc91ba8ca926d8381c5ad1a55692dfe78c33057
+commit: c1898a6f2fac466a5219edebd8c03ead480dacc0
 branch: arena/01a0f7c2-tacord
-date: Fri Oct  2 04:38:46 UTC 2026
+date: Fri Oct  2 04:44:56 UTC 2026
 job status: failure
 
 === cargo build (short) ===
@@ -13,9 +13,9 @@ job status: failure
    [1m[94m= [0m[1mnote[0m: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
 
 [1m[33mwarning[0m[1m: function `steer_to` is never used[0m
-   [1m[94m--> [0mcrates/sim_cli/src/main.rs:571:4
+   [1m[94m--> [0mcrates/sim_cli/src/main.rs:600:4
     [1m[94m|[0m
-[1m[94m571[0m [1m[94m|[0m fn steer_to(
+[1m[94m600[0m [1m[94m|[0m fn steer_to(
     [1m[94m|[0m    [1m[33m^^^^^^^^[0m
     [1m[94m|[0m
     [1m[94m= [0m[1mnote[0m: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
@@ -33,9 +33,9 @@ job status: failure
    [1m[94m= [0m[1mnote[0m: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
 
 [1m[33mwarning[0m[1m: function `steer_to` is never used[0m
-   [1m[94m--> [0mcrates/sim_cli/src/main.rs:571:4
+   [1m[94m--> [0mcrates/sim_cli/src/main.rs:600:4
     [1m[94m|[0m
-[1m[94m571[0m [1m[94m|[0m fn steer_to(
+[1m[94m600[0m [1m[94m|[0m fn steer_to(
     [1m[94m|[0m    [1m[33m^^^^^^^^[0m
     [1m[94m|[0m
     [1m[94m= [0m[1mnote[0m: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
@@ -54,19 +54,18 @@ test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 running 34 tests
 test cover::tests::angular_factor_front_is_full_and_back_is_zero ... ok
 test nav::tests::bridge_deck_is_walkable_but_you_cannot_climb_it ... ok
-test cover::tests::blocking_high_when_behind_wall ... ok
-test cover::tests::wall_generates_slots_on_both_sides ... ok
-test cover::tests::low_wall_vs_high_wall_classification ... ok
-test nav::tests::destruction_opens_a_path ... ok
 test nav::tests::compute_is_deterministic ... ok
+test nav::tests::destruction_opens_a_path ... ok
 test nav::tests::flat_ground_is_walkable_everywhere ... ok
+test cover::tests::blocking_high_when_behind_wall ... ok
+test nav::tests::flow_field_routes_around_a_wall ... ok
 test nav::tests::flow_field_shortest_path_on_flat_ground ... ok
+test cover::tests::wall_generates_slots_on_both_sides ... ok
 test nav::tests::no_corner_cutting ... ok
-test nav::tests::radius_limits_the_field ... ok
 test nav::tests::step_toward_moves_at_most_one_step ... ok
 test nav::tests::step_up_and_down_limits ... ok
-test nav::tests::flow_field_routes_around_a_wall ... ok
 test nav::tests::unreachable_target_yields_empty_field ... ok
+test nav::tests::radius_limits_the_field ... ok
 test nav::tests::void_columns_are_unwalkable ... ok
 test nav::tests::wall_top_is_standable_but_unreachable_on_foot ... ok
 test nav::tests::wire_blocks_the_column_and_is_not_a_surface ... ok
@@ -78,6 +77,7 @@ test ray::tests::overhang_gap_is_walkable_and_shootable ... ok
 test ray::tests::is_deterministic_across_repeated_runs ... ok
 test ray::tests::wire_blocks_move_but_not_sight_or_bullets ... ok
 test tests::floor_div_matches_floor_semantics ... ok
+test cover::tests::low_wall_vs_high_wall_classification ... ok
 test world::tests::checksum_is_deterministic_and_order_sensitive ... ok
 test world::tests::damage_destroys_and_marks_dirty ... ok
 test world::tests::flat_world_has_ground_everywhere ... ok
@@ -104,17 +104,17 @@ running 16 tests
 test isqrt_tests::isqrt_matches_known_values ... ok
 test tests::ang_helpers ... ok
 test tests::atan2_known_slopes ... ok
+test tests::atan2_quadrants ... ok
 test tests::mm_scaling ... ok
 test tests::pcg32_determinism_and_streams ... ok
 test tests::pcg32_matches_reference ... ok
 test tests::pcg32_ranges_and_chance ... ok
 test tests::prob_conversions ... ok
 test tests::q16_mul_div_identities ... ok
-test tests::atan2_quadrants ... ok
+test tests::q16_sqrt ... ok
 test tests::tables_sane ... ok
 test tests::trig_endpoints ... ok
 test tests::trig_known_values ... ok
-test tests::q16_sqrt ... ok
 test tests::vec2_lengths ... ok
 test tests::trig_pythagoras_and_continuity ... ok
 
