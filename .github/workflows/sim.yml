@@ -648,23 +648,35 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set +e
+          dbg=/tmp/web-upload.log
+          {
+            echo "=== /tmp ==="
+            ls -la /tmp | head -20
+            echo "=== gh 探测 ==="
+            gh --version | head -1
+            gh api "repos/${GITHUB_REPOSITORY}" --jq .full_name 2>&1 | head -3
+            echo "=== GH_TOKEN 有没有设 ==="
+            if [ -n "$GH_TOKEN" ]; then echo "已设"; else echo "没设！"; fi
+          } > "$dbg" 2>&1
           put_file() {  # $1 = 仓库内路径，$2 = 本地文件
-            [ -f "$2" ] || return 0
+            if [ ! -f "$2" ]; then echo "跳过 $1：$2 不存在" >> "$dbg"; return 0; fi
             content=$(base64 -w0 < "$2")
-            sha=$(gh api "repos/${GITHUB_REPOSITORY}/contents/$1?ref=ci/artifacts" --jq .sha 2>/dev/null)
+            echo "存 $1（$(stat -c%s "$2") 字节，base64 ${#content}）" >> "$dbg"
+            sha=$(gh api "repos/${GITHUB_REPOSITORY}/contents/$1?ref=ci/artifacts" --jq .sha 2>>"$dbg")
             if [ -n "$sha" ]; then
               gh api -X PUT "repos/${GITHUB_REPOSITORY}/contents/$1" \
                 -f message="ci: $1 (${GITHUB_SHA:0:8})" -f content="$content" \
-                -f branch=ci/artifacts -f sha="$sha" > /dev/null
+                -f branch=ci/artifacts -f sha="$sha" 2>>"$dbg" | head -c 300 >> "$dbg"
             else
               gh api -X PUT "repos/${GITHUB_REPOSITORY}/contents/$1" \
                 -f message="ci: $1 (${GITHUB_SHA:0:8})" -f content="$content" \
-                -f branch=ci/artifacts > /dev/null
+                -f branch=ci/artifacts 2>>"$dbg" | head -c 300 >> "$dbg"
             fi
-            echo "已存 $1"
+            echo "" >> "$dbg"
           }
           put_file ci/perf/web-shot.png /tmp/web-shot.png
           put_file ci/perf/web-console.log /tmp/web-console.log
+          put_file ci/perf/web-upload.log "$dbg"
           exit 0
 
   # ─────────────────────────── 静态检查与参数 ───────────────────────────
