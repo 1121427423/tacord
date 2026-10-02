@@ -5,6 +5,9 @@
 [log] Build configuration: Emscripten 4.0.20, single-threaded, GDExtension support.
 [log] [tacord] units=400 segments=5497 dim_cells=64 cover_slots=523 checksum=0x27dc657ce3fe2bd8
 [smoke] sim 起来=true（等了 2.0s）
-[smoke] 截图 46200 字节
+[smoke] 截图 46077 字节
 [smoke] 非黑像素 46.7%  平均亮度 93.5/255
-[smoke] PASS
+[smoke] 6 秒内变化的像素 0.13%（变化处平均色 rgb(120,125,133)）
+[smoke] 动的东西占比 0.13%（低于 0.2% = 画面是死的）
+::error::画面 6 秒内只有 0.13% 的像素在变（没动 = 没接上 sim）
+[smoke] FAIL
