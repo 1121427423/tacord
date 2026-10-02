@@ -4,6 +4,6 @@ Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 [scene] 加载 res://scenes/main.tscn
 [scene] 已实例化: Main
 [tacord] units=400 segments=5497 dim_cells=64 cover_slots=523 checksum=0x27dc657ce3fe2bd8
-[scene] 状态: tick=13 units=400 cubes=400 walls=1401 slots=523 in_cover=67 shots=1 pos=0xB53891B4CA6D3970
+[scene] 状态: tick=14 units=400 cubes=400 walls=1401 slots=523 in_cover=69 shots=1 pos=0xFE2DF0D9FF5FADD8
 [scene] DONE frames=30
 scene 退出码: 0
