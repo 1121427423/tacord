@@ -81,6 +81,16 @@ def as_int(v: str | None) -> int | None:
         return None
 
 
+def as_float(v: str | None) -> float | None:
+    """取 float（ron 里可能是 "0.70" / "0.70,"）。"""
+    if v is None:
+        return None
+    try:
+        return float(s(v).rstrip(","))
+    except ValueError:
+        return None
+
+
 def ints_in(v: str | None) -> list[int]:
     if not v:
         return []
@@ -300,6 +310,23 @@ def main() -> int:
           "R10 coverage 标记为全角（判定时取半角）")
     fm = as_int(ron.get("flank_margin_deg"))
     check(fm is not None and 0 < fm <= 45, "R10 侧翼 margin 合理", f"{fm}°")
+
+    # §6.2 掩体派生：三条"写错了要大范围返工"的自洽性
+    rush = as_int(ron.get("rush_mm_per_tick"))
+    sprint = as_int(ron.get("speed_sprint_mmps"))
+    check(rush and sprint and rush == sprint // hz,
+          "§6.2 冲刺步长 = speed_sprint_mmps / SIM_HZ", f"{rush} vs {sprint}/{hz}")
+    horizon = as_int(ron.get("reach_horizon_ticks"))
+    check(horizon and rush and horizon * rush <= 9000,
+          "§6.2 到达视界 × 冲刺 ≤ 9 m（§20.1.8 的 3 s 物理上限，直线）",
+          f"{horizon} × {rush} mm")
+    ok_b, dead_b = as_float(ron.get("cover_ok_block")), as_float(ron.get("cover_dead_block"))
+    if ok_b is None or dead_b is None:
+        err("§6.2 缺少 cover_ok_block / cover_dead_block")
+    else:
+        check(0.0 < dead_b < ok_b < 1.0, "§6.2 失效门槛 < 够用门槛 < 1", f"{dead_b} < {ok_b}")
+    budget = as_int(ron.get("cover_budget_per_tick"))
+    check(budget is not None and budget >= 1, "§6.2 重评预算 ≥ 1（成本与人数解耦）", f"{budget}")
 
     # 文档同步：关键裁定必须在设计文档里出现
     for needle, label in [("Critical", "R5 伤员状态机"), ("render_fog", "R2 信息可见性"),

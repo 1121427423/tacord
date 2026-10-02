@@ -235,12 +235,18 @@ M0.2（`sim_core` 体素世界 + 破坏管线 + 体素 DDA 射线 + `sim_cli ben
 
 ## 90.8 待办（本轮审查的遗留项）
 
-- [ ] **M1-A 接进 Godot 场景**：让 400 个单位"挨打就找掩体"在浏览器里看得见
-      （sim 侧已验收完：反脚本化 96%，三平台校验和一致），接完再部署一次 Web
-- [ ] **浏览器里人工确认 Web 版**：打开 <https://1121427423.github.io/tacord/>
+- [x] **M1-A 接进 Godot 场景**：400 个单位"挨打就找掩体"在浏览器里看得见
+      （sim 侧验收 96% → 引擎内 64² 城 523 槽 / 1401 段墙，300 tick 内峰值 135/400 进掩体，
+      ubuntu + macos-15 headless 冒烟全绿），带 `[web]` 的构建已部署
+- [ ] **浏览器里人工确认 Web 版（M1-A）**：打开 <https://1121427423.github.io/tacord/>
       （CI 已部署，提交信息带 `[web]` 触发重新部署）；
-      要求 HUD 有 tick / units / fps / 两个校验和、400 个方块在动，
-      且 Web 的 `pos_checksum` 必须等于桌面端 `0x3F2F61446B0811BD`（"Web 展示正确"的判据）
+      要求：HUD 有 tick / units / fps / world 与 cover 校验和、城（灰盒子）看得见、
+      400 个方块在动，机枪开火时方块由亮蓝转橙再转绿（冲掩体 → 藏好并趴下/蹲下）。
+      **"Web 展示正确"的判据已随 M1-A 更新**：老判据 `pos_checksum = 0x3F2F61446B0811BD`
+      是 M0 那张图（`gdext` 自带的 `build_world`，孤立单柱）的，
+      M1-A 换成 `sim_core::gen::build_city` 之后世界校验和变成 `0x27DC657CE3FE2BD8`；
+      位置校验和每次跑都随场景状态变，**只用于"Web 与桌面同一 tick 是否一致"的比对，
+      不再当作固定值门槛**（要固定值就用 `world_checksum` 与 `cover_checksum`）
 - [ ] macOS arm64 导出产物（A5 ad-hoc 签名）—— 用户已同意**排在 Web 之后**
 - [ ] `tools/check_geo.py`：可掩体/可破坏渲染物件必须关联柱段（R4，M3）
 - [ ] 把 A8 相机无关性测试写进 `.github/workflows/sim.yml`（R1，M0.2）

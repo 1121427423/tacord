@@ -188,6 +188,16 @@
 | 宽度扫描上限 | **8 000 mm** | T2 | 与掩体图连边 8 m 同量级 |
 | 战壕判定 | 槽位地面 ≤ 面前一格 − 500 mm（且面前一格可站立） | T2 | |
 | 探身偏移 | **450 mm**（沿墙面切向） | T2 | `PEEK` 姿态专用 |
+| 最小掩体高度 | **400 mm**（`min_height_mm`） | T2 | 见上，与"一脚跨过去"同一条线 |
+| 高墙门槛 | **1 100 mm**（`high_wall_mm`） | T2 | ≥ 此高度蹲下即可藏住；矮墙/残骸/战壕必须**卧倒**（`CoverKind::best_posture`） |
+| 窄柱上限 | **1 000 mm**（`pillar_max_width_mm`） | T2 | 比这宽就不算"柱子"，按墙处理 |
+| 战壕判定 | **−500 mm**（`trench_depth_mm`） | T2 | 面前一格比脚下低这么多 ⇒ 战壕 |
+| 到达视界 | **60 tick = 2 s**（`reach_horizon_ticks`） | T2 | **不是 3 s**：验收窗口 3 s 里还要留时间摆姿态；且直线距离 ×1.5～2 才是实际路程 |
+| 冲刺速度 | **100 mm/tick**（`rush_mm_per_tick` = 3 000 mm/s ÷ 30 Hz） | T2 | 与 `speed_sprint_mmps` 同源，改一处必须改另一处 |
+| "够用了"门槛 | **blocking ≥ 0.70**（`cover_ok_block`，Q16 45 875） | T2 | 候选里只要有挡得住的，**不再比分数，直接挑最近的**（真人是冲最近的，不是全场最优） |
+| "已失效"门槛 | **blocking < 0.20**（`cover_dead_block`，Q16 13 107） | T2 | §20.1.8-3：掩体被打掉后必须掉到 0.2 以下 |
+| 评分权重 | `w_block 1.00 / w_angle 0.45 / w_reach 0.35 / w_crowd 0.25` | T2 | M1 只启用这四项，其余恒 0 |
+| 重评预算 | **每 tick ≤ 16 人**（`cover_budget_per_tick`） | T2 | **成本与人数解耦**：400 人同一 tick 一起选槽会把一帧顶到几十毫秒；代价是最坏 0.8 s 才轮完一圈 |
 
 **本块明确不做（M2）**：掩体图、`escape_score`、`firesupport_score`、压制场、
 任务牵引 `objective_pull`、班长 proximity —— `cover.rs` 里这些项**恒为 0**，并在注释中标明。
