@@ -639,6 +639,34 @@ jobs:
             /tmp/web-console.log
           if-no-files-found: warn
 
+      # 沙箱访问不到 Actions 的 artifact 存储（blob.core.windows.net 不通），
+      # 所以**截图也要**走 contents API 存回 ci/artifacts —— 否则只能靠人去
+      # GitHub 网页上点开看，等于没有闭环。
+      - name: 记录截图与控制台
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set +e
+          put_file() {  # $1 = 仓库内路径，$2 = 本地文件
+            [ -f "$2" ] || return 0
+            content=$(base64 -w0 < "$2")
+            sha=$(gh api "repos/${GITHUB_REPOSITORY}/contents/$1?ref=ci/artifacts" --jq .sha 2>/dev/null)
+            if [ -n "$sha" ]; then
+              gh api -X PUT "repos/${GITHUB_REPOSITORY}/contents/$1" \
+                -f message="ci: $1 (${GITHUB_SHA:0:8})" -f content="$content" \
+                -f branch=ci/artifacts -f sha="$sha" > /dev/null
+            else
+              gh api -X PUT "repos/${GITHUB_REPOSITORY}/contents/$1" \
+                -f message="ci: $1 (${GITHUB_SHA:0:8})" -f content="$content" \
+                -f branch=ci/artifacts > /dev/null
+            fi
+            echo "已存 $1"
+          }
+          put_file ci/perf/web-shot.png /tmp/web-shot.png
+          put_file ci/perf/web-console.log /tmp/web-console.log
+          exit 0
+
   # ─────────────────────────── 静态检查与参数 ───────────────────────────
   lint:
     name: 格式与静态检查
