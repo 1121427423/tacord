@@ -11,6 +11,6 @@ target/release/libtacord_gdext.so
 cp: cannot stat 'target/release/libtacord_gdext.dylib': No such file or directory
 --- godot/bin ---
 total 5104
-drwxr-xr-x 2 runner runner    4096 Oct  2 06:59 .
-drwxr-xr-x 5 runner runner    4096 Oct  2 06:59 ..
--rwxr-xr-x 1 runner runner 5217744 Oct  2 06:59 libtacord_gdext.so
+drwxr-xr-x 2 runner runner    4096 Oct  2 07:04 .
+drwxr-xr-x 5 runner runner    4096 Oct  2 07:04 ..
+-rwxr-xr-x 1 runner runner 5217744 Oct  2 07:04 libtacord_gdext.so
