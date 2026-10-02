@@ -1,30 +1,30 @@
 === /tmp ===
-total 160
-drwxrwxrwt 14 root   root    4096 Oct  2 09:21 .
-drwxr-xr-x 23 root   root    4096 Oct  2 09:05 ..
-drwxrwxrwt  2 root   root    4096 Oct  2 09:05 .ICE-unix
-drwxrwxrwt  2 root   root    4096 Oct  2 09:05 .X11-unix
-drwxrwxrwt  2 root   root    4096 Oct  2 09:05 .XIM-unix
-drwxrwxrwt  2 root   root    4096 Oct  2 09:05 .font-unix
-prwx------  1 runner runner     0 Oct  2 09:19 clr-debug-pipe-2261-86915-in
-prwx------  1 runner runner     0 Oct  2 09:19 clr-debug-pipe-2261-86915-out
-prwx------  1 runner runner     0 Oct  2 09:19 clr-debug-pipe-2283-87044-in
-prwx------  1 runner runner     0 Oct  2 09:19 clr-debug-pipe-2283-87044-out
-srw-------  1 runner runner     0 Oct  2 09:19 dotnet-diagnostic-2261-86915-socket
-srw-------  1 runner runner     0 Oct  2 09:19 dotnet-diagnostic-2283-87044-socket
--rw-r--r--  1 runner runner   815 Oct  2 09:20 http.log
-drwx------  2 root   root    4096 Oct  2 09:05 snap-private-tmp
-drwx------  3 root   root    4096 Oct  2 09:05 systemd-private-8555753fd2a04b60802284bb42add104-ModemManager.service-0vXMgR
-drwx------  3 root   root    4096 Oct  2 09:05 systemd-private-8555753fd2a04b60802284bb42add104-chrony.service-3tnkKo
-drwx------  3 root   root    4096 Oct  2 09:05 systemd-private-8555753fd2a04b60802284bb42add104-haveged.service-sXss2G
-drwx------  3 root   root    4096 Oct  2 09:05 systemd-private-8555753fd2a04b60802284bb42add104-polkit.service-qRiWRe
-drwx------  3 root   root    4096 Oct  2 09:05 systemd-private-8555753fd2a04b60802284bb42add104-systemd-logind.service-rdyrT7
+total 164
+drwxrwxrwt 14 root   root    4096 Oct  2 10:04 .
+drwxr-xr-x 23 root   root    4096 Oct  2 10:02 ..
+drwxrwxrwt  2 root   root    4096 Oct  2 10:02 .ICE-unix
+drwxrwxrwt  2 root   root    4096 Oct  2 10:02 .X11-unix
+drwxrwxrwt  2 root   root    4096 Oct  2 10:02 .XIM-unix
+drwxrwxrwt  2 root   root    4096 Oct  2 10:02 .font-unix
+prwx------  1 runner runner     0 Oct  2 10:02 clr-debug-pipe-2188-2985-in
+prwx------  1 runner runner     0 Oct  2 10:02 clr-debug-pipe-2188-2985-out
+prwx------  1 runner runner     0 Oct  2 10:02 clr-debug-pipe-2228-3147-in
+prwx------  1 runner runner     0 Oct  2 10:02 clr-debug-pipe-2228-3147-out
+srw-------  1 runner runner     0 Oct  2 10:02 dotnet-diagnostic-2188-2985-socket
+srw-------  1 runner runner     0 Oct  2 10:02 dotnet-diagnostic-2228-3147-socket
+-rw-r--r--  1 runner runner   815 Oct  2 10:03 http.log
+drwx------  2 root   root    4096 Oct  2 10:02 snap-private-tmp
+drwx------  3 root   root    4096 Oct  2 10:02 systemd-private-06897e0192c245399cfe68d70cacb7ae-ModemManager.service-RmFRGi
+drwx------  3 root   root    4096 Oct  2 10:02 systemd-private-06897e0192c245399cfe68d70cacb7ae-chrony.service-RqEJcq
+drwx------  3 root   root    4096 Oct  2 10:02 systemd-private-06897e0192c245399cfe68d70cacb7ae-haveged.service-lbsRIc
+drwx------  3 root   root    4096 Oct  2 10:02 systemd-private-06897e0192c245399cfe68d70cacb7ae-polkit.service-FSIPWO
+drwx------  3 root   root    4096 Oct  2 10:02 systemd-private-06897e0192c245399cfe68d70cacb7ae-systemd-logind.service-wdDgke
 === gh 探测 ===
 gh version 2.101.0 (2026-09-15)
 1121427423/tacord
 === GH_TOKEN 有没有设 ===
 已设
-存 ci/perf/web-shot.png（44090 字节，base64 58788）
-{"content":{"name":"web-shot.png","path":"ci/perf/web-shot.png","sha":"9d136527e197b71c88bf39fb620e4bcb16ae54b9","size":44090,"url":"https://api.github.com/repos/1121427423/tacord/contents/ci/perf/web-shot.png?ref=ci/artifacts","html_url":"https://github.com/1121427423/tacord/blob/ci/artifacts/ci/pe
-存 ci/perf/web-console.log（1470 字节，base64 1960）
-{"content":{"name":"web-console.log","path":"ci/perf/web-console.log","sha":"d7710cc1340d5a8a333175bc2b67aa71b856f57a","size":1470,"url":"https://api.github.com/repos/1121427423/tacord/contents/ci/perf/web-console.log?ref=ci/artifacts","html_url":"https://github.com/1121427423/tacord/blob/ci/artifac
+存 ci/perf/web-shot.png（45344 字节，base64 60460）
+{"content":{"name":"web-shot.png","path":"ci/perf/web-shot.png","sha":"cc4bb04817215c06cdabcd5cf39644121176165f","size":45344,"url":"https://api.github.com/repos/1121427423/tacord/contents/ci/perf/web-shot.png?ref=ci/artifacts","html_url":"https://github.com/1121427423/tacord/blob/ci/artifacts/ci/pe
+存 ci/perf/web-console.log（1563 字节，base64 2084）
+{"content":{"name":"web-console.log","path":"ci/perf/web-console.log","sha":"da3736cd499a00fbca2b67edfafdcf13f924a831","size":1563,"url":"https://api.github.com/repos/1121427423/tacord/contents/ci/perf/web-console.log?ref=ci/artifacts","html_url":"https://github.com/1121427423/tacord/blob/ci/artifac
