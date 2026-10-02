@@ -1,12 +1,12 @@
-Fri Oct  2 06:16:25 UTC 2026
-run_id=36972704528 runner=macOS ARM64
+Fri Oct  2 06:20:42 UTC 2026
+run_id=36973030686 runner=macOS ARM64
 arm64
 /Users/runner/work/tacord/tacord
 --- godot/bin ---
 total 8048
-drwxr-xr-x   3 runner  staff       96 Oct  2 06:16 .
-drwxr-xr-x  11 runner  staff      352 Oct  2 06:16 ..
--rwxr-xr-x   1 runner  staff  4119264 Oct  2 06:16 libtacord_gdext.dylib
+drwxr-xr-x   3 runner  staff       96 Oct  2 06:20 .
+drwxr-xr-x  11 runner  staff      352 Oct  2 06:20 ..
+-rwxr-xr-x   1 runner  staff  4119264 Oct  2 06:20 libtacord_gdext.dylib
 --- tacord.gdextension ---
 [configuration]
 
@@ -68,16 +68,8 @@ Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 Initialize godot-rust (API v4.7.2.stable.official, runtime v4.7.2.stable.official, safeguards balanced)
 Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 
-SCRIPT ERROR: Invalid assignment of property or key 'light_intensity' with value of type 'float' on a base object of type 'DirectionalLight3D'.
-          at: _build_environment (res://scripts/main.gd:179)
-          GDScript backtrace (most recent call first):
-              [0] _build_environment (res://scripts/main.gd:179)
-              [1] _ready (res://scripts/main.gd:53)
 [tacord] units=400 segments=5497 dim_cells=64 cover_slots=523 checksum=0x27dc657ce3fe2bd8
 [smoke] units=400 dim=64 tick=300 world_checksum=0x27dc657ce3fe2bd8 pos_checksum=0x4625a972faed8d01 pos0=(14.47, 0.0, 29.007)
 [smoke] M1-A：掩体槽=523 点射=2 同时在掩体里最多=135 此刻=5 cover_checksum=0x9073084462868b23
 [smoke] PASS
-WARNING: 1 ObjectDB instance was leaked at exit (run with `--verbose` for details).
-   at: cleanup (core/object/object.cpp:2536)
-ERROR: 1 RID allocations of type 'N17RendererSceneCull8InstanceE' were leaked at exit.
 smoke 退出码: 0
