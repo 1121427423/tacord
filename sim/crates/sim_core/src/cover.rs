@@ -77,6 +77,11 @@ pub const RUSH_MM_PER_TICK: i64 = 100;
 /// 少了这条，评分里 block 权重(1.0)远大于 reach(0.35)，
 /// 士兵会为了多 5% 的遮挡多跑 6 m（实测：因此 27% 的 trial 在 3 秒内没走到）。
 pub const COVER_OK_BLOCK: i32 = 45_875;
+/// "这处掩体已经失效了"的遮挡度门槛（0.2 × 65536）。
+///
+/// 用途：§20.1.8-3 —— 墙被打掉之后，这个位置的遮挡度必须掉到 0.2 以下
+/// （剩下的 0.2 是"被别的墙顺带挡着"的容差）。
+pub const COVER_DEAD_BLOCK: i32 = 13_107;
 
 // 评分权重（ai_weights.ron 的 M1 子集，Q16 口径：1.0 = 65536）
 impl CoverKind {

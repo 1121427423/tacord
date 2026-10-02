@@ -10,6 +10,7 @@
 #![deny(clippy::float_arithmetic)]
 
 pub mod cover;
+pub mod gen;
 pub mod nav;
 pub mod ray;
 pub mod world;
