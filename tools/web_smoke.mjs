@@ -77,7 +77,10 @@ try {
     // 两帧做差，变化像素的占比 = 画面里有多少东西在动，
     // 变化像素的平均颜色 = 士兵到底是什么颜色（MultiMesh 的 instance color
     // 有没有生效，光看单张截图分不出"没画"和"画成了白色"）。
-    await new Promise((r) => setTimeout(r, 6_000));
+    // 软件渲染下帧率是个位数，6 秒只够走几个 tick —— 看着像"画面是死的"。
+    // 给 30 秒：既让士兵真的走出一段距离，也让 main.gd 那行 2 秒一次的实况
+    // （tick / fps / pos0）有时间打进控制台。
+    await new Promise((r) => setTimeout(r, 30_000));
     await canvas.screenshot({ path: '/tmp/web-shot2.png' });
   } else {
     note('[smoke] 页面上没有 canvas！');
@@ -127,7 +130,7 @@ try {
     }
     const mv = (changed * 100) / tot;
     note(
-      `[smoke] 6 秒内变化的像素 ${mv.toFixed(2)}%` +
+      `[smoke] 30 秒内变化的像素 ${mv.toFixed(2)}%` +
         (changed ? `（变化处平均色 rgb(${Math.round(sr / changed)},${Math.round(sg / changed)},${Math.round(sb / changed)})）` : ''),
     );
     changedPct = mv;

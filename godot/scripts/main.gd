@@ -97,6 +97,9 @@ func _build_cubes() -> void:
 	var mat := StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.albedo_color = Color.WHITE
+	# 光开 use_colors 不够：材质不读顶点色的话，instance color 会被丢掉，
+	# 结果是 400 个士兵全画成纯白（截图里那 10% 的纯白就是它们，不是墙）
+	mat.vertex_color_use_as_albedo = true
 	box.material = mat
 
 	var mm := MultiMesh.new()
@@ -237,10 +240,7 @@ func _process(delta: float) -> void:
 	# 到底是 sim 没跑、跑得慢、还是渲染的问题（fps 与 tick 分开看就知道）。
 	_frames += 1
 	if _frames % 60 == 0 and sim != null:
-		print("[tacord] 实况 frame=", _frames, " tick=", sim.tick_count(),
-				" fps=", snappedf(Engine.get_frames_per_second(), 0.1),
-				" in_cover=", sim.in_cover_count(), "/", sim.unit_count(),
-				" pos0=", str(sim.unit_position(0)))
+		print("[tacord] 实况 frame=", _frames, " tick=", sim.tick_count(), " fps=", snappedf(Engine.get_frames_per_second(), 0.1), " in_cover=", sim.in_cover_count(), "/", sim.unit_count(), " pos0=", str(sim.unit_position(0)))
 
 
 func _sync() -> void:
