@@ -626,7 +626,17 @@ impl Sim {
         out
     }
 
-    fn apply_near_miss(&mut self, ax: i64, ay: i64, az: i64, bx: i64, by: i64, bz: i64, team: u8) {
+    #[allow(clippy::too_many_arguments)]
+    fn apply_near_miss(
+        &mut self,
+        ax: i64,
+        ay: i64,
+        az: i64,
+        bx: i64,
+        by: i64,
+        bz: i64,
+        shooter_team: u8,
+    ) {
         let cands = self.candidates_for_segment(ax, ay, az, bx, by, bz);
         for idx in cands {
             let i = idx as usize;
@@ -634,7 +644,10 @@ impl Sim {
                 let s = &self.soldiers[i];
                 (s.alive(), s.team, s.x, s.z)
             };
-            if !alive || team == team {
+            // 注意别写反：这里比较的是"士兵的队"与"开枪那一方的队"，
+            // 两个都叫 team 时会静默变成"自己跟自己比"（恒真 ⇒ 谁也不压制，
+            // 而且不报错，只是近失永远为 0 —— 上一版就栽在这）。
+            if !alive || team == shooter_team {
                 continue;
             }
             let ground = self.ground_mm(sx, sz);
