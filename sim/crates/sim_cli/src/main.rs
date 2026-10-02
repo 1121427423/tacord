@@ -8,11 +8,13 @@
 //! 注意：这里可以用浮点与 `std::time`（不进 sim），但**任何影响模拟结果的输入都必须来自
 //! 确定性 PRNG**，否则回放会分叉。
 
-use sim_core::cover::{blocking_at, pick_cover, CoverField, Posture, Threat};
+use sim_core::cover::{
+    bearing_dir, blocking_at, cover_cell, cover_half_angle_deg, pick_cover, CoverField, Threat,
+};
 use sim_core::nav::{nearest_walkable, step_toward, FlowField, HeightField, NavParams};
 use sim_core::ray::{blocked, RayMode};
 use sim_core::world::{mat, Segment, World};
-use sim_math::{isqrt_i64, Mm, Pcg32, Vec3};
+use sim_math::{isqrt_i64, Ang, Mm, Pcg32, Vec3};
 
 const CELL: i64 = 500;
 
@@ -848,5 +850,158 @@ fn cmd_cover(args: &[String]) {
     println!("  每 trial 平均 {} µs", eval_us / evaluated.max(1) as u128);
     // 给 CI 用的机器可读行（反脚本化验收门禁读这一行）
     println!("cover_rate_pct={pct:.1}");
+
+    // ── §20.1.8 第 2 条：被包抄 → 1.5 秒内放弃该掩体（目标 ≥ 90%）──
+    let (flank_ok, flank_n) = verify_flank_abandon(&world, &hf, &field, &mut rng, dim, trials);
+    let flank_pct = if flank_n > 0 {
+        flank_ok as f64 * 100.0 / flank_n as f64
+    } else {
+        0.0
+    };
+    println!();
+    println!("被包抄就换掩体（§20.1.8-2）: {flank_n} 次");
+    println!("  1.5 秒内换槽: {flank_ok}/{flank_n} = {flank_pct:.1}%   （目标 ≥ 90%）");
+    println!("flank_rate_pct={flank_pct:.1}");
+
+    // ── §20.1.8 第 3 条：墙被炸掉 → 0.5 秒内判定失效（blocking < 0.2）──
+    let (kill_ok, kill_n) = verify_cover_destroyed(&world, &hf, &field, &mut rng, trials);
+    let kill_pct = if kill_n > 0 {
+        kill_ok as f64 * 100.0 / kill_n as f64
+    } else {
+        0.0
+    };
+    println!();
+    println!("掩体被打掉就失效（§20.1.8-3）: {kill_n} 次");
+    println!("  炸掉墙后 blocking < 0.2: {kill_ok}/{kill_n} = {kill_pct:.1}%   （目标 100%）");
+    println!("destroy_rate_pct={kill_pct:.1}");
     println!("───────────────────────────────────────────────");
+}
+
+/// §20.1.8-2：敌人绕到 `angular_factor == 0` 的位置后，士兵 1.5 秒内放弃该掩体。
+///
+/// 判据直接调生产函数 `angular_factor`（R10：测试里不得重述阈值）。
+fn verify_flank_abandon(
+    world: &World,
+    hf: &HeightField,
+    field: &CoverField,
+    rng: &mut Pcg32,
+    dim: u32,
+    trials: u32,
+) -> (u32, u32) {
+    let p = NavParams::default();
+    let mut ok = 0u32;
+    let mut n = 0u32;
+    let mut scrape: Vec<u32> = Vec::new();
+    for _ in 0..trials {
+        if field.is_empty() {
+            break;
+        }
+        // 随机挑一个够宽的槽（窄柱没有"被包抄"可言）
+        let idx = rng.next_range(field.len() as u32) as usize;
+        let slot = match field.slot(idx as u32) {
+            Some(s) if s.width_mm >= 1_000 => *s,
+            _ => continue,
+        };
+        let (sx, sz) = (slot.center_x_mm(), slot.center_z_mm());
+        let (fx, fz) = bearing_dir(slot.normal);
+        let d = 8_000i64;
+        let front = Threat {
+            x_mm: (sx + (fx.0 as i64 * d >> 16)) as i32,
+            y_mm: 0,
+            z_mm: (sz + (fz.0 as i64 * d >> 16)) as i32,
+            confidence: 65_535,
+        };
+        // 前提：正面来敌时这处掩体确实挡得住（否则这条 trial 没意义）
+        if blocking_at(world, hf, sx, sz, None, &[front]).0 < 45_875 {
+            continue;
+        }
+        // 绕到侧面：超过覆盖半角 + 侧翼余量 → angular_factor 必须为 0
+        let rot = cover_half_angle_deg(slot.width_mm) + 25 + 12;
+        let side_ang = slot.normal.wrapping_add(Ang::from_degrees(rot));
+        let (gx, gz) = bearing_dir(side_ang);
+        let flanker = Threat {
+            x_mm: (sx + (gx.0 as i64 * d >> 16)) as i32,
+            y_mm: 0,
+            z_mm: (sz + (gz.0 as i64 * d >> 16)) as i32,
+            confidence: 65_535,
+        };
+        if sim_core::cover::angular_factor(&slot, flanker.x_mm as i64, flanker.z_mm as i64).0 != 0 {
+            continue; // 没真的形成包抄，跳过
+        }
+        n += 1;
+        // 1.5 s = 45 tick，5 Hz 重评估：有没有换槽？
+        let mut changed = false;
+        for tick in 0..45u64 {
+            if tick % 6 != 0 {
+                continue;
+            }
+            if let Some(c) = pick_cover(world, field, sx, sz, None, &[flanker], 12, &mut scrape) {
+                if c.slot != idx as u32 {
+                    changed = true;
+                    break;
+                }
+            }
+        }
+        if changed {
+            ok += 1;
+        }
+    }
+    (ok, n)
+}
+
+/// §20.1.8-3：把掩体打掉，0.5 秒（15 tick）内该位置必须判定为失效（blocking < 0.2）。
+///
+/// 顺带验证 `CoverField::rebuild_area` 这条增量重建路径（平时没人走）。
+/// 每个 trial 都在自己的副本上销毁，不污染后面的验证。
+fn verify_cover_destroyed(
+    world_in: &World,
+    hf_in: &HeightField,
+    field_in: &CoverField,
+    rng: &mut Pcg32,
+    trials: u32,
+) -> (u32, u32) {
+    let p = NavParams::default();
+    let mut ok = 0u32;
+    let mut n = 0u32;
+    for _ in 0..trials.min(20) {
+        if field_in.is_empty() {
+            break;
+        }
+        let mut world = world_in.clone();
+        let mut hf = hf_in.clone();
+        let mut field = field_in.clone();
+
+        let idx = rng.next_range(field.len() as u32) as usize;
+        let slot = match field.slot(idx as u32) {
+            Some(s) => *s,
+            None => continue,
+        };
+        let (sx, sz) = (slot.center_x_mm(), slot.center_z_mm());
+        let (fx, fz) = bearing_dir(slot.normal);
+        let d = 8_000i64;
+        let front = Threat {
+            x_mm: (sx + (fx.0 as i64 * d >> 16)) as i32,
+            y_mm: 0,
+            z_mm: (sz + (fz.0 as i64 * d >> 16)) as i32,
+            confidence: 65_535,
+        };
+        // 前提：打掉之前，这处掩体确实挡得住
+        if blocking_at(&world, &hf, sx, sz, None, &[front]).0 < 45_875 {
+            continue;
+        }
+        // 打掉掩体那根柱的所有非地面段（地面是第一段，留着）
+        let (wx, wz) = cover_cell(&slot);
+        while world.segments(wx as u32, wz as u32).len() > 1 {
+            let last = (world.segments(wx as u32, wz as u32).len() - 1) as u32;
+            world.remove_segment(wx as u32, wz as u32, last);
+        }
+        hf.rebuild_area(&world, wx - 1, wz - 1, wx + 1, wz + 1, &p);
+        field.rebuild_area(&world, &hf, wx - 1, wz - 1, wx + 1, wz + 1);
+        n += 1;
+        // 0.5 s 的判据：重建是同步的，所以"多久失效"取决于重评估周期（5 Hz = 6 tick < 15 tick）
+        if blocking_at(&world, &hf, sx, sz, None, &[front]).0 < 13_107 {
+            ok += 1;
+        }
+    }
+    (ok, n)
 }

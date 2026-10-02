@@ -567,6 +567,19 @@ fn classify(
 
 // ═══════════════════════════ 有效遮挡角（§20.1.4）═══════════════════════════
 
+/// 掩体所在的柱（法线指的那一格）—— 破坏测试与调试用。
+///
+/// 槽法线是四个轴向之一（0/90/180/270），所以直接换算成柱偏移。
+pub fn cover_cell(slot: &CoverSlot) -> (i64, i64) {
+    let deg = (slot.normal.raw() as u32 * 360) / 65_536;
+    match deg {
+        0 => (slot.cx as i64, slot.cz as i64 - 1), // 北
+        90 => (slot.cx as i64 + 1, slot.cz as i64), // 东
+        180 => (slot.cx as i64, slot.cz as i64 + 1), // 南
+        _ => (slot.cx as i64 - 1, slot.cz as i64), // 西
+    }
+}
+
 /// 覆盖角（**全角**，度）：越宽的墙能挡的范围越大。
 pub fn coverage_angle_deg(width_mm: i32) -> i32 {
     let extra = COVERAGE_WIDTH_DEG * width_mm / 2_000;
@@ -654,8 +667,8 @@ fn exposure_samples(slot: &CoverSlot, posture: Posture) -> [Vec3; 2] {
     ]
 }
 
-/// 方位角 → 单位方向（x, z），Q16。
-fn bearing_dir(a: Ang) -> (Q16, Q16) {
+/// 方位角 → 单位方向（x, z），Q16。约定 0 = 北(-Z)，顺时针。
+pub fn bearing_dir(a: Ang) -> (Q16, Q16) {
     (a.sin(), Q16(-a.cos().0))
 }
 

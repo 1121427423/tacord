@@ -65,12 +65,19 @@ jobs:
           cargo run --release -q -p sim_cli -- nav --units 400 --ticks 2000 --world 256 --breach 500 --seed 1 2>&1 | tee -a /tmp/ci-smoke.log
           cargo run --release -q -p sim_cli -- cover --world 256 --trials 100 --seed 1 2>&1 | tee -a /tmp/ci-smoke.log
           # 反脚本化验收（§20.1.8）：随机遭遇里 3 秒内 blocking ≥ 0.7 的成功率必须 ≥ 95%
-          pct=$(grep -o 'cover_rate_pct=[0-9.]*' /tmp/ci-smoke.log | tail -1 | cut -d= -f2)
-          echo "掩体反脚本化成功率: ${pct}%"
-          awk -v p="${pct:-0}" 'BEGIN{exit !(p+0 >= 95)}' || {
-            echo "::error::掩体反脚本化验收失败：${pct}% < 95%（见 ci-smoke.log）"
-            exit 1
+          # §20.1.8 三条验收一起过：找掩体 ≥95% / 被包抄换槽 ≥90% / 打掉就失效 =100%
+          gate() {  # $1 = 机器可读行的名字，$2 = 门槛
+            local v
+            v=$(grep -o "$1=[0-9.]*" /tmp/ci-smoke.log | tail -1 | cut -d= -f2)
+            echo "$1 = ${v}% （门槛 $2%）"
+            awk -v p="${v:-0}" -v t="$2" 'BEGIN{exit !(p+0 >= t+0)}' || {
+              echo "::error::$1 未达标：${v}% < $2%（见 latest-smoke.log）"
+              exit 1
+            }
           }
+          gate cover_rate_pct 95
+          gate flank_rate_pct 90
+          gate destroy_rate_pct 100
 
       - name: 记录输出（失败时另存编译/测试日志）
         if: always()
