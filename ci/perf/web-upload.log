@@ -1,24 +1,24 @@
 === /tmp ===
 total 88
-drwxrwxrwt 14 root   root    4096 Oct  2 07:23 .
-drwxr-xr-x 23 root   root    4096 Oct  2 07:18 ..
-drwxrwxrwt  2 root   root    4096 Oct  2 07:18 .ICE-unix
-drwxrwxrwt  2 root   root    4096 Oct  2 07:18 .X11-unix
-drwxrwxrwt  2 root   root    4096 Oct  2 07:18 .XIM-unix
-drwxrwxrwt  2 root   root    4096 Oct  2 07:18 .font-unix
-prwx------  1 runner runner     0 Oct  2 07:21 clr-debug-pipe-2147-20929-in
-prwx------  1 runner runner     0 Oct  2 07:21 clr-debug-pipe-2147-20929-out
-prwx------  1 runner runner     0 Oct  2 07:21 clr-debug-pipe-2167-21121-in
-prwx------  1 runner runner     0 Oct  2 07:21 clr-debug-pipe-2167-21121-out
-srw-------  1 runner runner     0 Oct  2 07:21 dotnet-diagnostic-2147-20929-socket
-srw-------  1 runner runner     0 Oct  2 07:21 dotnet-diagnostic-2167-21121-socket
+drwxrwxrwt 14 root   root    4096 Oct  2 07:24 .
+drwxr-xr-x 23 root   root    4096 Oct  2 07:21 ..
+drwxrwxrwt  2 root   root    4096 Oct  2 07:21 .ICE-unix
+drwxrwxrwt  2 root   root    4096 Oct  2 07:21 .X11-unix
+drwxrwxrwt  2 root   root    4096 Oct  2 07:21 .XIM-unix
+drwxrwxrwt  2 root   root    4096 Oct  2 07:21 .font-unix
+prwx------  1 runner runner     0 Oct  2 07:21 clr-debug-pipe-2194-2741-in
+prwx------  1 runner runner     0 Oct  2 07:21 clr-debug-pipe-2194-2741-out
+prwx------  1 runner runner     0 Oct  2 07:21 clr-debug-pipe-2213-2911-in
+prwx------  1 runner runner     0 Oct  2 07:21 clr-debug-pipe-2213-2911-out
+srw-------  1 runner runner     0 Oct  2 07:21 dotnet-diagnostic-2194-2741-socket
+srw-------  1 runner runner     0 Oct  2 07:21 dotnet-diagnostic-2213-2911-socket
 -rw-r--r--  1 runner runner   421 Oct  2 07:22 http.log
-drwx------  2 root   root    4096 Oct  2 07:18 snap-private-tmp
-drwx------  3 root   root    4096 Oct  2 07:18 systemd-private-b056030dcb5245bf9bc46901209e390d-ModemManager.service-t1rWl4
-drwx------  3 root   root    4096 Oct  2 07:18 systemd-private-b056030dcb5245bf9bc46901209e390d-chrony.service-8EXgsS
-drwx------  3 root   root    4096 Oct  2 07:18 systemd-private-b056030dcb5245bf9bc46901209e390d-haveged.service-DZFfTZ
-drwx------  3 root   root    4096 Oct  2 07:18 systemd-private-b056030dcb5245bf9bc46901209e390d-polkit.service-EnYMsN
-drwx------  3 root   root    4096 Oct  2 07:18 systemd-private-b056030dcb5245bf9bc46901209e390d-systemd-logind.service-pVL7NF
+drwx------  2 root   root    4096 Oct  2 07:21 snap-private-tmp
+drwx------  3 root   root    4096 Oct  2 07:21 systemd-private-33e624773a634b4d994234f93003e68d-ModemManager.service-g2ACSp
+drwx------  3 root   root    4096 Oct  2 07:21 systemd-private-33e624773a634b4d994234f93003e68d-chrony.service-yI0Nsg
+drwx------  3 root   root    4096 Oct  2 07:21 systemd-private-33e624773a634b4d994234f93003e68d-haveged.service-4KXqx6
+drwx------  3 root   root    4096 Oct  2 07:21 systemd-private-33e624773a634b4d994234f93003e68d-polkit.service-8HFyvB
+drwx------  3 root   root    4096 Oct  2 07:21 systemd-private-33e624773a634b4d994234f93003e68d-systemd-logind.service-Csz3p6
 === gh 探测 ===
 gh version 2.101.0 (2026-09-15)
 1121427423/tacord
