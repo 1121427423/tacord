@@ -1,5 +1,5 @@
 os: windows-latest
 arch: x86_64
-cpu: Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz
-commit: 1c84ce85dbb762a7a4ff3ca1d78f73f6724d1cf6
-date: Fri Oct  2 07:30:48 UTC 2026
+cpu: AMD EPYC 9V74 80-Core Processor                
+commit: f6308da945c1b03cfa99da42667840413aa9824f
+date: Fri Oct  2 08:08:51 UTC 2026
