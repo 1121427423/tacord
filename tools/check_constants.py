@@ -328,6 +328,70 @@ def main() -> int:
     budget = as_int(ron.get("cover_budget_per_tick"))
     check(budget is not None and budget >= 1, "§6.2 重评预算 ≥ 1（成本与人数解耦）", f"{budget}")
 
+    # §6.3 交战派生：全部由源值推一遍，写错一个数 CI 就会红
+    def q16(x: float) -> int:
+        return int(x * 65536 + 0.5)
+
+    vms_r, vms_m = as_int(ron.get("vel_ms_rifle")), as_int(ron.get("vel_ms_mg"))
+    vr, vm = as_int(ron.get("vel_rifle_mmpt")), as_int(ron.get("vel_mg_mmpt"))
+    check(vms_r and vr and abs(vr - vms_r * 1000 // hz) <= 1,
+          "§6.3 步枪弹速 = vel_ms / SIM_HZ", f"{vr} vs {vms_r * 1000 // hz}")
+    check(vms_m and vm and abs(vm - round(vms_m * 1000 / hz)) <= 1,
+          "§6.3 机枪弹速 = vel_ms / SIM_HZ", f"{vm} vs {round(vms_m * 1000 / hz)}")
+
+    rpm_r, rpm_m = as_int(ron.get("rpm_rifle")), as_int(ron.get("rpm_mg"))
+    rpt_r, rpt_m = as_int(ron.get("rpt_rifle_q16")), as_int(ron.get("rpt_mg_q16"))
+    check(rpm_r and rpt_r and abs(rpt_r - q16(rpm_r / 60 / hz)) <= 1,
+          "§6.3 步枪射速 = rpm / 60 / SIM_HZ（Q16）", f"{rpt_r} vs {q16(rpm_r / 60 / hz)}")
+    check(rpm_m and rpt_m and abs(rpt_m - q16(rpm_m / 60 / hz)) <= 1,
+          "§6.3 机枪射速 = rpm / 60 / SIM_HZ（Q16）", f"{rpt_m} vs {q16(rpm_m / 60 / hz)}")
+
+    rt_ms, re_ms = as_int(ron.get("reload_tactical_ms")), as_int(ron.get("reload_empty_ms"))
+    rt_t, re_t = as_int(ron.get("reload_tactical_ticks")), as_int(ron.get("reload_empty_ticks"))
+    check(rt_ms and rt_t and rt_t == rt_ms * hz // 1000,
+          "§6.3 战术换弹 tick = ms × SIM_HZ / 1000", f"{rt_t} vs {rt_ms * hz // 1000}")
+    check(re_ms and re_t and re_t == re_ms * hz // 1000,
+          "§6.3 空仓换弹 tick = ms × SIM_HZ / 1000", f"{re_t} vs {re_ms * hz // 1000}")
+    check(rt_t and re_t and rt_t < re_t, "§6.3 战术换弹比空仓快", f"{rt_t} < {re_t}")
+
+    dec = as_int(ron.get("suppression_decay_ticks"))
+    sd = as_int(ron.get("supp_decay_q16"))
+    check(dec and sd and abs(sd - q16(1 - 1 / dec)) <= 1,
+          "§6.3 压制衰减 = 1 − 1/τ（Q16）", f"{sd} vs {q16(1 - 1 / dec)}")
+
+    for key, src in [("part_head_q16", "dmg_head"), ("part_chest_q16", "dmg_chest"),
+                     ("part_gut_q16", "dmg_gut"), ("part_limb_q16", "dmg_limb")]:
+        got, src_f = as_int(ron.get(key)), as_float(ron.get(src))
+        check(got is not None and src_f is not None and abs(got - q16(src_f)) <= 1,
+              f"§6.3 {key} = {src}（Q16）", f"{got} vs {q16(src_f)}")
+
+    bmax = as_int(ron.get("bloom_max_mul_q16"))
+    check(bmax == 3 * 65536, "§6.3 散布上限 = ×3.0（Q16）", f"{bmax}")
+    check(as_int(ron.get("near_miss_mm")) == as_int(ron.get("supp_near_miss_mm")),
+          "§6.3 近失半径与 §7 同源", f"{ron.get('near_miss_mm')} vs {ron.get('supp_near_miss_mm')}")
+    mproj = as_int(ron.get("max_projectiles"))
+    check(mproj is not None and mproj >= 1024, "§6.3 投射物上限合理", f"{mproj}")
+    sst = as_int(ron.get("single_shot_ticks"))
+    check(sst and rpt_r and sst * rpt_r >= 65536,
+          "§6.3 单发节奏比连发慢（长点射退化成单发才有意义）", f"{sst} × {rpt_r} ≥ 65536")
+    for w, br_key, cd_key, rpt in [("步枪", "burst_rounds_rifle", "burst_cooldown_rifle", rpt_r),
+                                   ("机枪", "burst_rounds_mg", "burst_cooldown_mg", rpt_m)]:
+        br, cd = as_int(ron.get(br_key)), as_int(ron.get(cd_key))
+        if not (br and cd and rpt):
+            err(f"§6.3 {w} 长点射参数缺失")
+            continue
+        burst_t = br * 65536 // rpt                     # 打完一轮要多少 tick
+        check(cd >= 1 and cd <= burst_t * 3, f"§6.3 {w} 冷却与点射时长同量级", f"{cd} vs {burst_t}")
+        check(burst_t + cd <= hz * 3, f"§6.3 {w} 点射+冷却 ≤ 3 s", f"{burst_t + cd} tick")
+    check(as_int(ron.get("range_rifle_mm")) and vr
+          and as_int(ron.get("range_rifle_mm")) >= vr * 2,
+          "§6.3 步枪射程 ≥ 2 tick 弹程（弹丸不会一 tick 飞出射程）")
+    for k in ("hit_r_head_mm", "hit_r_chest_mm", "hit_r_gut_mm", "hit_r_limb_mm"):
+        r_mm = as_int(ron.get(k))
+        check(r_mm is not None and 0 < r_mm <= 300, f"§6.3 {k} 合理", f"{r_mm}")
+    check(as_int(ron.get("hit_r_head_mm")) < as_int(ron.get("hit_r_chest_mm")),
+          "§6.3 头部判定半径 < 胸")
+
     # 文档同步：关键裁定必须在设计文档里出现
     for needle, label in [("Critical", "R5 伤员状态机"), ("render_fog", "R2 信息可见性"),
                           ("angular_factor", "R10 侧翼判定"), ("per_point", "R3 逐点命中"),

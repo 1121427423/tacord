@@ -172,6 +172,52 @@ Constants(
         unreachable:        4294967295,     // u32::MAX，与真实代价绝不冲突
     ),
 
+    // ──────────────────── 6.2 交战（M1-B 引入，见 §6.3）───────────────────
+    engagement: Engagement(
+        // 源值（§30.3.1 武器表）—— 派生值全部由这四个数推出来，自检会算一遍
+        vel_ms_rifle:          900,
+        vel_ms_mg:             850,
+        rpm_rifle:             600,
+        rpm_mg:                750,
+        // 弹速（mm/tick）：m/s ÷ SIM_HZ
+        vel_rifle_mmpt:        30000,          // 900 m/s
+        vel_mg_mmpt:           28333,          // 850 m/s（取整，误差 0.001%）
+        // 射速（发/tick，Q16）：rpm ÷ 60 ÷ 30
+        rpt_rifle_q16:         21845,          // 600 rpm = 0.33333 发/tick
+        rpt_mg_q16:            27306,          // 750 rpm = 0.41667 发/tick
+        // 弹匣容量 / 携弹量 / 投射物上限在 §8 combat 段（mag_rifle 等），这里不抄第二份
+        reload_tactical_ticks: 78,             // 2600 ms
+        reload_empty_ticks:    96,             // 3200 ms
+        // 长点射：打满就停火冷却，之后退化为单发（P4）
+        burst_rounds_rifle:    8,
+        burst_rounds_mg:       20,
+        burst_cooldown_rifle:  18,             // 0.6 s
+        burst_cooldown_mg:     30,             // 1.0 s
+        single_shot_ticks:     6,              // 单发节奏 5 发/s
+        // 散布（µrad；1 mrad = 1000 µrad）—— 初值，M1 末试玩后调
+        cone_base_urad_rifle:  2500,
+        cone_base_urad_mg:     5000,
+        bloom_urad_per_round:  400,
+        bloom_max_mul_q16:     196608,         // ×3.0
+        bloom_decay_urad_pt:   800,            // 停火后 ≈ 0.2 s 回落
+        // 压制（§7 的 τ 与阈值，这里是定点化结果）
+        supp_decay_q16:        64990,          // 每 tick × (1 − 1/120)
+        // 部位系数（Q16）：头 2.6 / 胸 1.0 / 腹 0.85 / 肢 0.45
+        part_head_q16:         170394,
+        part_chest_q16:        65536,
+        part_gut_q16:          55706,
+        part_limb_q16:         29491,
+        // 命中判定半径（mm）
+        hit_r_head_mm:         120,
+        hit_r_chest_mm:        200,
+        hit_r_gut_mm:          200,
+        hit_r_limb_mm:         150,
+        near_miss_mm:          1500,           // 与 perception.supp_near_miss_mm 同源
+        // 有效射程（mm）
+        range_rifle_mm:        400000,
+        range_mg_mm:           800000,
+    ),
+
     // ──────────────────────── 7. 感知与压制（T2）────────────────────────
     perception: Perception(
         fov_half_deg:       110,
