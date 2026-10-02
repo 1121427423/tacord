@@ -17,7 +17,7 @@
 
 use crate::cover::{blocking_at, pick_cover, CoverField, Posture, Threat, COVER_OK_BLOCK};
 use crate::nav::{step_toward, HeightField, NavParams};
-use crate::ray::{blocked, cast, RayMode};
+use crate::ray::{blocked, cast, hit_point, RayMode};
 use crate::world::World;
 use crate::CELL_MM;
 use sim_math::{isqrt_i64, Mm, Pcg32, Vec3};
@@ -540,10 +540,17 @@ impl Sim {
                 // 打在墙上：M1-B 不做墙体破坏（穿透/跳弹/掩体被打掉留 M2）
                 consumed = true;
             }
-            if !consumed {
-                // 没命中 → 近失压制（子弹从身边飞过）
-                self.apply_near_miss(&p);
-            }
+            // 近失压制：不管这一发最后打到哪儿，只要**飞过的那一段**从谁身边
+            // 擦过去就算。原来的写法只在"谁也没打中"时才判近失，于是
+            // 先擦过人、再打进墙里的那些子弹全被漏掉了（实测一条都没有）。
+            let (ex, ey, ez) = match &hit_wall {
+                Some(w) => {
+                    let h = hit_point(v3(p.px, p.py, p.pz), v3(p.x, p.y, p.z), w);
+                    (i64::from(h.x.0), i64::from(h.y.0), i64::from(h.z.0))
+                }
+                None => (p.x, p.y, p.z),
+            };
+            self.apply_near_miss(p.px, p.py, p.pz, ex, ey, ez, p.team);
             if consumed || p.ttl <= 0 || p.y < -2_000 {
                 self.projectiles.swap_remove(i);
             } else {
@@ -555,7 +562,7 @@ impl Sim {
 
     /// 线段 vs 敌人士兵的采样点球体，返回**最近**的一个命中（索引、t、部位）。
     fn resolve_segment(&self, p: &Projectile) -> Option<(usize, i64, i64, Part)> {
-        let cands = self.candidates_for_segment(p);
+        let cands = self.candidates_for_segment(p.px, p.py, p.pz, p.x, p.y, p.z);
         let mut best: Option<(usize, i64, i64, Part)> = None;
         for idx in cands {
             let s = &self.soldiers[idx as usize];
@@ -586,12 +593,20 @@ impl Sim {
     }
 
     /// 取线段附近格子里的士兵；格子太多（子弹一 tick 走 60 格）就退回全量枚举。
-    fn candidates_for_segment(&self, p: &Projectile) -> Vec<u32> {
+    fn candidates_for_segment(
+        &self,
+        ax: i64,
+        _ay: i64,
+        az: i64,
+        bx: i64,
+        _by: i64,
+        bz: i64,
+    ) -> Vec<u32> {
         let d = self.dim as i64;
-        let c0x = clamp_cell(i64::min(p.px, p.x) / CELL_MM - 1, d);
-        let c1x = clamp_cell(i64::max(p.px, p.x) / CELL_MM + 1, d);
-        let c0z = clamp_cell(i64::min(p.pz, p.z) / CELL_MM - 1, d);
-        let c1z = clamp_cell(i64::max(p.pz, p.z) / CELL_MM + 1, d);
+        let c0x = clamp_cell(i64::min(ax, bx) / CELL_MM - 1, d);
+        let c1x = clamp_cell(i64::max(ax, bx) / CELL_MM + 1, d);
+        let c0z = clamp_cell(i64::min(az, bz) / CELL_MM - 1, d);
+        let c1z = clamp_cell(i64::max(az, bz) / CELL_MM + 1, d);
         let area = (c1x - c0x + 1) * (c1z - c0z + 1);
         let mut out = Vec::new();
         if area > 256 {
@@ -611,20 +626,20 @@ impl Sim {
         out
     }
 
-    fn apply_near_miss(&mut self, p: &Projectile) {
-        let cands = self.candidates_for_segment(p);
+    fn apply_near_miss(&mut self, ax: i64, ay: i64, az: i64, bx: i64, by: i64, bz: i64, team: u8) {
+        let cands = self.candidates_for_segment(ax, ay, az, bx, by, bz);
         for idx in cands {
             let i = idx as usize;
             let (alive, team, sx, sz) = {
                 let s = &self.soldiers[i];
                 (s.alive(), s.team, s.x, s.z)
             };
-            if !alive || team == p.team {
+            if !alive || team == team {
                 continue;
             }
             let ground = self.ground_mm(sx, sz);
             let chest = ground + 1_350;
-            let d2 = seg_point_dist2(p.px, p.py, p.pz, p.x, p.y, p.z, sx, chest, sz);
+            let d2 = seg_point_dist2(ax, ay, az, bx, by, bz, sx, chest, sz);
             if d2 > NEAR_MISS_MM * NEAR_MISS_MM {
                 continue;
             }

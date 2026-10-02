@@ -207,6 +207,7 @@ jobs:
           cargo run --release -q -p sim_cli -- worldcheck --world 64 > "worldcheck-${OS}.txt" 2>&1
           cargo run --release -q -p sim_cli -- bench --units 400 --ticks 20000 --rays 4 --world 256 --seed 1 > "bench-${OS}.txt" 2>&1
           cargo run --release -q -p sim_cli -- cover --world 256 --trials 100 --seed 1 > "cover-${OS}.txt" 2>&1
+          cargo run --release -q -p sim_cli -- engage --world 64 --units 400 --ticks 900 --seed 1 > "engage-${OS}.txt" 2>&1
           {
             echo "os: ${OS}"
             echo "arch: $(uname -m)"
@@ -217,6 +218,7 @@ jobs:
           echo "--- worldcheck ---"; cat "worldcheck-${OS}.txt"
           echo "--- bench ---";      cat "bench-${OS}.txt"
           echo "--- cover ---";      cat "cover-${OS}.txt"
+          echo "--- engage ---";     cat "engage-${OS}.txt"
 
       - uses: actions/upload-artifact@v4
         with:
