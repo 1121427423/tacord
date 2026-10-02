@@ -1,21 +1,21 @@
 [1m[93mwarning[0m[1m[97m: unused variable: `dim`[0m
-   [1m[96m--> [0mcrates\sim_cli\src\main.rs:893:5
+   [1m[96m--> [0mcrates\sim_cli\src\main.rs:800:5
     [1m[96m|[0m
-[1m[96m893[0m [1m[96m|[0m     dim: u32,
+[1m[96m800[0m [1m[96m|[0m     dim: u32,
     [1m[96m|[0m     [1m[93m^^^[0m [1m[93mhelp: if this is intentional, prefix it with an underscore: `_dim`[0m
     [1m[96m|[0m
     [1m[96m= [0m[1m[97mnote[0m: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
 
 [1m[93mwarning[0m[1m[97m: unused variable: `p`[0m
-   [1m[96m--> [0mcrates\sim_cli\src\main.rs:896:9
+   [1m[96m--> [0mcrates\sim_cli\src\main.rs:803:9
     [1m[96m|[0m
-[1m[96m896[0m [1m[96m|[0m     let p = NavParams::default();
+[1m[96m803[0m [1m[96m|[0m     let p = NavParams::default();
     [1m[96m|[0m         [1m[93m^[0m [1m[93mhelp: if this is intentional, prefix it with an underscore: `_p`[0m
 
 [1m[93mwarning[0m[1m[97m: function `steer_to` is never used[0m
-   [1m[96m--> [0mcrates\sim_cli\src\main.rs:604:4
+   [1m[96m--> [0mcrates\sim_cli\src\main.rs:511:4
     [1m[96m|[0m
-[1m[96m604[0m [1m[96m|[0m fn steer_to(
+[1m[96m511[0m [1m[96m|[0m fn steer_to(
     [1m[96m|[0m    [1m[93m^^^^^^^^[0m
     [1m[96m|[0m
     [1m[96m= [0m[1m[97mnote[0m: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
@@ -27,8 +27,8 @@ tick 数     : 20000
 射线/tick   : 4（合计 32000000）
 命中率      : 15.4%
 退化射线    : 0（截断把射线砍成 0 长度的数量，必须恒为 0）
-每 tick 耗时: 平均 3094.5 µs | p50 3067.2 | p90 3164.3 | p99 4093.8 | max 6134.2
-射线吞吐    : 517041 ray/s（0.52 M ray/s，单条 1.93 µs）
-预算对照    : p99 4093.8 µs / 11000 µs（每 tick 预算）= 37.22%
+每 tick 耗时: 平均 3040.5 µs | p50 3014.2 | p90 3105.0 | p99 4071.3 | max 6156.0
+射线吞吐    : 526225 ray/s（0.53 M ray/s，单条 1.90 µs）
+预算对照    : p99 4071.3 µs / 11000 µs（每 tick 预算）= 37.01%
 世界校验和  : 0xBCDB03CC976971A2
 （注意：这是纯射线负载的基线，尚未包含 AI 决策与掩体评分）
