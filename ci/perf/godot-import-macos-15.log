@@ -22,28 +22,23 @@ Initialize godot-rust (API v4.7.2.stable.official, runtime v4.7.2.stable.officia
 [  16% ] [90m[1mloading_editor_layout[22m | Loading docks...[39m[0m
 [92m[ DONE ][39m [1mloading_editor_layout[22m
 [0m
-SCRIPT ERROR: Parse Error: Cannot find member "SHADING_MODE_UNLIT" in base "BaseMaterial3D".
-          at: GDScript::reload (res://scripts/main.gd:69)
-SCRIPT ERROR: Parse Error: Cannot find member "SHADING_MODE_UNLIT" in base "BaseMaterial3D".
-          at: GDScript::reload (res://scripts/main.gd:108)
-ERROR: Failed to load script "res://scripts/main.gd" with error "Parse error".
-   at: load (modules/gdscript/gdscript_resource_format.cpp:46)
 
 ================================================================
 handle_crash: Program crashed with signal 11
 Engine version: Godot Engine v4.7.2.stable.official (ed1daf0bf001b61586d9930840f2f1394092c079)
 Dumping the backtrace. Please include this when reporting the bug on: https://github.com/godotengine/godot/issues
-Load address: 104494000
+Load address: 102bb8000
 
-[1] 1876856a4 (libsystem_platform.dylib+36a4) - _sigtramp + 56
-[2] 10664cdbc (main+21b8dbc) - SDL_GetPerformanceFrequency + 4162848
-[3] 10662c3c0 (main+21983c0) - SDL_GetPerformanceFrequency + 4029220
-[4] 10666d69c (main+21d969c) - SDL_GetPerformanceFrequency + 4296192
-[5] 10922037c (main+4d8c37c) - ZSTD_decompressStream_simpleArgs + 6538008
-[6] 109220664 (main+4d8c664) - ZSTD_decompressStream_simpleArgs + 6538752
-[7] 104c0694c (main+77294c) - main + 155224
-[8] 104b7e578 (main+6ea578) - mvk::SPIRVToMSLConverter::convert(mvk::SPIRVToMSLConversionConfiguration&, mvk::SPIRVToMSLConversionResult&, bool, bool, bool)
-[9] 104be0ea4 (main+74cea4) - main (in Godot) + 944
-[10] 1872aab98 (dyld+6b98) - start + 6076
+[1] 18bb016a4 (libsystem_platform.dylib+36a4) - _sigtramp + 56
+[2] 104d70dbc (main+21b8dbc) - SDL_GetPerformanceFrequency + 4162848
+[3] 104d503c0 (main+21983c0) - SDL_GetPerformanceFrequency + 4029220
+[4] 104d9169c (main+21d969c) - SDL_GetPerformanceFrequency + 4296192
+[5] 10794437c (main+4d8c37c) - ZSTD_decompressStream_simpleArgs + 6538008
+[6] 107944664 (main+4d8c664) - ZSTD_decompressStream_simpleArgs + 6538752
+[7] 10332a94c (main+77294c) - main + 155224
+[8] 1032a2578 (main+6ea578) - mvk::SPIRVToMSLConverter::convert(mvk::SPIRVToMSLConversionConfiguration&, mvk::SPIRVToMSLConversionResult&, bool, bool, bool)
+[9] 103304ea4 (main+74cea4) - main (in Godot) + 944
+[10] 18b726b98 (dyld+6b98) - start + 6076
 -- END OF C++ BACKTRACE --
 ================================================================
+tools/ci_timeout.sh: line 26: 22821 Abort trap: 6           perl -e 'alarm shift; exec @ARGV' "$secs" "$@"
