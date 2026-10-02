@@ -5,5 +5,6 @@
 [log] Build configuration: Emscripten 4.0.20, single-threaded, GDExtension support.
 [log] [tacord] units=400 segments=5497 dim_cells=64 cover_slots=523 checksum=0x27dc657ce3fe2bd8
 [smoke] sim 起来=true（等了 2.0s）
-[smoke] 截图 34092 字节
+[smoke] 截图 46200 字节
+[smoke] 非黑像素 46.7%  平均亮度 93.5/255
 [smoke] PASS
