@@ -7,9 +7,9 @@
    [1m[94m= [0m[1mnote[0m: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
 
 [1m[33mwarning[0m[1m: function `steer_to` is never used[0m
-   [1m[94m--> [0mcrates/sim_cli/src/main.rs:571:4
+   [1m[94m--> [0mcrates/sim_cli/src/main.rs:600:4
     [1m[94m|[0m
-[1m[94m571[0m [1m[94m|[0m fn steer_to(
+[1m[94m600[0m [1m[94m|[0m fn steer_to(
     [1m[94m|[0m    [1m[33m^^^^^^^^[0m
     [1m[94m|[0m
     [1m[94m= [0m[1mnote[0m: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
@@ -29,9 +29,9 @@ OK
    [1m[94m= [0m[1mnote[0m: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
 
 [1m[33mwarning[0m[1m: function `steer_to` is never used[0m
-   [1m[94m--> [0mcrates/sim_cli/src/main.rs:571:4
+   [1m[94m--> [0mcrates/sim_cli/src/main.rs:600:4
     [1m[94m|[0m
-[1m[94m571[0m [1m[94m|[0m fn steer_to(
+[1m[94m600[0m [1m[94m|[0m fn steer_to(
     [1m[94m|[0m    [1m[33m^^^^^^^^[0m
     [1m[94m|[0m
     [1m[94m= [0m[1mnote[0m: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
@@ -43,9 +43,9 @@ tick 数     : 20000
 射线/tick   : 4（合计 32000000）
 命中率      : 15.4%
 退化射线    : 0（截断把射线砍成 0 长度的数量，必须恒为 0）
-每 tick 耗时: 平均 2007.6 µs | p50 1988.1 | p90 2082.2 | p99 2282.9 | max 5329.8
-射线吞吐    : 796955 ray/s（0.80 M ray/s，单条 1.25 µs）
-预算对照    : p99 2282.9 µs / 11000 µs（每 tick 预算）= 20.75%
+每 tick 耗时: 平均 2961.5 µs | p50 2950.6 | p90 3032.5 | p99 3182.9 | max 9761.0
+射线吞吐    : 540274 ray/s（0.54 M ray/s，单条 1.85 µs）
+预算对照    : p99 3182.9 µs / 11000 µs（每 tick 预算）= 28.94%
 世界校验和  : 0xBCDB03CC976971A2
 （注意：这是纯射线负载的基线，尚未包含 AI 决策与掩体评分）
 [1m[33mwarning[0m[1m: unused import: `Posture`[0m
@@ -57,9 +57,9 @@ tick 数     : 20000
    [1m[94m= [0m[1mnote[0m: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
 
 [1m[33mwarning[0m[1m: function `steer_to` is never used[0m
-   [1m[94m--> [0mcrates/sim_cli/src/main.rs:571:4
+   [1m[94m--> [0mcrates/sim_cli/src/main.rs:600:4
     [1m[94m|[0m
-[1m[94m571[0m [1m[94m|[0m fn steer_to(
+[1m[94m600[0m [1m[94m|[0m fn steer_to(
     [1m[94m|[0m    [1m[33m^^^^^^^^[0m
     [1m[94m|[0m
     [1m[94m= [0m[1mnote[0m: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
@@ -68,11 +68,11 @@ tick 数     : 20000
 世界        : 256 柱（128 m），65818 段
 可站立柱    : 65536 / 65536（100.0%）
 目标柱      : (254, 254)；流场覆盖 65365 柱
-高度场构建  : 399 µs（全量）
-流场首次计算: 3107 µs；之后每 15 tick 重算一次：p50 2901 µs | p99 3132 µs（共 133 次）
+高度场构建  : 614 µs（全量）
+流场首次计算: 4992 µs；之后每 15 tick 重算一次：p50 4960 µs | p99 5084 µs（共 133 次）
 单位        : 400（生成 400；步行 50 mm/tick）
-每 tick 移动: 平均 16.7 µs | p50 16 | p90 18 | p99 22 | max 33
-预算对照    : p99 22 µs / 11000 µs（每 tick 预算）= 0.20%
+每 tick 移动: 平均 20.5 µs | p50 20 | p90 23 | p99 30 | max 43
+预算对照    : p99 30 µs / 11000 µs（每 tick 预算）= 0.27%
 到达        : 0 / 400，平均 0.0 s，最长 0.0 s
 卡住        : 0 单位·tick（流场不可达；正常时应为 0）
 破坏演示    : tick 500 炸开 (99, 87) → 流场覆盖 65365 → 65366 柱（新通路）
@@ -86,31 +86,32 @@ tick 数     : 20000
    [1m[94m= [0m[1mnote[0m: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
 
 [1m[33mwarning[0m[1m: function `steer_to` is never used[0m
-   [1m[94m--> [0mcrates/sim_cli/src/main.rs:571:4
+   [1m[94m--> [0mcrates/sim_cli/src/main.rs:600:4
     [1m[94m|[0m
-[1m[94m571[0m [1m[94m|[0m fn steer_to(
+[1m[94m600[0m [1m[94m|[0m fn steer_to(
     [1m[94m|[0m    [1m[33m^^^^^^^^[0m
     [1m[94m|[0m
     [1m[94m= [0m[1mnote[0m: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
 
 ── sim_cli cover ──────────────────────────────
 世界: 256×256 柱（128 m 见方）
-高度场重建: 402 µs
-掩体派生:   1270 µs  →  2430 个槽
-平均: 高 4281 mm / 宽 5831 mm
-  战壕        12
-  矮墙       194
-  高墙      1060
-  转角       258
-  窗洞       805
-  残骸        64
-  窄柱        37
-掩体场校验和: 0xAF501818B2770A87
+高度场重建: 635 µs
+掩体派生:   2146 µs  →  2842 个槽
+平均: 高 3779 mm / 宽 5091 mm
+  战壕        21
+  矮墙       252
+  高墙      1053
+  转角       439
+  窗洞       800
+  残骸       119
+  窄柱       158
+掩体场校验和: 0x97A1C2E63F9CAF2B
 
 反脚本化验证（§20.1.8）: 100 次随机遭遇
-  3 秒内 blocking ≥ 0.7: 75/100 = 75.0%   （目标 ≥ 95%）
-  平均: 选中槽距离 4921 mm / 到达槽位 23/100 / 走了 39 步
-  到达者的平均 blocking 1.00（其中达标 23/23） / 没到达的 0.68
-  每 trial 平均 2233 µs
-cover_rate_pct=75.0
+  3 秒内 blocking ≥ 0.7: 93/100 = 93.0%   （目标 ≥ 95%）
+  平均: 选中槽距离 3414 mm / 到达槽位 30/100 / 走了 29 步
+  到达者的平均 blocking 1.00（其中达标 30/30） / 没到达的 0.90
+  失败样本出生点到最近掩体: 平均 10663 mm（7 个样本）
+  每 trial 平均 2842 µs
+cover_rate_pct=93.0
 ───────────────────────────────────────────────
