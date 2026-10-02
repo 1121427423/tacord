@@ -392,6 +392,15 @@ jobs:
             echo "::error::主场景里 sim 没接到（units 不是 400）"
             exit 1
           fi
+          # M1-A：画面里必须真的有城、有掩体（wall_boxes / cover 派生为空 ⇒ 一片空地）
+          if ! grep -qE "walls=[1-9][0-9]*" /tmp/godot-scene.log; then
+            echo "::error::场景里一面墙都没有（wall_boxes 是空的？）"
+            exit 1
+          fi
+          if ! grep -qE "slots=[1-9][0-9]*" /tmp/godot-scene.log; then
+            echo "::error::场景里一个掩体槽都没有（掩体场没建起来？）"
+            exit 1
+          fi
           exit "$(cat /tmp/scene-code)"
 
       - name: 记录输出

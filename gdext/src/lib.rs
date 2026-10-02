@@ -561,8 +561,8 @@ impl SimRoot {
                     if s.bottom_mm < 0 || s.top_mm <= s.bottom_mm {
                         continue;
                     }
-                    let y0 = f32::from(s.bottom_mm) / 1000.0;
-                    let y1 = f32::from(s.top_mm) / 1000.0;
+                    let y0 = s.bottom_mm as f32 / 1000.0;
+                    let y1 = s.top_mm as f32 / 1000.0;
                     out.push(cx as f32 * 0.5 + 0.25);
                     out.push((y0 + y1) * 0.5);
                     out.push(cz as f32 * 0.5 + 0.25);

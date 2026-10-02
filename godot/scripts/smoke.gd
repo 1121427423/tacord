@@ -38,8 +38,13 @@ func _process(_delta: float) -> bool:
 	sim.set_auto_advance(false)   # 关掉帧驱动：校验和必须只由 tick 数决定
 
 	var cs0 := sim.world_checksum()
+	# 一边 tick 一边记"最多有多少人同时在掩体里"：
+	# 只在结束那一刻取样会漏 —— 点射结束后他们会自己站起来（HOLD_TICKS），
+	# 恰好取在站起来之后就会误判成"没人找掩体"。
+	var max_in_cover := 0
 	for _i in range(TICKS):
 		sim.step()
+		max_in_cover = maxi(max_in_cover, sim.in_cover_count())
 	var pos0 := sim.unit_position(0)
 
 	# 校验和是 u64（Godot 整数是 i64）⇒ 用 num_uint64 打印；这个数字用于跨平台逐位比对
@@ -49,6 +54,11 @@ func _process(_delta: float) -> bool:
 			" world_checksum=0x", String.num_uint64(sim.world_checksum(), 16),
 			" pos_checksum=0x", String.num_uint64(sim.unit_position_checksum(), 16),
 			" pos0=", str(pos0))
+	print("[smoke] M1-A：掩体槽=", sim.cover_slot_count(),
+			" 点射=", sim.shot_count(),
+			" 同时在掩体里最多=", max_in_cover,
+			" 此刻=", sim.in_cover_count(),
+			" cover_checksum=0x", String.num_uint64(sim.cover_checksum(), 16))
 
 	var ok := true
 	ok = ok and sim.unit_count() == 400
@@ -56,6 +66,9 @@ func _process(_delta: float) -> bool:
 	ok = ok and sim.world_checksum() == cs0        # 这个演示里世界不变动
 	ok = ok and sim.world_checksum() != 0
 	ok = ok and pos0.length() > 0.0                # 单位确实动了
+	# M1-A：图里得有掩体，而且挨打之后得有人真的钻进去
+	ok = ok and sim.cover_slot_count() > 0
+	ok = ok and max_in_cover > 0
 
 	print("[smoke] ", "PASS" if ok else "FAIL")
 	quit(0 if ok else 1)

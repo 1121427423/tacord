@@ -1,8 +1,9 @@
 extends Node3D
-## M0 的表现层：400 个 MultiMesh 方块跟着 sim 走。
+## M1-A 的表现层：一座程序化生成的城 + 400 个士兵，挨打时自己找掩体。
 ##
-## **边界（A6）**：这里没有规则逻辑，只有"把 sim 的位置搬到渲染"。
-## 规则全在 Rust 侧（sim_core），改行为请改那里，不要在这里打补丁。
+## **边界（A6）**：这里没有规则逻辑，只有"把 sim 的状态搬到渲染"。
+## 规则（什么时候该找掩体、哪个槽更好、够不够藏住）全在 Rust 侧
+## （`sim_core::cover` + `gdext` 的 SimRoot），改行为请改那里，不要在这里打补丁。
 ##
 ## 四条"为了在浏览器里活下来"的设计（Web 版没有控制台可看，出了错就是一片黑）：
 ##
@@ -10,22 +11,41 @@ extends Node3D
 ##    之前写进 .tscn 的后果：扩展一旦没加载（侧模块没起来），整个场景加载失败，
 ##    屏幕上什么都不剩，连一句"为什么"都没有。
 ## 2. HUD 第一个建、每一步都往屏幕上写字：出任何问题都能在画面上看到原因。
-## 3. 方块用 unlit 材质 + 环境光 + 地面：缺光源不会表现成"黑屏没画面"。
+## 3. 士兵方块用 unlit 材质（有光没光都看得见）；墙按高度调明度，
+##    即使打光没生效也还能靠明暗分出楼和地面 —— 少一个"黑屏"的失败模式。
 ## 4. 相机用 look_at 对准世界中心，**不要手算欧拉角**。
 ##    之前是 Rx(+45°) 放在 (0,40,40)：视线方向 (0,+0.707,-0.707) —— 朝天、背对世界，
 ##    世界中心在相机平面上且远在视锥下方，于是"引擎加载完成但没有游戏画面"。
+##
+## 颜色约定（一眼看懂在发生什么）：
+##   亮蓝 = 巡逻（没挨打，站着走）
+##   橙   = 正在冲向掩体
+##   绿   = 已经在掩体里（并且按掩体类型趴下/蹲下）
 
 const CELL_M := 0.5  # 与 sim 的 CELL_MM = 500 对应
 
 @export var auto_advance := true
-@export var cube_size := Vector3(0.5, 0.5, 0.5)
+@export var cube_width := 0.4
+
+# 姿态高度（米）：站 / 蹲 / 趴
+const H_STAND := 0.9
+const H_CROUCH := 0.6
+const H_PRONE := 0.3
+
+const C_PATROL := Color(0.30, 0.85, 1.00)
+const C_RUSH := Color(1.00, 0.62, 0.20)
+const C_HIDDEN := Color(0.35, 0.95, 0.45)
 
 @onready var _camera: Camera3D = $Camera3D
 
 var sim: Object = null
-var _mm: MultiMeshInstance3D
+var _mm: MultiMeshInstance3D      # 士兵
+var _walls: MultiMeshInstance3D   # 楼 / 墙 / 残骸
+var _threat: MeshInstance3D       # 那挺机枪
+var _threat_mat: StandardMaterial3D
 var _hud: Label
 var _status := ""
+var _seed := 1
 
 
 func _ready() -> void:
@@ -35,8 +55,10 @@ func _ready() -> void:
 	if sim != null:
 		_place_camera()
 		_build_ground()
+		_build_walls()
+		_build_threat()
 		_build_cubes()
-	_sync()
+		_sync()
 
 
 func _setup_sim() -> void:
@@ -50,6 +72,7 @@ func _setup_sim() -> void:
 	sim.set_auto_advance(auto_advance)
 	print("[tacord] units=", sim.unit_count(), " segments=", sim.segment_count(),
 			" dim_cells=", sim.dim_cells(),
+			" cover_slots=", sim.cover_slot_count(),
 			" checksum=0x", String.num_uint64(sim.world_checksum(), 16))
 
 
@@ -62,21 +85,78 @@ func _place_camera() -> void:
 
 
 func _build_cubes() -> void:
+	# unlit：有光没光都看得见，士兵是画面里最该抢眼的东西
 	var box := BoxMesh.new()
-	box.size = cube_size
+	box.size = Vector3.ONE
 	var mat := StandardMaterial3D.new()
-	# unlit：有光没光都看得见，避免"没配光源"表现成黑屏
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.albedo_color = Color(0.30, 0.85, 1.0)
+	mat.albedo_color = Color.WHITE
 	box.material = mat
 
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true   # 每个士兵按状态上色（不开这个 set_instance_color 是空操作）
 	mm.mesh = box
 	mm.instance_count = sim.unit_count()
 	_mm = MultiMeshInstance3D.new()
 	_mm.multimesh = mm
 	add_child(_mm)
+
+
+## 城里的楼 / 院墙 / 残骸：sim 里每一段非地面体素画成一个盒子。
+##
+## 盒子数据由 sim 一次性给全（`wall_boxes`，每 6 个 float 一个：中心 xyz + 尺寸 xyz），
+## 这里不做任何"哪些该画"的判断 —— 那属于规则。
+func _build_walls() -> void:
+	var arr: PackedFloat32Array = sim.wall_boxes()
+	var n: int = arr.size() / 6
+	if n == 0:
+		push_warning("[tacord] sim 没给任何墙段")
+		return
+	var box := BoxMesh.new()
+	box.size = Vector3.ONE
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.66, 0.63, 0.58)
+	mat.roughness = 0.95
+	box.material = mat
+
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true   # 按高度调明度：打光万一没生效，还能靠明暗分出楼和地面
+	mm.mesh = box
+	mm.instance_count = n
+	_walls = MultiMeshInstance3D.new()
+	_walls.multimesh = mm
+	add_child(_walls)
+	for i in range(n):
+		var t := Transform3D()
+		var sx: float = arr[i * 6 + 3]
+		var sy: float = arr[i * 6 + 4]
+		var sz: float = arr[i * 6 + 5]
+		t.origin = Vector3(arr[i * 6 + 0], arr[i * 6 + 1], arr[i * 6 + 2])
+		t.basis.x = Vector3(sx, 0.0, 0.0)
+		t.basis.y = Vector3(0.0, sy, 0.0)
+		t.basis.z = Vector3(0.0, 0.0, sz)
+		mm.set_instance_transform(i, t)
+		# 越高越亮：0.5 m 的瓦砾最暗，7 m 的楼最亮
+		var k: float = clampf(sy / 6.0, 0.0, 1.0)
+		var v: float = 0.62 + 0.30 * k
+		mm.set_instance_color(i, Color(v, v * 0.97, v * 0.92))
+
+
+## 那挺机枪：唯一的"敌人"，红色方块，开火时变亮。
+func _build_threat() -> void:
+	var box := BoxMesh.new()
+	box.size = Vector3.ONE
+	# 材质自己留一份引用：MeshInstance3D 上取材质要走 surface_get_material，
+	# 而 PrimitiveMesh 的 material 是不是落在 surface 上是不确定的，别赌。
+	_threat_mat = StandardMaterial3D.new()
+	_threat_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_threat_mat.albedo_color = Color(0.95, 0.20, 0.18)
+	box.material = _threat_mat
+	_threat = MeshInstance3D.new()
+	_threat.mesh = box
+	add_child(_threat)
 
 
 func _build_environment() -> void:
@@ -90,11 +170,15 @@ func _build_environment() -> void:
 	env.environment = e
 	add_child(env)
 
-	# 这里**故意不建 DirectionalLight3D**：方块和地面都是 unlit（unshaded）材质，
-	# 有没有光都看得见 —— 少一个"光源没配好就黑屏"的失败模式。
-	# 另外 4.7 的 Light3D 已经没有 `energy` 属性了（改成物理单位 Light3D.PARAM_INTENSITY /
-	# light_intensity），照 4.3 的教程写 `light.energy = 1.2` 会报
-	# "Invalid assignment of property or key 'energy'"。M1 真要做打光时再处理。
+	# 一盏平行光：给墙体明暗，不然整座城是一张平面图，看不出高低。
+	# 注意 4.7 的 Light3D 已经没有 `energy` 属性了（改成物理单位的 light_intensity），
+	# 照 4.3 的教程写 `light.energy = 1.2` 会报
+	# "Invalid assignment of property or key 'energy'"。
+	# 不开阴影：400 人 + 上千个盒子，Web 上为这点观感不值。
+	var sun := DirectionalLight3D.new()
+	sun.light_intensity = 1.2
+	sun.rotation_degrees = Vector3(-45.0, 35.0, 0.0)
+	add_child(sun)
 
 
 func _build_ground() -> void:
@@ -106,8 +190,8 @@ func _build_ground() -> void:
 	g.rotation_degrees = Vector3(-90.0, 0.0, 0.0)
 	g.position = Vector3(half * 0.5, -0.02, half * 0.5)
 	var m := StandardMaterial3D.new()
-	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	m.albedo_color = Color(0.17, 0.19, 0.24)
+	m.albedo_color = Color(0.16, 0.17, 0.20)
+	m.roughness = 1.0
 	g.material_override = m
 	add_child(g)
 
@@ -117,7 +201,7 @@ func _build_hud() -> void:
 	_hud = Label.new()
 	_hud.position = Vector2(12, 12)
 	# 顶层 Control 不会被自动撑开，不给 size 就整块被裁掉（浏览器里表现为"什么都没有"）
-	_hud.size = Vector2(720, 200)
+	_hud.size = Vector2(760, 260)
 	_hud.add_theme_font_size_override("font_size", 18)
 	_hud.add_theme_color_override("font_color", Color(0.95, 0.97, 1.0))
 	_hud.text = "tacord · 启动中…"
@@ -134,10 +218,42 @@ func _process(delta: float) -> void:
 func _sync() -> void:
 	if _mm != null and sim != null:
 		var t := Transform3D()
+		var p: Vector3
+		var h: float
 		for i in range(_mm.multimesh.instance_count):
-			t.origin = sim.unit_position(i)
+			var st: int = sim.unit_state(i)
+			match st:
+				2:
+					# 在掩体里：按掩体类型摆姿态（矮墙/残骸趴，高墙/转角蹲）
+					h = H_PRONE if sim.unit_posture(i) == 2 else H_CROUCH
+				1:
+					h = H_STAND
+				_:
+					h = H_STAND
+			p = sim.unit_position(i)
+			t.origin = Vector3(p.x, p.y + h * 0.5, p.z)
+			t.basis.x = Vector3(cube_width, 0.0, 0.0)
+			t.basis.y = Vector3(0.0, h, 0.0)
+			t.basis.z = Vector3(0.0, 0.0, cube_width)
 			_mm.multimesh.set_instance_transform(i, t)
+			_mm.multimesh.set_instance_color(i, _color_of(st))
+	if _threat != null and sim != null:
+		var tp: Vector3 = sim.threat_position()
+		_threat.position = Vector3(tp.x, tp.y + 0.6, tp.z)
+		_threat.scale = Vector3(1.2, 1.2, 1.2)
+		if sim.under_fire():
+			_threat_mat.albedo_color = Color(1.0, 0.25, 0.18)
+		else:
+			_threat_mat.albedo_color = Color(0.45, 0.12, 0.12)
 	_update_hud()
+
+
+func _color_of(state: int) -> Color:
+	if state == 2:
+		return C_HIDDEN
+	if state == 1:
+		return C_RUSH
+	return C_PATROL
 
 
 func _update_hud() -> void:
@@ -147,22 +263,66 @@ func _update_hud() -> void:
 		_hud.text = "tacord\n!! " + _status
 		return
 	# 注意：sim 的校验和是 u64，Godot 的整数是 i64 ⇒ 必须 num_uint64，否则出现负号
-	_hud.text = "tacord Web\n tick=%d  units=%d  %.0f fps\n world=0x%s\n pos=0x%s" % [
+	_hud.text = "tacord Web · M1-A 掩体\n tick=%d  units=%d  %.0f fps\n %s（第 %d 次点射）\n 在掩体里 %d/%d   掩体槽 %d\n world=0x%s\n cover=0x%s\n F 开火   R 换地形   空格 暂停" % [
 		sim.tick_count(),
 		sim.unit_count(),
 		Engine.get_frames_per_second(),
+		"## 交火中 ##" if sim.under_fire() else "安静",
+		sim.shot_count(),
+		sim.in_cover_count(),
+		sim.unit_count(),
+		sim.cover_slot_count(),
 		String.num_uint64(sim.world_checksum(), 16).to_upper(),
-		String.num_uint64(sim.unit_position_checksum(), 16).to_upper(),
+		String.num_uint64(sim.cover_checksum(), 16).to_upper(),
 	]
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not (event is InputEventKey) or not event.pressed or event.echo:
+		return
+	match event.keycode:
+		KEY_F:
+			if sim != null:
+				sim.fire()
+		KEY_R:
+			_regenerate()
+		KEY_SPACE:
+			auto_advance = not auto_advance
+			if sim != null:
+				sim.set_auto_advance(auto_advance)
+		_:
+			pass
+
+
+## 换一张地图（同一个 seed 序列的下一个）：墙要整个重建，士兵数量可能变。
+func _regenerate() -> void:
+	if sim == null:
+		return
+	_seed += 1
+	sim.reset(sim.dim_cells(), sim.unit_count(), _seed)
+	if _walls != null:
+		remove_child(_walls)
+		_walls.queue_free()
+		_walls = null
+	_build_walls()
+	if _mm != null:
+		_mm.multimesh.instance_count = sim.unit_count()
+	print("[tacord] 换图 seed=", _seed, " units=", sim.unit_count(),
+			" slots=", sim.cover_slot_count(),
+			" world=0x", String.num_uint64(sim.world_checksum(), 16))
 
 
 ## 给 headless 冒烟用的一行状态（CI 里看不到画面，只能读这个）
 func debug_state() -> String:
 	if sim == null:
 		return "NO-SIM: " + _status
-	return "tick=%d units=%d cubes=%d pos=0x%s" % [
+	return "tick=%d units=%d cubes=%d walls=%d slots=%d in_cover=%d shots=%d pos=0x%s" % [
 		sim.tick_count(),
 		sim.unit_count(),
 		0 if _mm == null else _mm.multimesh.instance_count,
+		0 if _walls == null else _walls.multimesh.instance_count,
+		sim.cover_slot_count(),
+		sim.in_cover_count(),
+		sim.shot_count(),
 		String.num_uint64(sim.unit_position_checksum(), 16).to_upper(),
 	]
