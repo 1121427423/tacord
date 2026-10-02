@@ -1,0 +1,32 @@
+=== /tmp ===
+total 72
+drwxrwxrwt 14 root   root   4096 Oct  2 07:12 .
+drwxr-xr-x 23 root   root   4096 Oct  2 07:06 ..
+drwxrwxrwt  2 root   root   4096 Oct  2 07:06 .ICE-unix
+drwxrwxrwt  2 root   root   4096 Oct  2 07:06 .X11-unix
+drwxrwxrwt  2 root   root   4096 Oct  2 07:06 .XIM-unix
+drwxrwxrwt  2 root   root   4096 Oct  2 07:06 .font-unix
+prwx------  1 runner runner    0 Oct  2 07:10 clr-debug-pipe-2199-27298-in
+prwx------  1 runner runner    0 Oct  2 07:10 clr-debug-pipe-2199-27298-out
+prwx------  1 runner runner    0 Oct  2 07:10 clr-debug-pipe-2219-27438-in
+prwx------  1 runner runner    0 Oct  2 07:10 clr-debug-pipe-2219-27438-out
+srw-------  1 runner runner    0 Oct  2 07:10 dotnet-diagnostic-2199-27298-socket
+srw-------  1 runner runner    0 Oct  2 07:10 dotnet-diagnostic-2219-27438-socket
+-rw-r--r--  1 runner runner  642 Oct  2 07:11 http.log
+drwx------  2 root   root   4096 Oct  2 07:06 snap-private-tmp
+drwx------  3 root   root   4096 Oct  2 07:06 systemd-private-ffa4dceea7d7451a9ca794f33be8d6d0-ModemManager.service-YFcq2c
+drwx------  3 root   root   4096 Oct  2 07:06 systemd-private-ffa4dceea7d7451a9ca794f33be8d6d0-chrony.service-GzJh2z
+drwx------  3 root   root   4096 Oct  2 07:06 systemd-private-ffa4dceea7d7451a9ca794f33be8d6d0-haveged.service-I1ndlt
+drwx------  3 root   root   4096 Oct  2 07:06 systemd-private-ffa4dceea7d7451a9ca794f33be8d6d0-polkit.service-UNKP5h
+drwx------  3 root   root   4096 Oct  2 07:06 systemd-private-ffa4dceea7d7451a9ca794f33be8d6d0-systemd-logind.service-G1AJwq
+=== gh 探测 ===
+gh version 2.101.0 (2026-09-15)
+1121427423/tacord
+=== GH_TOKEN 有没有设 ===
+已设
+存 ci/perf/web-shot.png（497 字节，base64 664）
+gh: Not Found (HTTP 404)
+{"content":{"name":"web-shot.png","path":"ci/perf/web-shot.png","sha":"f4f691aae1381399dce99382ea3fcba3ae9f59bd","size":497,"url":"https://api.github.com/repos/1121427423/tacord/contents/ci/perf/web-shot.png?ref=ci/artifacts","html_url":"https://github.com/1121427423/tacord/blob/ci/artifacts/ci/perf
+存 ci/perf/web-console.log（391 字节，base64 524）
+gh: Not Found (HTTP 404)
+{"content":{"name":"web-console.log","path":"ci/perf/web-console.log","sha":"0291d227e0428952a398417e8217ecb67f6e86a2","size":391,"url":"https://api.github.com/repos/1121427423/tacord/contents/ci/perf/web-console.log?ref=ci/artifacts","html_url":"https://github.com/1121427423/tacord/blob/ci/artifact
