@@ -240,7 +240,25 @@ func _process(delta: float) -> void:
 	# 到底是 sim 没跑、跑得慢、还是渲染的问题（fps 与 tick 分开看就知道）。
 	_frames += 1
 	if _frames % 60 == 0 and sim != null:
-		print("[tacord] 实况 frame=", _frames, " tick=", sim.tick_count(), " fps=", snappedf(Engine.get_frames_per_second(), 0.1), " in_cover=", sim.in_cover_count(), "/", sim.unit_count(), " pos0=", str(sim.unit_position(0)))
+		# 三个数分开打，才能定位"画面看着不动"到底卡在哪一环：
+		#   poscs 变 = sim 里的人真的在走
+		#   mm0   变 = MultiMesh 的实例数据也被改写了
+		#   两个都变而画面不动 = 渲染/上传那一段的问题，不是模拟的问题
+		var npatrol := 0
+		var nrush := 0
+		var nhidden := 0
+		for i in range(sim.unit_count()):
+			match sim.unit_state(i):
+				1:
+					nrush += 1
+				2:
+					nhidden += 1
+				_:
+					npatrol += 1
+		var mm0 := Vector3.ZERO
+		if _mm != null:
+			mm0 = _mm.multimesh.get_instance_transform(0).origin
+		print("[tacord] 实况 frame=", _frames, " tick=", sim.tick_count(), " fps=", snappedf(Engine.get_frames_per_second(), 0.1), " in_cover=", sim.in_cover_count(), "/", sim.unit_count(), " 状态 巡逻/冲/藏=", npatrol, "/", nrush, "/", nhidden, " poscs=0x", String.num_uint64(sim.unit_position_checksum(), 16), " pos0=", str(sim.unit_position(0)), " mm0=", str(mm0))
 
 
 func _sync() -> void:
