@@ -589,6 +589,56 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
+  # ─────────────────── 真浏览器看一眼（headless 看不见黑屏）───────────────────
+  # 触发：提交信息带 [browsersmoke]。
+  #
+  # 为什么需要：Godot 的 headless 模式**不渲染**，"脚本报错""相机朝向错"
+  # "wasm 扩展没加载"在 CI 里全都看不见 —— 它们只表现为用户那边的"加载完了
+  # 但是一片黑"。所以这里用真 Chrome（软件 WebGL2 / SwiftShader）打开
+  # **已经在 Pages 上跑着的那份产物**（ci/web-preview 分支），抓控制台 + 截图。
+  # 产物上传后本地 `gh run download` 就能看图。
+  web-smoke:
+    name: 真浏览器看一眼（Chrome + SwiftShader）
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[browsersmoke]')
+    runs-on: ubuntu-latest
+    steps:
+      - name: 取工具与脚本
+        uses: actions/checkout@v4
+
+      - name: 取 Pages 上正在跑的那份 dist
+        uses: actions/checkout@v4
+        with:
+          ref: ci/web-preview
+          path: dist
+          clean: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: 起静态服务
+        run: |
+          set -e
+          ls -la dist
+          python3 -m http.server 8080 --bind 127.0.0.1 --directory dist > /tmp/http.log 2>&1 &
+          sleep 2
+          curl -sS -o /dev/null -w "index.html -> %{http_code}\n" http://127.0.0.1:8080/index.html
+
+      - name: 装 puppeteer（自带 Chrome）
+        run: npm init -y >/dev/null 2>&1; npm i puppeteer --no-audit --no-fund 2>&1 | tail -3
+
+      - name: 跑浏览器冒烟
+        run: node tools/web_smoke.mjs
+        continue-on-error: true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-smoke
+          path: |
+            /tmp/web-shot.png
+            /tmp/web-console.log
+          if-no-files-found: warn
+
   # ─────────────────────────── 静态检查与参数 ───────────────────────────
   lint:
     name: 格式与静态检查
