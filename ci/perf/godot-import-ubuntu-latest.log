@@ -4,7 +4,10 @@ Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 [   0% ] [90m[1mfirst_scan_filesystem[22m | Scanning file structure...[39m[0m
 [  16% ] [90m[1mfirst_scan_filesystem[22m | Loading global class names...[39m[0m
 [  33% ] [90m[1mfirst_scan_filesystem[22m | Verifying GDExtensions...[39m[0m
-Initialize godot-rust (API v4.7.2.stable.official, runtime v4.7.2.stable.official, safeguards balanced)
+ERROR: Can't open dynamic library, file not found: '/home/runner/work/tacord/tacord/godot/bin/libtacord_gdext.so'.
+   at: open_dynamic_library (drivers/unix/os_unix.cpp:1063)
+ERROR: GDExtension dynamic library not found: 'res://tacord.gdextension'.
+   at: open_library (core/extension/gdextension.cpp:810)
 [  50% ] [90m[1mfirst_scan_filesystem[22m | Creating autoload scripts...[39m[0m
 [  66% ] [90m[1mfirst_scan_filesystem[22m | Initializing plugins...[39m[0m
 [  83% ] [90m[1mfirst_scan_filesystem[22m | Starting file scan...[39m[0m
@@ -17,10 +20,12 @@ Initialize godot-rust (API v4.7.2.stable.official, runtime v4.7.2.stable.officia
 [  60% ] [90m[1mupdate_scripts_classes[22m | [39m[0m
 [92m[ DONE ][39m [1mupdate_scripts_classes[22m
 [0m
+ERROR: Can't open dynamic library, file not found: '/home/runner/work/tacord/tacord/godot/bin/libtacord_gdext.so'.
+   at: open_dynamic_library (drivers/unix/os_unix.cpp:1063)
+ERROR: GDExtension dynamic library not found: 'res://tacord.gdextension'.
+   at: open_library (core/extension/gdextension.cpp:810)
 [   0% ] [90m[1mloading_editor_layout[22m | Started Loading editor (5 steps)[39m[0m
 [   0% ] [90m[1mloading_editor_layout[22m | Loading editor layout...[39m[0m
 [  16% ] [90m[1mloading_editor_layout[22m | Loading docks...[39m[0m
 [92m[ DONE ][39m [1mloading_editor_layout[22m
 [0m
-timeout: the monitored command dumped core
-tools/ci_timeout.sh: line 26:  2405 Aborted                 timeout "$secs" "$@"
