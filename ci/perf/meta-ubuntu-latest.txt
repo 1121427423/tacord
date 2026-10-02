@@ -1,5 +1,5 @@
 os: ubuntu-latest
 arch: x86_64
-cpu: Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz
-commit: c1898a6f2fac466a5219edebd8c03ead480dacc0
-date: Fri Oct  2 04:44:58 UTC 2026
+cpu: INTEL(R) XEON(R) PLATINUM 8573C
+commit: f6d27974d3ce1cbc4940535fd078200fea758805
+date: Fri Oct  2 04:50:41 UTC 2026
