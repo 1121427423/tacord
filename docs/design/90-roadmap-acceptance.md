@@ -238,7 +238,7 @@ M0.2（`sim_core` 体素世界 + 破坏管线 + 体素 DDA 射线 + `sim_cli ben
 - [x] **M1-A 接进 Godot 场景**：400 个单位"挨打就找掩体"在浏览器里看得见
       （sim 侧验收 96% → 引擎内 64² 城 523 槽 / 1401 段墙，300 tick 内峰值 135/400 进掩体，
       ubuntu + macos-15 headless 冒烟全绿），带 `[web]` 的构建已部署
-- [ ] **浏览器里人工确认 Web 版（M1-A）**：打开 <https://1121427423.github.io/tacord/>
+- [ ] **浏览器里人工确认 Web 版（M1-A）**（已自动验过一遍，见下一条，仍建议人眼过一次）：打开 <https://1121427423.github.io/tacord/>
       （CI 已部署，提交信息带 `[web]` 触发重新部署）；
       要求：HUD 有 tick / units / fps / world 与 cover 校验和、城（灰盒子）看得见、
       400 个方块在动，机枪开火时方块由亮蓝转橙再转绿（冲掩体 → 藏好并趴下/蹲下）。
@@ -255,8 +255,20 @@ M0.2（`sim_core` 体素世界 + 破坏管线 + 体素 DDA 射线 + `sim_cli ben
       修法：`gdext/.cargo/config.toml` 加 `-Z emscripten-wasm-eh=false`。
       **教训**：headless CI 不渲染，这类问题只能靠真浏览器抓 —— 已加
       `[browsersmoke]` 触发的"真 Chrome + SwiftShader 打开已部署页面 + 截图"的 CI job
+- [x] **Web 版"加载完就黑屏"的两层原因都修了**（都是 headless CI 看不见的那类）：
+      1. **侧模块根本没加载**：`WebAssembly.instantiate(): Import #35 "env" "__cpp_exception":
+         tag import requires a WebAssembly.Tag`。rustc 1.93 起 emscripten 目标默认打开
+         WASM 异常处理，侧模块去 import 一个 tag，而 Godot 的 main module 不导出它。
+         证据：canvas 停在 300×150 的 HTML 默认尺寸 —— 引擎一行都没跑。
+         修法 `panic=abort` + `-Zbuild-std=std,panic_abort`
+         （godot-rust book 给的 `-Z emscripten-wasm-eh=false` 已被 2026-10 的 nightly 删掉）。
+      2. **相机在 43 m 外**：32 m 的城只占画面 8%（截图 91% 是纯黑），
+         看着和"没画面"一样。改成 FOV 45° + 距离按"城占七成画面"反推。
 - [ ] macOS arm64 导出产物（A5 ad-hoc 签名）—— 用户已同意**排在 Web 之后**
 - [ ] `tools/check_geo.py`：可掩体/可破坏渲染物件必须关联柱段（R4，M3）
 - [ ] 把 A8 相机无关性测试写进 `.github/workflows/sim.yml`（R1，M0.2）
 - [ ] `sim_cli dump --what cover|threat` 可视化输出（调参与调试的前提）
+- [ ] 侧模块的 emsdk 版本对齐：Godot 4.7.2 自己是 **Emscripten 4.0.20** 编的，
+      我们还在用 godot-rust book 推荐的 3.1.74（那是 Godot 4.3 时代的建议）。
+      现在能跑，但版本号差着一大截，属于"哪天突然炸了别意外"的隐患
 - [ ] 真机核对参考视频，回填 `_open_visual_questions.md` 后才能定稿美术方向（R11）
