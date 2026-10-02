@@ -59,6 +59,12 @@ func _process(_delta: float) -> bool:
 			" 同时在掩体里最多=", max_in_cover,
 			" 此刻=", sim.in_cover_count(),
 			" cover_checksum=0x", String.num_uint64(sim.cover_checksum(), 16))
+	print("[smoke] M1-B：开火=", sim.shot_count(),
+			" 命中=", sim.hit_count(),
+			" 近失=", sim.near_miss_count(),
+			" 倒地=", sim.downed_count(),
+			" 被压制=", sim.pinned_count(),
+			" 红队=", sim.team_alive(0), " 蓝队=", sim.team_alive(1))
 
 	var ok := true
 	ok = ok and sim.unit_count() == 400
@@ -69,6 +75,13 @@ func _process(_delta: float) -> bool:
 	# M1-A：图里得有掩体，而且挨打之后得有人真的钻进去
 	ok = ok and sim.cover_slot_count() > 0
 	ok = ok and max_in_cover > 0
+	# M1-B：交战链路 —— 得有人开枪、有人被打中、有近失弹压制人
+	# （这三条任意一条为 0 都说明链路断了，而不是"运气不好"：
+	#  400 人打 300 tick，量级上不可能一个都没有）
+	ok = ok and sim.shot_count() > 0
+	ok = ok and sim.hit_count() > 0
+	ok = ok and sim.near_miss_count() > 0
+	ok = ok and sim.downed_count() > 0
 
 	print("[smoke] ", "PASS" if ok else "FAIL")
 	quit(0 if ok else 1)

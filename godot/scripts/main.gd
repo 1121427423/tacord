@@ -18,31 +18,47 @@ extends Node3D
 ##    世界中心在相机平面上且远在视锥下方，于是"引擎加载完成但没有游戏画面"。
 ##
 ## 颜色约定（一眼看懂在发生什么）：
-##   亮蓝 = 巡逻（没挨打，站着走）
-##   橙   = 正在冲向掩体
-##   绿   = 已经在掩体里（并且按掩体类型趴下/蹲下）
+##   **队 = 色系**：红队偏暖（橙红/黄），蓝队偏冷（青/绿）
+##   **状态 = 明暗**：站着巡逻最亮、冲掩体次之、钻进掩体最暗、倒地接近黑
+## 之所以让队占色系：交战之后最先要分辨的是"谁在打谁"，
+## 状态靠姿态高度（站/蹲/趴）也能看出来，颜色重复一层不亏。
 
 const CELL_M := 0.5  # 与 sim 的 CELL_MM = 500 对应
 
 @export var auto_advance := true
 @export var cube_width := 0.6
 
-# 姿态高度（米）：站 / 蹲 / 趴
-const H_STAND := 1.3
-const H_CROUCH := 0.8
-const H_PRONE := 0.4
+# 姿态高度（米）—— 与 sim 的 PostureCode 一一对应（站/蹲/趴/爬/探身/探头）
+const H_STAND := 1.35
+const H_CROUCH := 0.85
+const H_PRONE := 0.40
+const H_CRAWL := 0.30
+const H_PEEK := 1.15
+const H_PEEKOVER := 1.40
 
-const C_PATROL := Color(0.30, 0.85, 1.00)
-const C_RUSH := Color(1.00, 0.62, 0.20)
-const C_HIDDEN := Color(0.35, 0.95, 0.45)
+# 姿态高度表（按 sim_core::engage::PostureCode 的编码：0..5）
+const POSTURE_H := [H_STAND, H_CROUCH, H_PRONE, H_CRAWL, H_PEEK, H_PEEKOVER]
+
+# 红队（team 0）：巡逻橙 / 冲锋黄 / 藏起来暗红 / 倒地近黑褐
+const R_PATROL := Color(1.00, 0.62, 0.30)
+const R_RUSH := Color(1.00, 0.88, 0.35)
+const R_HIDDEN := Color(0.78, 0.35, 0.22)
+const R_DOWN := Color(0.26, 0.17, 0.15)
+# 蓝队（team 1）：巡逻青 / 冲锋亮绿 / 藏起来深蓝 / 倒地近黑蓝
+const B_PATROL := Color(0.30, 0.85, 1.00)
+const B_RUSH := Color(0.55, 1.00, 0.55)
+const B_HIDDEN := Color(0.20, 0.45, 0.88)
+const B_DOWN := Color(0.15, 0.18, 0.26)
+
+const C_TRACER := Color(1.00, 0.92, 0.55)   # 曳光弹：暖黄，一眼就能从灰城里跳出来
+const TRACER_MAX := 1024                    # 渲染上限（sim 那边是 4096，画面上 1024 足够）
 
 @onready var _camera: Camera3D = $Camera3D
 
 var sim: Object = null
 var _mm: MultiMeshInstance3D      # 士兵
 var _walls: MultiMeshInstance3D   # 楼 / 墙 / 残骸
-var _threat: MeshInstance3D       # 那挺机枪
-var _threat_mat: StandardMaterial3D
+var _tracers: MultiMeshInstance3D  # 曳光弹（每发子弹这一 tick 飞过的线段）
 var _hud: Label
 var _status := ""
 var _seed := 1
@@ -56,8 +72,8 @@ func _ready() -> void:
 		_place_camera()
 		_build_ground()
 		_build_walls()
-		_build_threat()
 		_build_cubes()
+		_build_tracers()
 		_sync()
 
 
@@ -121,6 +137,29 @@ func _build_cubes() -> void:
 ##
 ## 盒子数据由 sim 一次性给全（`wall_boxes`，每 6 个 float 一个：中心 xyz + 尺寸 xyz），
 ## 这里不做任何"哪些该画"的判断 —— 那属于规则。
+func _build_tracers() -> void:
+	# 子弹是**实体**：sim 每 tick 给的是"这一 tick 飞过的线段"，
+	# 画成一个点会在墙里闪现（一 tick 就走 30 m），画成线段才是"从这儿飞到那儿"。
+	var box := BoxMesh.new()
+	box.size = Vector3.ONE
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = C_TRACER
+	box.material = mat
+
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = box
+	# 与士兵同样的坑：包围盒只在分配时算一次，必须写死一个覆盖全图的
+	var span := float(sim.dim_cells()) * CELL_M
+	mm.custom_aabb = AABB(Vector3(-8.0, -8.0, -8.0), Vector3(span + 16.0, 32.0, span + 16.0))
+	mm.instance_count = TRACER_MAX
+	mm.visible_instance_count = 0
+	_tracers = MultiMeshInstance3D.new()
+	_tracers.multimesh = mm
+	add_child(_tracers)
+
+
 func _build_walls() -> void:
 	var arr: PackedFloat32Array = sim.wall_boxes()
 	var n: int = arr.size() / 6
@@ -158,21 +197,6 @@ func _build_walls() -> void:
 		var k: float = clampf(sy / 6.0, 0.0, 1.0)
 		var v: float = 0.62 + 0.30 * k
 		mm.set_instance_color(i, Color(v, v * 0.97, v * 0.92))
-
-
-## 那挺机枪：唯一的"敌人"，红色方块，开火时变亮。
-func _build_threat() -> void:
-	var box := BoxMesh.new()
-	box.size = Vector3.ONE
-	# 材质自己留一份引用：MeshInstance3D 上取材质要走 surface_get_material，
-	# 而 PrimitiveMesh 的 material 是不是落在 surface 上是不确定的，别赌。
-	_threat_mat = StandardMaterial3D.new()
-	_threat_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	_threat_mat.albedo_color = Color(0.95, 0.20, 0.18)
-	box.material = _threat_mat
-	_threat = MeshInstance3D.new()
-	_threat.mesh = box
-	add_child(_threat)
 
 
 func _build_environment() -> void:
@@ -268,38 +292,72 @@ func _sync() -> void:
 		var h: float
 		for i in range(_mm.multimesh.instance_count):
 			var st: int = sim.unit_state(i)
-			match st:
-				2:
-					# 在掩体里：按掩体类型摆姿态（矮墙/残骸趴，高墙/转角蹲）
-					h = H_PRONE if sim.unit_posture(i) == 2 else H_CROUCH
-				1:
-					h = H_STAND
-				_:
-					h = H_STAND
+			var po: int = sim.unit_posture(i)
+			h = POSTURE_H[po] if po >= 0 and po < POSTURE_H.size() else H_STAND
 			p = sim.unit_position(i)
 			t.origin = Vector3(p.x, p.y + h * 0.5, p.z)
 			t.basis.x = Vector3(cube_width, 0.0, 0.0)
 			t.basis.y = Vector3(0.0, h, 0.0)
 			t.basis.z = Vector3(0.0, 0.0, cube_width)
 			_mm.multimesh.set_instance_transform(i, t)
-			_mm.multimesh.set_instance_color(i, _color_of(st))
-	if _threat != null and sim != null:
-		var tp: Vector3 = sim.threat_position()
-		_threat.position = Vector3(tp.x, tp.y + 0.6, tp.z)
-		_threat.scale = Vector3(1.2, 1.2, 1.2)
-		if sim.under_fire():
-			_threat_mat.albedo_color = Color(1.0, 0.25, 0.18)
-		else:
-			_threat_mat.albedo_color = Color(0.45, 0.12, 0.12)
+			_mm.multimesh.set_instance_color(i, _color_of(sim.unit_team(i), st))
+	_sync_tracers()
 	_update_hud()
 
 
-func _color_of(state: int) -> Color:
-	if state == 2:
-		return C_HIDDEN
-	if state == 1:
-		return C_RUSH
-	return C_PATROL
+## 队 = 色系，状态 = 明暗（见文件头的颜色约定）
+func _color_of(team: int, state: int) -> Color:
+	if team == 0:
+		match state:
+			1:
+				return R_RUSH
+			2:
+				return R_HIDDEN
+			3:
+				return R_DOWN
+			_:
+				return R_PATROL
+	match state:
+		1:
+			return B_RUSH
+		2:
+			return B_HIDDEN
+		3:
+			return B_DOWN
+		_:
+			return B_PATROL
+
+
+## 每发子弹画成一根细长的盒子：从这一 tick 的起点指到终点。
+func _sync_tracers() -> void:
+	if _tracers == null or sim == null:
+		return
+	var mm := _tracers.multimesh
+	var n: int = mini(sim.projectile_count(), TRACER_MAX)
+	var t := Transform3D()
+	for i in range(n):
+		var seg: PackedFloat32Array = sim.projectile_segment(i)
+		if seg.size() < 6:
+			continue
+		var a := Vector3(seg[0], seg[1], seg[2])
+		var b := Vector3(seg[3], seg[4], seg[5])
+		var d := b - a
+		var length := d.length()
+		if length < 0.001:
+			length = 0.05
+		var dir := d / length
+		# 手动搭基：Basis 的 z 轴对齐飞行方向，盒子就"躺"在弹道上
+		var up := Vector3.UP
+		if absf(dir.dot(up)) > 0.99:
+			up = Vector3.RIGHT
+		var z_axis := dir
+		var x_axis := up.cross(z_axis).normalized()
+		var y_axis := z_axis.cross(x_axis)
+		t.basis = Basis(x_axis, y_axis, z_axis).scaled(Vector3(0.04, 0.04, length))
+		t.origin = (a + b) * 0.5
+		mm.set_instance_transform(i, t)
+	# 只有前 n 个实例可见（剩下的别留在画面上）
+	mm.visible_instance_count = n
 
 
 func _update_hud() -> void:
@@ -309,15 +367,23 @@ func _update_hud() -> void:
 		_hud.text = "tacord\n!! " + _status
 		return
 	# 注意：sim 的校验和是 u64，Godot 的整数是 i64 ⇒ 必须 num_uint64，否则出现负号
-	_hud.text = "tacord Web · M1-A 掩体\n tick=%d  units=%d  %.0f fps\n %s（第 %d 次点射）\n 在掩体里 %d/%d   掩体槽 %d\n world=0x%s\n cover=0x%s\n F 开火   R 换地形   空格 暂停" % [
+	var hits: int = sim.hit_count()
+	var shots: int = sim.shot_count()
+	var acc := (hits * 100 / shots) if shots > 0 else 0
+	_hud.text = "tacord Web · M1-B 交战\n tick=%d  %.0f fps\n 红队 %d 人   蓝队 %d 人   倒地 %d\n 开火 %d   命中 %d（%d%%）   近失 %d\n 在掩体 %d   被压制 %d   打光弹药 %d\n 曳光弹 %d\n world=0x%s\n cover=0x%s\n F 重开   R 换地形   空格 暂停" % [
 		sim.tick_count(),
-		sim.unit_count(),
 		Engine.get_frames_per_second(),
-		"## 交火中 ##" if sim.under_fire() else "安静",
-		sim.shot_count(),
+		sim.team_alive(0),
+		sim.team_alive(1),
+		sim.downed_count(),
+		shots,
+		hits,
+		acc,
+		sim.near_miss_count(),
 		sim.in_cover_count(),
-		sim.unit_count(),
-		sim.cover_slot_count(),
+		sim.pinned_count(),
+		sim.dry_count(),
+		sim.projectile_count(),
 		String.num_uint64(sim.world_checksum(), 16).to_upper(),
 		String.num_uint64(sim.cover_checksum(), 16).to_upper(),
 	]
@@ -328,8 +394,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	match event.keycode:
 		KEY_F:
+			# M1-B 起没有"手动开一枪"这回事了（两边自己在打），
+			# F 改成重开一局：看伤亡/弹药曲线比看单发有用
 			if sim != null:
-				sim.fire()
+				sim.reset(sim.dim_cells(), sim.unit_count(), _seed)
+				print("[tacord] 重开一局 seed=", _seed)
 		KEY_R:
 			_regenerate()
 		KEY_SPACE:
