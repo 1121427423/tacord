@@ -55,12 +55,16 @@ pub const TRENCH_DEPTH_MM: i32 = 500;
 pub const PEEK_OFFSET_MM: i32 = 450;
 /// 槽位预留保持时间（tick）。
 pub const SLOT_RESERVE_TICKS: u32 = 30;
-/// `reach_score` 的时间视野（tick）：走 3 秒还没到的槽，reach 归零。
+/// `reach_score` 的时间视野（tick）。
 ///
 /// 为什么用**时间**而不是距离：`reach` 的本意是"到达时间的反比"（§20.1.5）。
 /// 只按距离算的话，15 m 外那个"完美掩体"会赢过脚边的矮墙，
 /// 于是士兵在 3 秒验收窗口里一直在开阔地跑 —— 实测成功率只有 7%。
-pub const REACH_HORIZON_TICKS: i64 = 90;
+///
+/// 为什么是 60 tick（2 s）而不是验收窗口的 90 tick（3 s）：这里用的是**直线距离**，
+/// 而实际要沿流场绕开建筑，路程通常是直线距离的 1.5～2 倍。
+/// 留 1/3 的余量，否则"能走到"的判定是假的（实测：3 s 视野时到达率只有 57%）。
+pub const REACH_HORIZON_TICKS: i64 = 60;
 /// "冲向掩体"的速度（mm/tick）：`speed_sprint_mmps = 3000` ÷ 30 Hz。
 ///
 /// 用冲刺而不是步行：挨打时冲进掩体是真实行为（constants.ron 里 sprint 就是给这个用的），

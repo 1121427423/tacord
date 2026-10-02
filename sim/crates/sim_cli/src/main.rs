@@ -91,10 +91,10 @@ fn build_city(rng: &mut Pcg32, dim_cells: u32) -> World {
     };
 
     // 建筑：矩形块（4..13 柱 ≈ 2..6.5 m 宽），高 3..7.5 m；1/3 带窗洞
-    let blocks = (dim / 8).max(6);
+    let blocks = (dim / 6).max(8);
     for _ in 0..blocks {
-        let bw = 4 + rng.next_range(9) as i64;
-        let bd = 4 + rng.next_range(9) as i64;
+        let bw = 6 + rng.next_range(11) as i64;
+        let bd = 6 + rng.next_range(11) as i64;
         let x0 = rng.next_range(dim_cells) as i64;
         let z0 = rng.next_range(dim_cells) as i64;
         let h = 3000 + rng.next_range(4) as i32 * 1500;
@@ -115,7 +115,7 @@ fn build_city(rng: &mut Pcg32, dim_cells: u32) -> World {
     }
 
     // 院墙：成排矮墙（0.9..1.3 m），是"蹲下全藏、起身探头"的主力掩体
-    let walls = (dim / 12).max(4);
+    let walls = (dim / 10).max(5);
     for _ in 0..walls {
         let len = 6 + rng.next_range(14) as i64;
         let x0 = rng.next_range(dim_cells) as i64;
@@ -664,6 +664,9 @@ fn cmd_cover(args: &[String]) {
     let mut reached = 0u32;
     let mut evaluated = 0u32;
     let mut arrived = 0u32;
+    let mut arrived_ok = 0u32;
+    let mut bsum_arrived = 0i64;
+    let mut bsum_lost = 0i64;
     let mut dist_sum = 0i64;
     let mut moved_sum = 0i64;
     let mut scrape: Vec<u32> = Vec::new();
@@ -742,9 +745,18 @@ fn cmd_cover(args: &[String]) {
         }
         evaluated += 1;
         let b = blocking_at(&world, &hf, pos.0, pos.1, None, &[threat]);
+        let did_arrive = goal.map_or(false, |g| (pos.0 / CELL, pos.1 / CELL) == g);
+        if did_arrive {
+            bsum_arrived += b.0 as i64;
+        } else {
+            bsum_lost += b.0 as i64;
+        }
         if b.0 >= 45_875 {
             // 0.7 × 65536
             reached += 1;
+            if did_arrive {
+                arrived_ok += 1;
+            }
         }
     }
     let eval_us = t2.elapsed().as_micros();
@@ -758,12 +770,21 @@ fn cmd_cover(args: &[String]) {
     println!(
         "  3 秒内 blocking ≥ 0.7: {reached}/{evaluated} = {pct:.1}%   （目标 ≥ 95%）"
     );
+    let n_arr = arrived.max(1) as i64;
+    let n_lost = (evaluated - arrived).max(1) as i64;
     println!(
         "  平均: 选中槽距离 {} mm / 到达槽位 {}/{} / 走了 {} 步",
         dist_sum / evaluated.max(1) as i64,
         arrived,
         evaluated,
         moved_sum / evaluated.max(1) as i64
+    );
+    println!(
+        "  到达者的平均 blocking {:.2}（其中达标 {}/{}） / 没到达的 {:.2}",
+        bsum_arrived as f64 / 65_536.0 / n_arr as f64,
+        arrived_ok,
+        arrived,
+        bsum_lost as f64 / 65_536.0 / n_lost as f64
     );
     println!("  每 trial 平均 {} µs", eval_us / evaluated.max(1) as u128);
     // 给 CI 用的机器可读行（反脚本化验收门禁读这一行）
