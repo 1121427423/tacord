@@ -1,9 +1,18 @@
-commit: 34654b9aa056848ba16cdbc9adb26bcb948dd551
+commit: e6686edd5a78963aca94e2adfbdda1ff1218a94f
 branch: arena/01a0f7c2-tacord
-date: Fri Oct  2 12:31:20 UTC 2026
+date: Fri Oct  2 12:38:55 UTC 2026
 job status: failure
 
 === cargo build (short) ===
+[1m[33mwarning[0m[1m: unused variable: `team`[0m
+   [1m[94m--> [0mcrates/sim_core/src/engage.rs:629:89
+    [1m[94m|[0m
+[1m[94m629[0m [1m[94m|[0m     fn apply_near_miss(&mut self, ax: i64, ay: i64, az: i64, bx: i64, by: i64, bz: i64, team: u8) {
+    [1m[94m|[0m                                                                                         [1m[33m^^^^[0m [1m[33mhelp: if this is intentional, prefix it with an underscore: `_team`[0m
+    [1m[94m|[0m
+    [1m[94m= [0m[1mnote[0m: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+[1m[33mwarning[0m: `sim_core` (lib) generated 1 warning (run `cargo fix --lib -p sim_core` to apply 1 suggestion)
 [1m[33mwarning[0m[1m: unused variable: `dim`[0m
    [1m[94m--> [0mcrates/sim_cli/src/main.rs:804:5
     [1m[94m|[0m
@@ -30,6 +39,15 @@ job status: failure
 [1m[92m    Finished[0m `release` profile [optimized] target(s) in 0.00s
 
 === cargo test (nocapture) ===
+[1m[33mwarning[0m[1m: unused variable: `team`[0m
+   [1m[94m--> [0mcrates/sim_core/src/engage.rs:629:89
+    [1m[94m|[0m
+[1m[94m629[0m [1m[94m|[0m     fn apply_near_miss(&mut self, ax: i64, ay: i64, az: i64, bx: i64, by: i64, bz: i64, team: u8) {
+    [1m[94m|[0m                                                                                         [1m[33m^^^^[0m [1m[33mhelp: if this is intentional, prefix it with an underscore: `_team`[0m
+    [1m[94m|[0m
+    [1m[94m= [0m[1mnote[0m: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+[1m[33mwarning[0m: `sim_core` (lib) generated 1 warning (run `cargo fix --lib -p sim_core` to apply 1 suggestion)
 [1m[33mwarning[0m[1m: unused variable: `dim`[0m
    [1m[94m--> [0mcrates/sim_cli/src/main.rs:804:5
     [1m[94m|[0m
@@ -53,6 +71,7 @@ job status: failure
     [1m[94m= [0m[1mnote[0m: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
 
 [1m[33mwarning[0m: `sim_cli` (bin "sim_cli" test) generated 3 warnings (run `cargo fix --bin "sim_cli" -p sim_cli --tests` to apply 2 suggestions)
+[1m[33mwarning[0m: `sim_core` (lib test) generated 1 warning (1 duplicate)
 [1m[92m    Finished[0m `release` profile [optimized] target(s) in 0.00s
 [1m[92m     Running[0m unittests src/main.rs (target/release/deps/sim_cli-1320e17642fdad2e)
 
@@ -70,10 +89,10 @@ test cover::tests::wall_generates_slots_on_both_sides ... ok
 test engage::tests::isqrt_is_exact_enough ... ok
 test engage::tests::near_miss_distance_is_perpendicular ... ok
 test engage::tests::segment_hits_sphere_only_when_close ... ok
+test cover::tests::low_wall_vs_high_wall_classification ... ok
 test nav::tests::bridge_deck_is_walkable_but_you_cannot_climb_it ... ok
 test nav::tests::compute_is_deterministic ... ok
 test nav::tests::destruction_opens_a_path ... ok
-test cover::tests::low_wall_vs_high_wall_classification ... ok
 test nav::tests::flat_ground_is_walkable_everywhere ... ok
 test nav::tests::flow_field_routes_around_a_wall ... ok
 test nav::tests::flow_field_shortest_path_on_flat_ground ... ok
@@ -91,18 +110,18 @@ test ray::tests::directed_cases ... ok
 test ray::tests::hit_point_lies_between_endpoints ... ok
 test ray::tests::overhang_gap_is_walkable_and_shootable ... ok
 test ray::tests::is_deterministic_across_repeated_runs ... ok
-test tests::floor_div_matches_floor_semantics ... ok
 test ray::tests::wire_blocks_move_but_not_sight_or_bullets ... ok
+test tests::floor_div_matches_floor_semantics ... ok
 test world::tests::checksum_is_deterministic_and_order_sensitive ... ok
 test world::tests::damage_destroys_and_marks_dirty ... ok
 test world::tests::flat_world_has_ground_everywhere ... ok
 test world::tests::material_flags_are_independent ... ok
 test world::tests::max_segments_per_column_enforced ... ok
-test world::tests::out_of_bounds_is_empty_not_panic ... ok
 test world::tests::segments_stay_sorted_and_allow_gaps ... ok
+test world::tests::out_of_bounds_is_empty_not_panic ... ok
 test world::tests::take_dirty_respects_max_for_amortized_rebuild ... ok
 
-thread 'engage::tests::engagement_runs_and_produces_casualties' (2702) panicked at crates/sim_core/src/engage.rs:1419:9:
+thread 'engage::tests::engagement_runs_and_produces_casualties' (2651) panicked at crates/sim_core/src/engage.rs:1434:9:
 近失弹要能压制到人
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 test engage::tests::engagement_runs_and_produces_casualties ... FAILED
@@ -113,6 +132,6 @@ failures:
 failures:
     engage::tests::engagement_runs_and_produces_casualties
 
-test result: FAILED. 38 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+test result: FAILED. 38 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
 
 [1m[91merror[0m: test failed, to rerun pass `-p sim_core --lib`
