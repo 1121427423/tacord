@@ -171,12 +171,14 @@ func _build_environment() -> void:
 	add_child(env)
 
 	# 一盏平行光：给墙体明暗，不然整座城是一张平面图，看不出高低。
-	# 注意 4.7 的 Light3D 已经没有 `energy` 属性了（改成物理单位的 light_intensity），
-	# 照 4.3 的教程写 `light.energy = 1.2` 会报
-	# "Invalid assignment of property or key 'energy'"。
+	#
+	# 属性名踩过一次坑：物理光照单位关着的时候（默认）Light3D 上是
+	# `light_energy`，`light_intensity_lux` / `light_intensity_lumens` 只在
+	# 打开 `use_physical_light_units` 之后才存在 —— 写 `light_intensity = 1.2`
+	# 会报 "Invalid assignment of property or key"。
 	# 不开阴影：400 人 + 上千个盒子，Web 上为这点观感不值。
 	var sun := DirectionalLight3D.new()
-	sun.light_intensity = 1.2
+	sun.light_energy = 1.2
 	sun.rotation_degrees = Vector3(-45.0, 35.0, 0.0)
 	add_child(sun)
 

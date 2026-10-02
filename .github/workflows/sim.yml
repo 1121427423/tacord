@@ -380,8 +380,14 @@ jobs:
             echo "scene 退出码: $code"
             echo "$code" > /tmp/scene-code
           } 2>&1 | tee /tmp/godot-scene.log
-          if grep -qE "SCRIPT ERROR|Parse Error|ERROR:" /tmp/godot-scene.log; then
+          # headless 用 --script 跑到 quit() 时，Godot 自己会报"运行时建的节点
+          # 来不及 free"（ObjectDB instance / RID allocations leaked）—— 那是
+          # teardown 噪声，不是场景错误；除此之外的 ERROR 一律不放过。
+          if grep -E "SCRIPT ERROR|Parse Error|ERROR:" /tmp/godot-scene.log \
+              | grep -vE "ObjectDB instance was leaked|RID allocations .* were leaked at exit" \
+              | grep -q .; then
             echo "::error::主场景有错误（见 godot-scene.log）"
+            grep -E "SCRIPT ERROR|Parse Error|ERROR:" /tmp/godot-scene.log | head -20
             exit 1
           fi
           if ! grep -q "\[scene\] DONE frames=" /tmp/godot-scene.log; then
